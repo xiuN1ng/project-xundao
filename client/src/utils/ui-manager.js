@@ -6,7 +6,8 @@
 // 存储面板的显示状态（由UI管理器维护）
 const panelStates = {
   adventurePanel: false,
-  equipmentEnhancePanel: false
+  equipmentEnhancePanel: false,
+  sealedRealmPanel: false
 }
 
 // 面板显示事件总线（供外部监听）
@@ -45,6 +46,22 @@ function hideEquipmentEnhancePanel() {
 }
 
 /**
+ * 显示封魔渊面板
+ */
+function showSealedRealmPanel() {
+  panelStates.sealedRealmPanel = true
+  emit('panel:sealed-realm', { action: 'show' })
+}
+
+/**
+ * 隐藏封魔渊面板
+ */
+function hideSealedRealmPanel() {
+  panelStates.sealedRealmPanel = false
+  emit('panel:sealed-realm', { action: 'hide' })
+}
+
+/**
  * 获取面板状态
  * @param {string} panelName - 面板名称
  */
@@ -78,6 +95,8 @@ export {
   hideAdventurePanel,
   showEquipmentEnhancePanel,
   hideEquipmentEnhancePanel,
+  showSealedRealmPanel,
+  hideSealedRealmPanel,
   getPanelState,
   on,
   panelStates

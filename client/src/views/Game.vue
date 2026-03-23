@@ -7,6 +7,7 @@
       </div>
       <div class="resources">
         <span>灵石: {{ player?.lingshi || 0 }}</span>
+        <span class="magic-crystal" v-if="player?.magicCrystal > 0">💠 魔晶: {{ player?.magicCrystal || 0 }}</span>
       </div>
     </header>
     
@@ -39,8 +40,13 @@
       <TribulationPanel v-if="activeTab === 'tribulation'" />
       <AdventurePanel v-if="activeTab === 'adventure'" />
       <AbyssDungeonPanel v-if="activeTab === 'abyss'" />
+      <SealedRealmPanel v-if="activeTab === 'sealed-realm'" />
       <ClanPanel v-if="activeTab === 'clan'" />
       <EquipmentEnhancePanel v-if="activeTab === 'equipment-enhance'" />
+      <FishingPanel v-if="activeTab === 'fishing'" />
+      <MarriagePanel v-if="activeTab === 'marriage'" />
+      <MasterDisciplePanel v-if="activeTab === 'master-disciple'" />
+      <CaveDwellingPanel v-if="activeTab === 'cave-dwelling'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -74,8 +80,13 @@ import UpgradeAnimation from '../components/UpgradeAnimation.vue'
 import EquipmentAnimation from '../components/EquipmentAnimation.vue'
 import AdventurePanel from '../components/AdventurePanel.vue'
 import AbyssDungeonPanel from '../components/AbyssDungeonPanel.vue'
+import SealedRealmPanel from '../components/SealedRealmPanel.vue'
 import ClanPanel from '../components/ClanPanel.vue'
 import EquipmentEnhancePanel from '../components/EquipmentEnhancePanel.vue'
+import FishingPanel from '../components/FishingPanel.vue'
+import MarriagePanel from '../components/MarriagePanel.vue'
+import MasterDisciplePanel from '../components/MasterDisciplePanel.vue'
+import CaveDwellingPanel from '../components/CaveDwellingPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -91,6 +102,7 @@ const tabs = [
   { id: 'equipment-enhance', name: '强化', icon: '⚔️' },
   { id: 'adventure', name: '奇遇', icon: '✨' },
   { id: 'abyss', name: '深渊', icon: '🌀' },
+  { id: 'sealed-realm', name: '封魔渊', icon: '⚫' },
   { id: 'spirit-artifact', name: '器灵', icon: '🔮' },
   { id: 'gongfa-effects', name: '功法', icon: '📚' },
   { id: 'arena', name: '竞技', icon: '⚔️' },
@@ -102,6 +114,10 @@ const tabs = [
   { id: 'mail', name: '邮件', icon: '📧' },
   { id: 'activity', name: '活动', icon: '🎁' },
   { id: 'friend', name: '好友', icon: '👥' },
+  { id: 'cave-dwelling', name: '洞府', icon: '🏠' },
+  { id: 'fishing', name: '钓鱼', icon: '🎣' },
+  { id: 'marriage', name: '婚姻', icon: '💍' },
+  { id: 'master-disciple', name: '师徒', icon: '👨‍🏫' },
   { id: 'rank', name: '排行', icon: '📊' },
   { id: 'shop', name: '商店', icon: '🛒' }
 ]

@@ -7,3 +7,11 @@
 # === 执行中 ===
 
 # === 已完成 ===
+# v8.1 [F] 封魔渊前端 - 2026-03-23
+#   - SealedRealmPanel.vue: 封魔渊副本 + 魔晶商店 + 魔器装备界面
+#   - Game.vue: 新增封魔渊⚫tab、魔晶💠货币header显示
+#   - ui-manager.js: showSealedRealmPanel/hideSealedRealmPanel 注册
+#
+# v7.2 [F] 社交生活前端 - 2026-03-23
+#   - Game.vue: 新增洞府🏠、钓鱼🎣、婚姻💍、师徒👨‍🏫四个tab
+#   - FishingPanel/MarriagePanel/MasterDisciplePanel/CaveDwellingPanel 已注册到Game.vue
