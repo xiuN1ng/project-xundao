@@ -1,0 +1,169 @@
+/**
+ * 器灵系统 API
+ */
+
+const express = require('express');
+const router = express.Router();
+
+// 加载依赖
+let spiritArtifactStorage;
+function loadDependencies() {
+  if (!spiritArtifactStorage) {
+    try {
+      spiritArtifactStorage = require('./spirit_artifact_storage');
+    } catch (e) {
+      console.error('加载spirit_artifact_storage失败:', e.message);
+    }
+  }
+  return spiritArtifactStorage;
+}
+
+// 获取所有器灵配置
+router.get('/list', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    
+    const storage = loadDependencies();
+    const unlocked = storage.getUnlockedArtifacts(parseInt(player_id));
+    const owned = storage.getPlayerArtifacts(parseInt(player_id));
+    const ownedIds = owned.map(o => o.artifact_id);
+    
+    // 标记哪些已拥有
+    const artifacts = unlocked.map(a => ({
+      ...a,
+      is_owned: ownedIds.includes(a.id),
+      rarity_config: storage.RARITY_CONFIG[a.rarity]
+    }));
+    
+    res.json({ success: true, data: artifacts });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取玩家器灵
+router.get('/my', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    
+    const storage = loadDependencies();
+    const artifacts = storage.getPlayerArtifacts(parseInt(player_id));
+    const equipped = storage.getEquippedArtifacts(parseInt(player_id));
+    const totalBonus = storage.getTotalBonus(parseInt(player_id));
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        artifacts,
+        equipped,
+        total_bonus: totalBonus
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取已装备器灵
+router.get('/equipped', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    
+    const storage = loadDependencies();
+    const equipped = storage.getEquippedArtifacts(parseInt(player_id));
+    const totalBonus = storage.getTotalBonus(parseInt(player_id));
+    
+    res.json({ 
+      success: true, 
+      data: { equipped, total_bonus: totalBonus } 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 激活器灵
+router.post('/acquire', (req, res) => {
+  try {
+    const { player_id, artifact_id } = req.body;
+    
+    if (!player_id || !artifact_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const storage = loadDependencies();
+    const result = storage.acquireArtifact(parseInt(player_id), parseInt(artifact_id));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 装备器灵
+router.post('/equip', (req, res) => {
+  try {
+    const { player_id, artifact_id, slot } = req.body;
+    
+    if (!player_id || !artifact_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const storage = loadDependencies();
+    const result = storage.equipArtifact(parseInt(player_id), parseInt(artifact_id), slot || 'weapon');
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 卸下器灵
+router.post('/unequip', (req, res) => {
+  try {
+    const { player_id, artifact_id } = req.body;
+    
+    if (!player_id || !artifact_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const storage = loadDependencies();
+    const result = storage.unequipArtifact(parseInt(player_id), parseInt(artifact_id));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 升级器灵
+router.post('/upgrade', (req, res) => {
+  try {
+    const { player_id, artifact_id } = req.body;
+    
+    if (!player_id || !artifact_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const storage = loadDependencies();
+    const result = storage.upgradeArtifact(parseInt(player_id), parseInt(artifact_id));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+module.exports = router;

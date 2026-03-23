@@ -1,0 +1,8 @@
+// 福利系统 API - stub 实现
+const express = require('express');
+const router = express.Router();
+
+router.get('/list', (req, res) => res.json([]));
+router.post('/claim', (req, res) => res.json({ success: true }));
+
+module.exports = router;

@@ -1,0 +1,34 @@
+# TTS Voice Lines - 寻道修仙 (Updated 2026-03-23)
+# Format: text|voice|filename
+# Note: Using actual MiniMax API voice IDs confirmed working
+
+# Working Chinese voice IDs:
+# - male-qn-qingse (Chinese male - 青涩风格)
+# - Chinese (Mandarin)_Lyrical_Voice (Chinese female - 抒情风格)
+# - Chinese (Mandarin)_HK_Flight_Attendant (Chinese female - 香港空姐风格)
+
+# P0 - High Impact Events
+天劫降临！请做好准备！|male-qn-qingse|tribulation_start
+恭喜！渡劫成功！你的修为更上一层楼！|male-qn-qingse|tribulation_success
+渡劫失败...但天道酬勤，请再接再厉！|male-qn-qingse|tribulation_fail
+恭喜突破！境界提升，实力大增！|Chinese (Mandarin)_Lyrical_Voice|realm_breakthrough
+成就解锁！|Chinese (Mandarin)_Lyrical_Voice|achievement_unlock
+战斗胜利！恭喜获得丰厚奖励！|Chinese (Mandarin)_HK_Flight_Attendant|battle_victory
+战斗失败...总结经验，下次必胜！|Chinese (Mandarin)_HK_Flight_Attendant|battle_fail
+
+# P1 - Important Events
+装备强化成功！恭喜！|Chinese (Mandarin)_HK_Flight_Attendant|equip_enhance_success
+装备强化失败...|Chinese (Mandarin)_HK_Flight_Attendant|equip_enhance_fail
+奇遇触发！有缘人，随我来！|Chinese (Mandarin)_Lyrical_Voice|adventure_trigger
+奇遇完成！获得珍贵奖励！|Chinese (Mandarin)_Lyrical_Voice|adventure_complete
+世界BOSS出现！众修士速来迎战！|male-qn-qingse|worldboss_appear
+恭喜击败世界BOSS！|male-qn-qingse|worldboss_defeat
+宗门战开始！|male-qn-qingse|sect_war_start
+恭喜在宗门战中获胜！|male-qn-qingse|sect_war_win
+
+# P2 - Experience Events
+有缘人，可愿与我结为仙侣？|Chinese (Mandarin)_Lyrical_Voice|marriage_propose
+恭喜结为道侣！|Chinese (Mandarin)_Lyrical_Voice|marriage_success
+恭喜获得稀有称号！|Chinese (Mandarin)_Lyrical_Voice|title_unlock
+修炼突破！灵力涌动，境界升华！|Chinese (Mandarin)_Lyrical_Voice|cultivate_breakthrough
+宗门捐献成功！为宗门添砖加瓦！|male-qn-qingse|sect_donate

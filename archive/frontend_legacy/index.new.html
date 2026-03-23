@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>寻道修仙</title>
+  <link rel="stylesheet" href="css/mobile.css">
+  <style>
+    /* ==================== 修仙主题 CSS 变量系统 ==================== */
+    :root {
+      --bg-primary: #0a0a12;
+      --bg-secondary: #12121f;
+      --bg-card: rgba(18, 18, 32, 0.92);
+      --bg-card-hover: rgba(28, 25, 45, 0.95);
+      --accent-primary: #b8860b;
+      --accent-secondary: #daa520;
+      --accent-gold: #ffd700;
+      --accent-gold-light: #ffec8b;
+      --color-spirit: #00ffff;
+      --color-cyan: #40e0d0;
+      --color-exp: #ff6b9d;
+      --color-stones: #ffd700;
+      --color-health: #ff4444;
+      --color-success: #00ff88;
+      --color-warning: #ff8c00;
+      --text-primary: #e8e8f0;
+      --text-secondary: #a0a0b8;
+      --text-muted: #606080;
+      --border-color: rgba(184, 134, 11, 0.25);
+      --border-glow: rgba(255, 215, 0, 0.4);
+      --border-bronze: rgba(205, 127, 50, 0.4);
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.7);
+      --shadow-glow: 0 0 20px rgba(255, 215, 0, 0.2);
+      --shadow-cyan-glow: 0 0 20px rgba(0, 255, 255, 0.2);
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+      --font-family: 'KaiTi', 'STKaiti', 'SimSun', 'Microsoft YaHei', 'PingFang SC', serif;
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.25s ease;
+      --transition-slow: 0.4s ease;
+    }
+    .auth-container { z-index: 9997 !important; }
+    /* Loading overlay for async HTML load */
+    #game-body-container { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <!-- Initial Loading Overlay -->
+  <div class="loading-overlay" id="initialLoading">
+    <div class="loading-logo">🎮</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-text">正在加载修仙世界...</div>
+  </div>
+  
+  <!-- Game Body Container (loaded async) -->
+  <div id="game-body-container"></div>
+
+  <!-- Vue3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  
+  <!-- UI Component System -->
+  <script src="components/ui-manager.js"></script>
+  <script src="components/component-loader.js"></script>
+  
+  <!-- Core Modules - Base -->
+  <script src="core/api.js"></script>
+  <script src="core/resource.js"></script>
+  <script src="core/resource_config.js"></script>
+  <script src="core/resource-loader.js"></script>
+  <script src="core/storage.js"></script>
+  <script src="core/elements.js"></script>
+  <script src="core/init-game.js"></script>
+  <script src="core/fmt.js"></script>
+  <script src="core/api-health.js"></script>
+  
+  <!-- Core Modules - Game Systems -->
+  <script src="core/game.js"></script>
+  <script src="core/artifact_system.js"></script>
+  <script src="core/beast_system.js"></script>
+  <script src="core/sect_system.js"></script>
+  <script src="core/friend_system.js"></script>
+  <script src="core/event_system.js"></script>
+  <script src="core/worldboss_system.js"></script>
+  <script src="core/market_system.js"></script>
+  <script src="core/mastersystem.js"></script>
+  <script src="core/realm_dungeon_system.js"></script>
+  <script src="core/immortal_realm_api.js"></script>
+  <script src="core/immortal_realm_system.js"></script>
+  <script src="core/immortal_quest_system.js"></script>
+  <script src="core/shared_boss_system.js"></script>
+  <script src="core/balance.js"></script>
+  <script src="core/extended_systems.js"></script>
+  <script src="core/fate_system.js"></script>
+  <script src="core/tribulation_system.js"></script>
+  <script src="core/resource_dungeon_system.js"></script>
+  <script src="core/blessed_land_system.js"></script>
+  <script src="core/achievement_system.js"></script>
+  
+  <!-- Core Modules - UI/Game Logic -->
+  <script src="core/renderer.js"></script>
+  <script src="core/ui-updater.js"></script>
+  <script src="core/battle.js"></script>
+  <script src="core/mobile.js"></script>
+  <script src="core/story.js"></script>
+  <script src="core/offline.js"></script>
+  <script src="core/settings.js"></script>
+  <script src="core/chat.js"></script>
+  <script src="core/battle-drops.js"></script>
+  <script src="core/floating-text.js"></script>
+  <script src="core/newbie-tips.js"></script>
+  <script src="core/guide.js"></script>
+  <script src="core/audio.js"></script>
+  <script src="core/utils.js"></script>
+  <script src="core/animations.js"></script>
+  <script src="core/handlers.js"></script>
+  
+  <!-- Core Modules - UI Panels -->
+  <script src="core/artifacts-ui.js"></script>
+  <script src="core/enhancement-ui.js"></script>
+  <script src="core/modals.js"></script>
+  <script src="core/alchemy-ui.js"></script>
+  <script src="core/resonance-ui.js"></script>
+  <script src="core/paradise-ui.js"></script>
+  <script src="core/immortal-realm-ui.js"></script>
+  <script src="core/boss-ui.js"></script>
+  <script src="core/fashion-ui.js"></script>
+  <script src="core/beasts-ui.js"></script>
+  <script src="core/sect-ui.js"></script>
+  <script src="core/worldboss-ui.js"></script>
+  <script src="core/trading-ui.js"></script>
+  <script src="core/master-ui.js"></script>
+  <script src="core/vip-ui.js"></script>
+  <script src="core/realm-dungeon-ui.js"></script>
+  <script src="core/resource-dungeon-ui.js"></script>
+  <script src="core/tribulation-ui.js"></script>
+  <script src="core/couple-ui.js"></script>
+  <script src="core/auth-ui.js"></script>
+  <script src="core/newbie-check.js"></script>
+  <script src="core/mail-ui.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="core/daily-rewards-ui.js"></script>
+  <script src="core/ranking-ui.js"></script>
+  <script src="core/ladder-ui.js"></script>
+  <script src="core/friend-ui.js"></script>
+  <script src="core/activity-ui.js"></script>
+  <script src="core/immortal-realm-display.js"></script>
+  <script src="core/shared-boss-ui.js"></script>
+  <script src="core/v15-features.js"></script>
+  <script src="core/ui-animation-enhanced.js"></script>
+  <script src="core/scene-bg.js"></script>
+  
+  <!-- Main Entry Point -->
+  <script src="main.js"></script>
+  
+  <!-- Scene Background Image -->
+  <img id="scene-bg" class="scene-bg" style="display:none" alt="">
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "idle-cultivation-frontend",
+  "version": "1.1.0",
+  "description": "挂机修仙 - 前端游戏 (MVC架构)",
+  "scripts": {
+    "dev": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "build": "echo 'Static HTML - no build needed'"
+  }
+}
