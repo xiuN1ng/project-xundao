@@ -28,14 +28,22 @@ let userBeasts = [
 
 router.get('/list', (req, res) => res.json(beastTemplates));
 
+// /my/list - 前端调用 /beast/my/list (修复API不匹配)
+router.get('/my/list', (req, res) => {
+  const userId = parseInt(req.query.userId) || 1;
+  res.json(userBeasts.filter(b => b.userId === userId));
+});
+
 router.get('/my', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
   res.json(userBeasts.filter(b => b.userId === userId));
 });
 
 router.post('/capture', (req, res) => {
-  const { userId, templateId } = req.body;
-  const template = beastTemplates.find(t => t.id === templateId);
+  // 支持前端传入 { beastId } (templateId) 或后端格式 { userId, templateId }
+  const { userId = 1, templateId, beastId } = req.body;
+  const targetTemplateId = templateId || beastId;
+  const template = beastTemplates.find(t => t.id === targetTemplateId || t.name === targetTemplateId);
   if (!template) return res.json({ success: false, message: '模板不存在' });
   
   const newBeast = {
@@ -87,6 +95,33 @@ router.post('/learnSkill', (req, res) => {
   
   beast.skill = skill;
   res.json({ success: true, skill: skill });
+});
+
+// 升级灵兽 (增加等级和属性)
+router.post('/upgrade', (req, res) => {
+  const { userId = 1, beastId } = req.body;
+  const beast = userBeasts.find(b => b.id === beastId && b.userId === userId);
+  if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+  
+  beast.level += 1;
+  const template = beastTemplates.find(t => t.id === beast.templateId) || beastTemplates[0];
+  beast.attack = template.baseAttack * beast.level;
+  beast.hp = template.baseHp * beast.level;
+  
+  res.json({ success: true, message: `升级成功！灵兽等级提升至 ${beast.level}`, beast });
+});
+
+// 喂养灵兽 (增加亲密度和属性)
+router.post('/feed', (req, res) => {
+  const { userId = 1, beastId } = req.body;
+  const beast = userBeasts.find(b => b.id === beastId && b.userId === userId);
+  if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+  
+  const feedBonus = Math.floor(beast.level * 5);
+  beast.attack += feedBonus;
+  beast.hp += feedBonus * 2;
+  
+  res.json({ success: true, message: '喂养成功！灵兽属性提升', beast });
 });
 
 module.exports = router;
