@@ -310,7 +310,9 @@
         "before": "BeastPanel.vue仅使用emoji🦊🦅作为灵兽图标,无真實立绘",
         "after": "灵狐🦊使用spirit-beast-fox.png (1024x1024像素风灵狐立绘),带稀有度发光+漂浮动画"
       },
-      "taskFrom": "cron-tasks-todo.txt [art-cron自动生成]"
+      "taskFrom": "cron-tasks-todo.txt [art-cron自动生成]",
+      "status": "completed",
+      "completedAt": "2026-03-24T04:03:00+08:00"
     },
     {
       "id": "frontend-character-portrait-20260322-001",
@@ -330,7 +332,9 @@
         "before": "AppearancePanel.vue使用旧character-portrait.jpg",
         "after": "AppearancePanel.vue使用新生成的角色立绘character-portrait-new.png (pixel art白衣剑修)"
       },
-      "taskFrom": "cron-tasks-todo.txt [art-cron自动生成 - 20:00生成]"
+      "taskFrom": "cron-tasks-todo.txt [art-cron自动生成 - 20:00生成]",
+      "status": "completed",
+      "completedAt": "2026-03-24T04:03:00+08:00"
     },
     {
       "id": "frontend-art-integrate-20260323-001",
