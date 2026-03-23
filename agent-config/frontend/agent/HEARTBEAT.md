@@ -1,12 +1,11 @@
-# 前端 Agent 心跳配置
+# HEARTBEAT.md - Frontend Agent
 
-## 任务检查
+## 任务来源
+读取 `cron-tasks-todo.txt` 中的 [F] 标签前端任务
 
-### 优先级顺序
-1. 是否有前端相关的 [F] 任务待执行
-2. 是否有策划更新的数值需要更新前端显示
-3. 是否有 UI 需要优化
+## Feishu 同步
+如有新界面完成，同步到飞书 folder: XNGXfOPkjlkQ5id43COcNW2MnVf
 
-### 自检
-- 检查 client/src/ 的 git status
-- 确认没有修改 server/ 文件
+## 禁止
+- 不修改 server/ 任何文件
+- 不修改 docs/ 任何文件（只读）
