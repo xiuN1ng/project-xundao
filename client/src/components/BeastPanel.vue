@@ -6,7 +6,8 @@
     <div class="beast-stage" v-if="selectedBeast">
       <div class="stage-glow"></div>
       <div class="beast-display">
-        <span class="beast-sprite" :class="selectedBeast.quality">{{ selectedBeast.icon }}</span>
+        <img v-if="getBeastImage(selectedBeast)" :src="getBeastImage(selectedBeast)" class="beast-portrait-img" :class="selectedBeast.quality" />
+        <span v-else class="beast-sprite" :class="selectedBeast.quality">{{ selectedBeast.icon }}</span>
       </div>
       <div class="beast-name">{{ selectedBeast.name }}</div>
       <div class="beast-quality" :class="selectedBeast.quality">{{ qualityName }}</div>
@@ -39,7 +40,8 @@
            :class="{ active: selectedBeast?.id === beast.id, [beast.quality]: true }"
            @click="selectBeast(beast)">
         <div class="card-glow"></div>
-        <span class="beast-icon">{{ beast.icon }}</span>
+        <img v-if="getBeastImage(beast)" :src="getBeastImage(beast)" class="beast-card-img" />
+        <span v-else class="beast-icon">{{ beast.icon }}</span>
         <div class="beast-info">
           <span class="name">{{ beast.name }}</span>
           <span class="level">Lv.{{ beast.level }}</span>
@@ -72,9 +74,32 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import spiritFoxImg from '@/assets/images/spirit-beast-fox.png'
+import beastDragonImg from '@/assets/images/beast-dragon.png'
+import beastQilinImg from '@/assets/images/beast-qilin.png'
 
 const loading = ref(true)
 const beasts = ref([])
+
+// 灵兽立绘图片映射
+const beastImageMap = {
+  'spirit_fox': spiritFoxImg,
+  '灵狐': spiritFoxImg,
+  'fox': spiritFoxImg,
+  'flood_dragon': beastDragonImg,
+  'dragon': beastDragonImg,
+  '蛟龙': beastDragonImg,
+  'qiLin': beastQilinImg,
+  'qilin': beastQilinImg,
+  '麒麟': beastQilinImg,
+  'QI_LIN': beastQilinImg,
+}
+
+function getBeastImage(beast) {
+  if (!beast) return null
+  if (beast.icon === '🦊') return spiritFoxImg
+  return beastImageMap[beast.id] || beastImageMap[beast.name] || null
+}
 
 async function loadData() {
   loading.value = true
@@ -138,6 +163,44 @@ h2 {
   font-size: 24px; 
   margin-bottom: 20px; 
   text-shadow: 0 0 20px rgba(240,147,251,0.5);
+}
+
+/* 灵兽立绘肖像 */
+.beast-portrait-img {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5));
+  animation: portraitFloat 3s infinite ease-in-out;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes portraitFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.03); }
+}
+
+.beast-portrait-img.common { filter: drop-shadow(0 0 15px rgba(255,255,255,0.3)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+.beast-portrait-img.uncommon { filter: drop-shadow(0 0 20px rgba(76,175,80,0.5)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+.beast-portrait-img.rare { filter: drop-shadow(0 0 25px rgba(33,150,243,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+.beast-portrait-img.epic { filter: drop-shadow(0 0 30px rgba(156,39,176,0.7)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+.beast-portrait-img.legendary { filter: drop-shadow(0 0 40px rgba(255,152,0,0.8)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); animation: portraitFloat 2.5s infinite ease-in-out, legendaryGlow 1.5s infinite alternate; }
+
+@keyframes legendaryGlow {
+  from { filter: drop-shadow(0 0 30px rgba(255,152,0,0.6)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+  to { filter: drop-shadow(0 0 50px rgba(255,152,0,1)) drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+}
+
+/* 灵兽卡片缩略图 */
+.beast-card-img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 10px;
+  border-radius: 10px;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.3));
 }
 
 /* 灵兽展示台 */

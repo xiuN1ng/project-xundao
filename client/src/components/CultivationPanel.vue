@@ -167,7 +167,7 @@ onMounted(loadData)
 
 /* 境界展示 */
 .realm-showcase { position: relative; text-align: center; padding: 40px 20px; background: linear-gradient(135deg, rgba(102,126,234,0.3), rgba(118,75,162,0.3)); border-radius: 20px; margin-bottom: 25px; overflow: hidden; }
-.realm-bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(102,126,234,0.2), transparent 70%); }
+.realm-bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(102,126,234,0.2), transparent 70%), url('@/assets/images/bg-cultivation-main-new.png') center/cover no-repeat; }
 .realm-particles { position: absolute; inset: 0; pointer-events: none; }
 .particle { position: absolute; font-size: 12px; opacity: 0; animation: float-particle 3s infinite ease-in-out; left: calc(var(--delay) * 10 % 100); top: calc(var(--delay) * 15 % 100); }
 @keyframes float-particle { 0%, 100% { opacity: 0; transform: translateY(20px); } 50% { opacity: 0.8; transform: translateY(-20px); } }

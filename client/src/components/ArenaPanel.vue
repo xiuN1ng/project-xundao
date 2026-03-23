@@ -111,10 +111,21 @@ export default {
 <style scoped>
 .panel {
   background: #1a1a2e;
+  background-image: url('@/assets/images/bg-arena-battle-new.png');
+  background-size: cover;
+  background-position: center;
   color: #fff;
   padding: 20px;
   height: 100%;
   overflow-y: auto;
+  position: relative;
+}
+.panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.75);
+  pointer-events: none;
 }
 .panel-header {
   display: flex;

@@ -1,5 +1,5 @@
 <template>
-  <div class="dungeon-panel" style="background-image: url('/assets/bg-dungeon-gate.png') !important; background-size: cover; background-position: center;">
+  <div class="dungeon-panel" style="background-image: url('/assets/bg-dungeon-gate.png'); background-size: cover; background-position: center;">
     <h2>🏔️ 副本挑战</h2>
     <div class="dungeon-list">
       <div v-for="d in dungeons" :key="d.id" class="dungeon-card" :class="{unlocked:d.unlocked}">
@@ -24,7 +24,21 @@ const dungeons = ref([
 ])
 </script>
 <style scoped>
-.dungeon-panel { padding: 20px; }
+.dungeon-panel {
+  padding: 20px;
+  background-image: url('@/assets/images/bg-battle-dungeon.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  min-height: 100%;
+}
+.dungeon-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.82);
+  pointer-events: none;
+}
 h2 { color: #f093fb; font-size: 24px; margin-bottom: 20px; }
 .dungeon-list { display: flex; flex-direction: column; gap: 15px; }
 .dungeon-card { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; }

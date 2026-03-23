@@ -259,8 +259,20 @@ onMounted(() => {
 .gongfa-effects-panel {
   padding: 20px;
   background: #1a1a2e;
+  background-image: url('@/assets/images/bg-debate.png');
+  background-size: cover;
+  background-position: center;
   border-radius: 12px;
   min-height: 500px;
+  position: relative;
+}
+.gongfa-effects-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.82);
+  pointer-events: none;
+  border-radius: 12px;
 }
 
 .gongfa-effects-panel h2 {

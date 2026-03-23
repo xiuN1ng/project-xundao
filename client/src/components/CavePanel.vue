@@ -17,7 +17,12 @@ const energy = ref(80)
 const caves = ref([{id:1,icon:'🪨',name:'初级矿洞',level:1,locked:false},{id:2,icon:'💎',name:'中级矿洞',level:5,locked:false},{id:3,icon:'💠',name:'高级矿洞',level:10,locked:true}])
 </script>
 <style scoped>
-.cave-panel { padding: 20px; }
+.cave-panel {
+  padding: 20px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, rgba(20, 10, 30, 0.88) 0%, rgba(10, 20, 40, 0.90) 100%), url('@/assets/images/bg-cave-dwelling.png') center/cover no-repeat;
+  box-sizing: border-box;
+}
 h2 { color: #f093fb; font-size: 24px; margin-bottom: 20px; }
 .cave-energy { margin-bottom: 25px; }
 .cave-energy span { display: block; color: #fff; margin-bottom: 10px; }

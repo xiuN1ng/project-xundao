@@ -1,536 +1,584 @@
 /**
- * 挂机修仙 - 数据存储适配器
- * 支持 MySQL 和 JSON 两种存储方式
+ * 数据存储层 - SQLite 操作封装
+ * 使用better-sqlite3，与server.js共享数据库连接
  */
 
-const database = require('./database');
+let db;
+try {
+  // 尝试从server.js导入db实例
+  const server = require('../server');
+  db = server.db || server;
+} catch {
+  // 如果导入失败，使用独立的数据库连接
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const dbPath = path.join(__dirname, '..', 'data', 'game.db');
+  db = new Database(dbPath);
+}
 
-// 默认配置
-const DEFAULT_STORAGE = {
-  type: 'json', // 'mysql' 或 'json'
-  jsonPath: './data/saves'
+// 玩家数据操作
+const playerStorage = {
+  // 创建或获取玩家
+  getOrCreatePlayer(playerId, username = null) {
+    let player;
+    
+    if (playerId) {
+      player = db.prepare('SELECT * FROM player WHERE id = ?').get(playerId);
+      if (player) return player;
+    }
+    
+    // 创建新玩家
+    const usernameStr = username || `player_${Date.now()}`;
+    const result = db.prepare(
+      'INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)'
+    ).run(usernameStr, 10000, 1, 0);
+    
+    return db.prepare('SELECT * FROM player WHERE id = ?').get(result.lastInsertRowid);
+  },
+
+  // 更新玩家灵石
+  updateSpiritStones(playerId, amount) {
+    db.prepare(
+      'UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?'
+    ).run(amount, playerId);
+  },
+
+  // 更新玩家强化石
+  updateQianghuaStones(playerId, amount) {
+    db.prepare(
+      'UPDATE player SET qianghua_stones = COALESCE(qianghua_stones, 0) + ? WHERE id = ?'
+    ).run(amount, playerId);
+  },
+
+  // 获取玩家强化石数量
+  getQianghuaStones(playerId) {
+    const player = db.prepare('SELECT qianghua_stones FROM player WHERE id = ?').get(playerId);
+    return player?.qianghua_stones || 0;
+  },
+
+  // 检查玩家是否有足够灵石
+  async hasEnoughSpiritStones(playerId, amount) {
+    const [rows] = await pool.execute(
+      'SELECT spirit_stones FROM player WHERE id = ?',
+      [playerId]
+    );
+    if (rows.length === 0) return false;
+    return rows[0].spirit_stones >= amount;
+  },
+
+  // 扣除玩家灵石
+  async deductSpiritStones(playerId, amount) {
+    await pool.execute(
+      'UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ? AND spirit_stones >= ?',
+      [amount, playerId, amount]
+    );
+  },
+
+  // 添加资源（灵石和经验）
+  async addResources(playerId, spiritStones = 0, exp = 0) {
+    if (spiritStones > 0) {
+      await pool.execute(
+        'UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?',
+        [spiritStones, playerId]
+      );
+    }
+    if (exp > 0) {
+      // 经验添加到玩家游戏数据中
+      const gameData = await gameDataStorage.getPlayerGameData(playerId);
+      if (!gameData) {
+        // 创建初始游戏数据
+        await gameDataStorage.savePlayerGameData(playerId, {
+          exp: exp,
+          level: 1,
+          realm_level: 0,
+          cultivation: 0
+        });
+      } else {
+        gameData.exp = (gameData.exp || 0) + exp;
+        await gameDataStorage.savePlayerGameData(playerId, gameData);
+      }
+    }
+  },
+
+  // 更新玩家境界
+  updateRealmLevel(playerId, realmLevel) {
+    db.prepare(
+      'UPDATE player SET realm_level = ? WHERE id = ?'
+    ).run(realmLevel, playerId);
+  },
+
+  // 更新玩家等级
+  updateLevel(playerId, level) {
+    db.prepare(
+      'UPDATE player SET level = ? WHERE id = ?'
+    ).run(level, playerId);
+  },
+
+  // 更新玩家经验
+  updateExperience(playerId, exp) {
+    db.prepare(
+      'UPDATE player SET experience = COALESCE(experience, 0) + ? WHERE id = ?'
+    ).run(exp, playerId);
+  }
 };
 
-class StorageAdapter {
-  constructor(options = {}) {
-    this.config = { ...DEFAULT_STORAGE, ...options };
-    this.type = this.config.type;
-    this.jsonPath = this.config.jsonPath;
-    this.currentPlayerId = null;
-  }
-
-  // 初始化存储系统
-  async init(storageType = null) {
-    if (storageType) {
-      this.type = storageType;
-    }
-
-    if (this.type === 'mysql') {
-      try {
-        await database.init();
-        console.log('📦 存储模式: MySQL');
-        return true;
-      } catch (error) {
-        console.error('MySQL 连接失败，切换到 JSON 模式:', error.message);
-        this.type = 'json';
-      }
-    }
-
-    if (this.type === 'json') {
-      this.ensureJsonDirectory();
-      console.log('📦 存储模式: JSON (本地文件)');
-    }
-
-    return true;
-  }
-
-  // 确保 JSON 目录存在
-  ensureJsonDirectory() {
-    const fs = require('fs');
-    const path = require('path');
-    const dir = path.resolve(this.jsonPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  }
-
-  // 设置当前玩家
-  setPlayerId(playerId) {
-    this.currentPlayerId = playerId;
-  }
-
-  // ==================== 玩家基础数据 ====================
-
-  // 保存玩家数据
-  async savePlayerData(dataKey, dataValue) {
-    if (!this.currentPlayerId) {
-      throw new Error('未设置玩家ID');
-    }
-
-    if (this.type === 'mysql') {
-      await database.savePlayerData(this.currentPlayerId, dataKey, dataValue);
-    } else {
-      await this.saveJson(`player_${this.currentPlayerId}`, {
-        [dataKey]: dataValue
-      });
-    }
-  }
-
-  // 读取玩家数据
-  async loadPlayerData(dataKey) {
-    if (!this.currentPlayerId) {
-      throw new Error('未设置玩家ID');
-    }
-
-    if (this.type === 'mysql') {
-      const data = await database.getPlayerData(this.currentPlayerId, dataKey);
-      return data ? JSON.parse(data) : null;
-    } else {
-      const allData = await this.loadJson(`player_${this.currentPlayerId}`);
-      return allData ? allData[dataKey] : null;
-    }
-  }
-
-  // 加载所有玩家数据
-  async loadAllPlayerData() {
-    if (!this.currentPlayerId) {
-      throw new Error('未设置玩家ID');
-    }
-
-    if (this.type === 'mysql') {
-      const rows = await database.query(
-        'SELECT data_key, data_value FROM player_data WHERE player_id = ?',
-        [this.currentPlayerId]
-      );
-      
-      const result = {};
-      for (const row of rows) {
-        result[row.data_key] = JSON.parse(row.data_value);
-      }
-      return result;
-    } else {
-      return await this.loadJson(`player_${this.currentPlayerId}`);
-    }
-  }
-
-  // ==================== 背包数据 ====================
-
-  // 保存背包
-  async saveInventory(inventoryData) {
-    await this.savePlayerData('inventory', inventoryData);
-  }
-
-  // 加载背包
-  async loadInventory() {
-    return await this.loadPlayerData('inventory') || {};
-  }
-
-  // ==================== 成就数据 ====================
-
-  // 保存成就
-  async saveAchievements(achievementsData) {
-    if (this.type === 'mysql') {
-      for (const [achievementId, data] of Object.entries(achievementsData)) {
-        await database.query(
-          `INSERT INTO achievements (player_id, achievement_id, progress, completed, completed_at, rewarded)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE progress = ?, completed = ?, completed_at = ?, rewarded = ?`,
-          [
-            this.currentPlayerId, achievementId, data.progress || 0,
-            data.completed ? 1 : 0, data.completed_at || null, data.rewarded ? 1 : 0,
-            data.progress || 0, data.completed ? 1 : 0, data.completed_at || null, data.rewarded ? 1 : 0
-          ]
-        );
-      }
-    } else {
-      await this.savePlayerData('achievements', achievementsData);
-    }
-  }
-
-  // 加载成就
-  async loadAchievements() {
-    if (this.type === 'mysql') {
-      const rows = await database.query(
-        'SELECT * FROM achievements WHERE player_id = ?',
-        [this.currentPlayerId]
-      );
-      
-      const result = {};
-      for (const row of rows) {
-        result[row.achievement_id] = {
-          progress: row.progress,
-          completed: row.completed === 1,
-          completed_at: row.completed_at,
-          rewarded: row.rewarded === 1
-        };
-      }
-      return result;
-    } else {
-      return await this.loadPlayerData('achievements') || {};
-    }
-  }
-
-  // ==================== 社交数据 ====================
-
-  // 保存社交数据
-  async saveSocialData(socialData) {
-    if (this.type === 'mysql') {
-      // 保存好友
-      for (const [friendId, data] of Object.entries(socialData.friends || {})) {
-        await database.query(
-          `INSERT INTO friendships (player_id, friend_id, added_at, last_interact, gift_count, visit_count, like_count)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE last_interact = ?, gift_count = ?, visit_count = ?, like_count = ?`,
-          [
-            this.currentPlayerId, friendId, new Date(data.addedAt), new Date(data.lastInteract),
-            data.giftCount || 0, data.visitCount || 0, data.likeCount || 0,
-            new Date(data.lastInteract), data.giftCount || 0, data.visitCount || 0, data.likeCount || 0
-          ]
-        );
-      }
-      
-      // 保存消息
-      for (const msg of socialData.messages || []) {
-        await database.query(
-          `INSERT INTO messages (player_id, from_id, to_id, content, timestamp, is_read)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [this.currentPlayerId, msg.from, msg.to, msg.content, new Date(msg.timestamp), msg.read ? 1 : 0]
-        );
-      }
-    } else {
-      await this.savePlayerData('social', socialData);
-    }
-  }
-
-  // 加载社交数据
-  async loadSocialData() {
-    if (this.type === 'mysql') {
-      const friends = await database.query(
-        'SELECT * FROM friendships WHERE player_id = ?',
-        [this.currentPlayerId]
-      );
-      
-      const messages = await database.query(
-        'SELECT * FROM messages WHERE player_id = ? ORDER BY timestamp DESC LIMIT 100',
-        [this.currentPlayerId]
-      );
-      
-      const friendsObj = {};
-      for (const f of friends) {
-        friendsObj[f.friend_id] = {
-          addedAt: f.added_at,
-          lastInteract: f.last_interact,
-          giftCount: f.gift_count,
-          visitCount: f.visit_count,
-          likeCount: f.like_count
-        };
-      }
-      
-      return {
-        friends: friendsObj,
-        messages: messages.map(m => ({
-          from: m.from_id,
-          to: m.to_id,
-          content: m.content,
-          timestamp: m.timestamp,
-          read: m.is_read === 1
-        }))
-      };
-    } else {
-      return await this.loadPlayerData('social') || {
-        friends: {},
-        messages: [],
-        dynamics: [],
-        likes: {},
-        lastLikeReset: 0
-      };
-    }
-  }
-
-  // ==================== 宗门数据 ====================
-
-  // 保存宗门数据
-  async saveSectData(sectData) {
-    if (this.type === 'mysql') {
-      if (sectData.sect) {
-        await database.query(
-          `INSERT INTO sects (sect_id, name, type, leader_id, level, members, buildings, resources)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE level = ?, members = ?, buildings = ?, resources = ?`,
-          [
-            sectData.sect.sect_id, sectData.sect.name, sectData.sect.type,
-            sectData.sect.leader_id, sectData.sect.level,
-            JSON.stringify(sectData.sect.members || []),
-            JSON.stringify(sectData.sect.buildings || {}),
-            JSON.stringify(sectData.sect.resources || {}),
-            sectData.sect.level,
-            JSON.stringify(sectData.sect.members || []),
-            JSON.stringify(sectData.sect.buildings || {}),
-            JSON.stringify(sectData.sect.resources || {})
-          ]
-        );
-      }
-    } else {
-      await this.savePlayerData('sect', sectData);
-    }
-  }
-
-  // 加载宗门数据
-  async loadSectData() {
-    if (this.type === 'mysql') {
-      const rows = await database.query(
-        'SELECT * FROM sects WHERE leader_id = ? OR members LIKE ?',
-        [this.currentPlayerId, `%${this.currentPlayerId}%`]
-      );
-      
-      if (rows.length > 0) {
-        const sect = rows[0];
-        return {
-          sect: {
-            sect_id: sect.sect_id,
-            name: sect.name,
-            type: sect.type,
-            leader_id: sect.leader_id,
-            level: sect.level,
-            members: JSON.parse(sect.members || '[]'),
-            buildings: JSON.parse(sect.buildings || '{}'),
-            resources: JSON.parse(sect.resources || '{}')
-          }
-        };
-      }
-      return { sect: null };
-    } else {
-      return await loadPlayerData('sect') || { sect: null };
-    }
-  }
-
-  // ==================== 统计数据 ====================
-
-  // 保存统计
-  async saveStats(statsData) {
-    if (this.type === 'mysql') {
-      await database.query(
-        `INSERT INTO player_stats (player_id, total_spirit, total_spirit_stones, offline_earnings, realm_breaks,
-           total_offline_time, total_idle_gains, techniques_learned, combat_wins, monsters_killed,
-           dungeons_cleared, total_damage, highest_damage, adventures_completed, chances_triggered,
-           artifacts_forged, artifacts_recycled, heaven_treasures_used, beasts_captured, sects_created,
-           world_boss_kills, market_sales)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           total_spirit = ?, total_spirit_stones = ?, offline_earnings = ?, realm_breaks = ?,
-           total_offline_time = ?, total_idle_gains = ?, techniques_learned = ?, combat_wins = ?,
-           monsters_killed = ?, dungeons_cleared = ?, total_damage = ?, highest_damage = ?,
-           adventures_completed = ?, chances_triggered = ?, artifacts_forged = ?, artifacts_recycled = ?,
-           heaven_treasures_used = ?, beasts_captured = ?, sects_created = ?, world_boss_kills = ?, market_sales = ?`,
-        [
-          this.currentPlayerId,
-          statsData.totalSpirit || 0, statsData.totalSpiritStones || 0, statsData.offlineEarnings || 0,
-          statsData.realmBreaks || 0, statsData.totalOfflineTime || 0, statsData.totalIdleGains || 0,
-          statsData.techniquesLearned || 0, statsData.combatWins || 0, statsData.monstersKilled || 0,
-          statsData.dungeonsCleared || 0, statsData.totalDamage || 0, statsData.highestDamage || 0,
-          statsData.adventuresCompleted || 0, statsData.chancesTriggered || 0,
-          statsData.artifactsForged || 0, statsData.artifactsRecycled || 0, statsData.heavenTreasuresUsed || 0,
-          statsData.beastsCaptured || 0, statsData.sectsCreated || 0, statsData.worldBossKills || 0,
-          statsData.marketSales || 0,
-          // Update values
-          statsData.totalSpirit || 0, statsData.totalSpiritStones || 0, statsData.offlineEarnings || 0,
-          statsData.realmBreaks || 0, statsData.totalOfflineTime || 0, statsData.totalIdleGains || 0,
-          statsData.techniquesLearned || 0, statsData.combatWins || 0, statsData.monstersKilled || 0,
-          statsData.dungeonsCleared || 0, statsData.totalDamage || 0, statsData.highestDamage || 0,
-          statsData.adventuresCompleted || 0, statsData.chancesTriggered || 0,
-          statsData.artifactsForged || 0, statsData.artifactsRecycled || 0, statsData.heavenTreasuresUsed || 0,
-          statsData.beastsCaptured || 0, statsData.sectsCreated || 0, statsData.worldBossKills || 0,
-          statsData.marketSales || 0
-        ]
-      );
-    } else {
-      await this.savePlayerData('stats', statsData);
-    }
-  }
-
-  // 加载统计
-  async loadStats() {
-    if (this.type === 'mysql') {
-      const rows = await database.query(
-        'SELECT * FROM player_stats WHERE player_id = ?',
-        [this.currentPlayerId]
-      );
-      
-      if (rows.length > 0) {
-        const s = rows[0];
-        return {
-          totalSpirit: Number(s.total_spirit),
-          totalSpiritStones: Number(s.total_spirit_stones),
-          offlineEarnings: Number(s.offline_earnings),
-          realmBreaks: s.realm_breaks,
-          totalOfflineTime: Number(s.total_offline_time),
-          totalIdleGains: Number(s.total_idle_gains),
-          techniquesLearned: s.techniques_learned,
-          combatWins: s.combat_wins,
-          monstersKilled: s.monsters_killed,
-          dungeonsCleared: s.dungeons_cleared,
-          totalDamage: Number(s.total_damage),
-          highestDamage: Number(s.highest_damage),
-          adventuresCompleted: s.adventures_completed,
-          chancesTriggered: s.chances_triggered,
-          artifactsForged: s.artifacts_forged,
-          artifactsRecycled: s.artifacts_recycled,
-          heavenTreasuresUsed: s.heaven_treasures_used,
-          beastsCaptured: s.beasts_captured,
-          sectsCreated: s.sects_created,
-          worldBossKills: s.world_boss_kills,
-          marketSales: s.market_sales
-        };
-      }
-      return null;
-    } else {
-      return await this.loadPlayerData('stats');
-    }
-  }
-
-  // ==================== 设置 ====================
-
-  // 保存设置
-  async saveSettings(settings) {
-    if (this.type === 'mysql') {
-      await database.query(
-        'INSERT INTO player_settings (player_id, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE settings = ?',
-        [this.currentPlayerId, JSON.stringify(settings), JSON.stringify(settings)]
-      );
-    } else {
-      await this.savePlayerData('settings', settings);
-    }
-  }
-
-  // 加载设置
-  async loadSettings() {
-    if (this.type === 'mysql') {
-      const rows = await database.query(
-        'SELECT settings FROM player_settings WHERE player_id = ?',
-        [this.currentPlayerId]
-      );
-      return rows.length > 0 ? JSON.parse(rows[0].settings) : { autoSave: true, offline收益: true };
-    } else {
-      return await this.loadPlayerData('settings') || { autoSave: true, offline收益: true };
-    }
-  }
-
-  // ==================== 完整存档 ====================
-
-  // 保存完整游戏数据
-  async saveGame(gameState, achievementData, socialDataStr) {
-    // 保存各个数据模块
-    await this.savePlayerData('player', gameState.player);
-    await this.savePlayerData('cave', gameState.cave);
-    await this.saveStats(gameState.stats);
-    await this.saveSettings(gameState.settings);
-    await this.saveAchievements(achievementData);
+// 功法数据操作
+const gongfaStorage = {
+  // 获取所有功法
+  getGongfaList(filters = {}) {
+    let sql = 'SELECT * FROM gongfa';
+    const params = [];
+    const conditions = [];
     
-    // 解析并保存社交数据
-    if (socialDataStr) {
+    if (filters.type) {
+      conditions.push('type = ?');
+      params.push(filters.type);
+    }
+    if (filters.rarity) {
+      conditions.push('rarity = ?');
+      params.push(filters.rarity);
+    }
+    if (filters.realm_req !== undefined) {
+      conditions.push('realm_req <= ?');
+      params.push(filters.realm_req);
+    }
+    if (filters.level_req !== undefined) {
+      conditions.push('level_req <= ?');
+      params.push(filters.level_req);
+    }
+    
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    sql += ' ORDER BY rarity DESC, realm_req ASC';
+    
+    return db.prepare(sql).all(...params);
+  },
+
+  // 获取单个功法
+  getGongfaById(gongfaId) {
+    return db.prepare('SELECT * FROM gongfa WHERE id = ?').get(gongfaId);
+  },
+
+  // 获取玩家已学习的功法
+  getLearnedGongfa(playerId) {
+    return db.prepare(
+      'SELECT pg.*, g.name, g.type, g.icon, g.rarity FROM player_gongfa pg JOIN gongfa g ON pg.gongfa_id = g.id WHERE pg.player_id = ?'
+    ).all(playerId);
+  },
+
+  // 学习功法
+  learnGongfa(playerId, gongfaId) {
+    db.prepare(
+      'INSERT INTO player_gongfa (player_id, gongfa_id, level, exp) VALUES (?, ?, ?, ?)'
+    ).run(playerId, gongfaId, 1, 0);
+  },
+
+  // 检查是否已学习
+  hasLearned(playerId, gongfaId) {
+    const row = db.prepare(
+      'SELECT * FROM player_gongfa WHERE player_id = ? AND gongfa_id = ?'
+    ).get(playerId, gongfaId);
+    return !!row;
+  },
+
+  // 升级功法
+  upgradeGongfa(playerId, gongfaId) {
+    db.prepare(
+      'UPDATE player_gongfa SET level = level + 1, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND gongfa_id = ?'
+    ).run(playerId, gongfaId);
+  },
+
+  // 获取玩家功法经验
+  getGongfaExp(playerId, gongfaId) {
+    const row = db.prepare(
+      'SELECT exp FROM player_gongfa WHERE player_id = ? AND gongfa_id = ?'
+    ).get(playerId, gongfaId);
+    return row?.exp || 0;
+  },
+
+  // 消耗功法经验
+  consumeGongfaExp(playerId, gongfaId, exp) {
+    db.prepare(
+      'UPDATE player_gongfa SET exp = exp - ?, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND gongfa_id = ?'
+    ).run(exp, playerId, gongfaId);
+  }
+};
+
+// 功法装备操作
+const equipmentStorage = {
+  // 获取装备列表
+  getEquipment(playerId) {
+    const rows = db.prepare(
+      'SELECT * FROM player_gongfa_equipment WHERE player_id = ?'
+    ).all(playerId);
+    
+    const equipment = {};
+    rows.forEach(row => {
+      equipment[row.slot] = row.gongfa_id;
+    });
+    return equipment;
+  },
+
+  // 装备功法
+  equipGongfa(playerId, slot, gongfaId) {
+    // SQLite使用INSERT OR REPLACE
+    db.prepare(
+      `INSERT OR REPLACE INTO player_gongfa_equipment (player_id, slot, gongfa_id, updated_at) 
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+    ).run(playerId, slot, gongfaId);
+  },
+
+  // 卸下功法
+  unequipGongfa(playerId, slot) {
+    db.prepare(
+      'UPDATE player_gongfa_equipment SET gongfa_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND slot = ?'
+    ).run(playerId, slot);
+  }
+};
+
+// 玩家游戏数据操作
+const gameDataStorage = {
+  // 获取玩家游戏数据
+  getPlayerGameData(playerId) {
+    const row = db.prepare(
+      'SELECT player_data FROM player_game_data WHERE player_id = ?'
+    ).get(playerId);
+    
+    if (row && row.player_data) {
       try {
-        const socialData = typeof socialDataStr === 'string' ? JSON.parse(socialDataStr) : socialDataStr;
-        await this.saveSocialData(socialData);
+        return JSON.parse(row.player_data);
       } catch (e) {
-        console.error('保存社交数据失败:', e);
+        console.error('解析玩家数据失败:', e.message);
+        return null;
       }
-    }
-    
-    // 保存背包括法器、灵兽等
-    await this.savePlayerData('artifacts_inventory', gameState.player.artifacts_inventory || {});
-    await this.savePlayerData('owned_artifacts', gameState.player.owned_artifacts || []);
-    await this.savePlayerData('artifact_equipment', gameState.player.artifact_equipment || {});
-    await this.savePlayerData('beasts', gameState.player.beasts || []);
-    await this.savePlayerData('treasure_cooldowns', gameState.player.treasure_cooldowns || {});
-    
-    console.log(`✅ 游戏数据已保存 (${this.type})`);
-  }
-
-  // 加载完整游戏数据
-  async loadGame() {
-    const playerData = await this.loadPlayerData('player');
-    const caveData = await this.loadPlayerData('cave');
-    const statsData = await this.loadStats();
-    const settingsData = await this.loadSettings();
-    const achievementsData = await this.loadAchievements();
-    const socialData = await this.loadSocialData();
-    
-    const artifactsInventory = await this.loadPlayerData('artifacts_inventory') || {};
-    const ownedArtifacts = await this.loadPlayerData('owned_artifacts') || [];
-    const artifactEquipment = await this.loadPlayerData('artifact_equipment') || {};
-    const beasts = await this.loadPlayerData('beasts') || [];
-    const treasureCooldowns = await this.loadPlayerData('treasure_cooldowns') || {};
-    
-    return {
-      gameState: {
-        player: playerData,
-        cave: caveData,
-        stats: statsData,
-        settings: settingsData
-      },
-      achievementData: achievementsData,
-      socialData: socialData
-    };
-  }
-
-  // ==================== JSON 辅助方法 ====================
-
-  // 保存 JSON 文件
-  async saveJson(filename, data) {
-    const fs = require('fs');
-    const path = require('path');
-    const filePath = path.resolve(this.jsonPath, `${filename}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  }
-
-  // 读取 JSON 文件
-  async loadJson(filename) {
-    const fs = require('fs');
-    const path = require('path');
-    const filePath = path.resolve(this.jsonPath, `${filename}.json`);
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(content);
     }
     return null;
+  },
+
+  // 保存玩家游戏数据
+  savePlayerGameData(playerId, gameData) {
+    const jsonData = JSON.stringify(gameData);
+    
+    db.prepare(
+      `INSERT OR REPLACE INTO player_game_data (player_id, player_data, updated_at) 
+       VALUES (?, ?, CURRENT_TIMESTAMP)`
+    ).run(playerId, jsonData);
   }
+};
 
-  // ==================== 迁移工具 ====================
+// 境界副本进度操作
+const realmDungeonStorage = {
+  // 获取玩家副本进度
+  getProgress(playerId) {
+    const rows = db.prepare(
+      'SELECT realm, highest_floor, cleared FROM realm_dungeon_progress WHERE player_id = ?'
+    ).all(playerId);
+    
+    const progress = {};
+    rows.forEach(row => {
+      progress[row.realm] = {
+        highestFloor: row.highest_floor,
+        cleared: !!row.cleared
+      };
+    });
+    return progress;
+  },
 
-  // 从 JSON 迁移到 MySQL
-  async migrateFromJson(playerId, jsonPath) {
-    this.currentPlayerId = playerId;
-    this.jsonPath = jsonPath;
-    this.type = 'json';
+  // 更新副本进度
+  updateProgress(playerId, realm, highestFloor, cleared) {
+    db.prepare(
+      `INSERT OR REPLACE INTO realm_dungeon_progress (player_id, realm, highest_floor, cleared, updated_at) 
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
+    ).run(playerId, realm, highestFloor, cleared ? 1 : 0);
+  }
+};
 
-    console.log(`🔄 开始迁移玩家 ${playerId} 的数据...`);
-
+// 经脉穴位存储 (SQLite版本)
+const meridianStorageSQLite = {
+  // 确保经脉表存在
+  ensureTables() {
     try {
-      // 加载所有 JSON 数据
-      const allData = await this.loadAllPlayerData();
+      db.prepare(`SELECT 1 FROM player_meridian LIMIT 1`).get();
+    } catch (e) {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS player_meridian (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id TEXT NOT NULL UNIQUE,
+          meridians_data TEXT DEFAULT '{}',
+          total_spirit_bonus INTEGER DEFAULT 0,
+          total_atk_bonus INTEGER DEFAULT 0,
+          total_def_bonus INTEGER DEFAULT 0,
+          total_hp_bonus INTEGER DEFAULT 0,
+          total_crit_bonus REAL DEFAULT 0,
+          total_dodge_bonus REAL DEFAULT 0,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
       
-      if (!allData || Object.keys(allData).length === 0) {
-        console.log('⚠️ 没有找到 JSON 数据');
-        return false;
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS meridian_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          meridian_id TEXT,
+          acupoint_id TEXT,
+          result TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+    }
+  },
+
+  // 获取玩家经脉数据
+  getPlayerMeridian(playerId) {
+    this.ensureTables();
+    const row = db.prepare('SELECT * FROM player_meridian WHERE player_id = ?').get(playerId);
+    
+    if (!row) {
+      return this.initPlayerMeridian(playerId);
+    }
+    
+    if (row.meridians_data) {
+      try {
+        row.meridiansData = JSON.parse(row.meridians_data);
+      } catch (e) {
+        row.meridiansData = {};
       }
+    }
+    
+    return row;
+  },
 
-      // 切换到 MySQL 模式
-      this.type = 'mysql';
-      await database.init();
+  // 初始化玩家经脉数据
+  initPlayerMeridian(playerId) {
+    this.ensureTables();
+    db.prepare(
+      `INSERT OR REPLACE INTO player_meridian (player_id, meridians_data, total_spirit_bonus, 
+       total_atk_bonus, total_def_bonus, total_hp_bonus, total_crit_bonus, total_dodge_bonus) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(playerId, '{}', 0, 0, 0, 0, 0, 0);
+    
+    return this.getPlayerMeridian(playerId);
+  },
 
-      // 逐个保存数据
-      for (const [key, value] of Object.entries(allData)) {
-        await this.savePlayerData(key, value);
+  // 保存玩家经脉数据
+  savePlayerMeridian(playerId, data) {
+    this.ensureTables();
+    const jsonData = JSON.stringify(data.meridiansData || {});
+    
+    db.prepare(
+      `UPDATE player_meridian 
+       SET meridians_data = ?, 
+           total_spirit_bonus = ?, 
+           total_atk_bonus = ?, 
+           total_def_bonus = ?, 
+           total_hp_bonus = ?,
+           total_crit_bonus = ?,
+           total_dodge_bonus = ?,
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE player_id = ?`
+    ).run(
+      jsonData,
+      data.totalSpiritBonus || 0,
+      data.totalAtkBonus || 0,
+      data.totalDefBonus || 0,
+      data.totalHpBonus || 0,
+      data.totalCritBonus || 0,
+      data.totalDodgeBonus || 0,
+      playerId
+    );
+  },
+
+  // 激活穴位
+  activateAcupoint(playerId, meridianId, acupointId, acupointData) {
+    const meridianData = this.getPlayerMeridian(playerId);
+    const meridians = meridianData.meridiansData || {};
+    
+    if (!meridians[meridianId]) {
+      meridians[meridianId] = {
+        id: meridianId,
+        acupoints: []
+      };
+    }
+    
+    meridians[meridianId].acupoints.push({
+      id: acupointId,
+      activatedAt: Date.now(),
+      ...acupointData
+    });
+    
+    this.savePlayerMeridian(playerId, { meridiansData: meridians });
+    
+    return meridians;
+  },
+
+  // 检查穴位是否已激活
+  isAcupointActivated(playerId, acupointId) {
+    const meridianData = this.getPlayerMeridian(playerId);
+    const meridians = meridianData.meridiansData || {};
+    
+    for (const meridian of Object.values(meridians)) {
+      if (meridian.acupoints && meridian.acupoints.some(a => a.id === acupointId)) {
+        return true;
       }
+    }
+    
+    return false;
+  },
 
-      console.log(`✅ 迁移完成！`);
-      return true;
-    } catch (error) {
-      console.error('迁移失败:', error);
-      return false;
+  // 获取所有已激活穴位
+  getAllActivatedAcupoints(playerId) {
+    const meridianData = this.getPlayerMeridian(playerId);
+    const meridians = meridianData.meridiansData || {};
+    
+    const allAcupoints = [];
+    for (const meridian of Object.values(meridians)) {
+      if (meridian.acupoints) {
+        allAcupoints.push(...meridian.acupoints);
+      }
+    }
+    
+    return allAcupoints;
+  },
+
+  // 获取穴位总数
+  getTotalAcupointsCount(playerId) {
+    return this.getAllActivatedAcupoints(playerId).length;
+  },
+
+  // 获取经脉加成
+  getMeridianBonuses(playerId) {
+    const meridianData = this.getPlayerMeridian(playerId);
+    
+    return {
+      totalSpiritBonus: meridianData.total_spirit_bonus || 0,
+      totalAtkBonus: meridianData.total_atk_bonus || 0,
+      totalDefBonus: meridianData.total_def_bonus || 0,
+      totalHpBonus: meridianData.total_hp_bonus || 0,
+      totalCritBonus: meridianData.total_crit_bonus || 0,
+      totalDodgeBonus: meridianData.total_dodge_bonus || 0
+    };
+  },
+
+  // 计算并更新经脉加成
+  calculateAndUpdateBonuses(playerId, acupoints, effects) {
+    const bonuses = {
+      totalSpiritBonus: effects.spirit || 0,
+      totalAtkBonus: (effects.atk || 0) + (effects.atk_percent ? Math.floor(effects.atk_percent * 100) : 0),
+      totalDefBonus: (effects.def || 0) + (effects.def_percent ? Math.floor(effects.def_percent * 100) : 0),
+      totalHpBonus: (effects.hp || 0) + (effects.hp_percent ? Math.floor(effects.hp_percent * 200) : 0),
+      totalCritBonus: effects.crit || 0,
+      totalDodgeBonus: effects.dodge || 0,
+      meridiansData: {}
+    };
+    
+    const meridianData = this.getPlayerMeridian(playerId);
+    const meridians = meridianData.meridiansData || {};
+    
+    for (const [meridianId, meridian] of Object.entries(meridians)) {
+      bonuses.meridiansData[meridianId] = { ...meridian };
+    }
+    
+    this.savePlayerMeridian(playerId, bonuses);
+    
+    return bonuses;
+  },
+
+  // 添加经脉操作日志
+  addMeridianLog(playerId, action, meridianId, acupointId, result) {
+    this.ensureTables();
+    db.prepare(
+      `INSERT INTO meridian_log (player_id, action, meridian_id, acupoint_id, result, created_at) 
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).run(playerId, action, meridianId, acupointId, JSON.stringify(result));
+  },
+
+  // 获取经脉日志
+  getMeridianLog(playerId, limit = 10) {
+    this.ensureTables();
+    return db.prepare(
+      `SELECT * FROM meridian_log WHERE player_id = ? ORDER BY created_at DESC LIMIT ?`
+    ).all(playerId, limit);
+  }
+};
+
+module.exports = {
+  playerStorage,
+  gongfaStorage,
+  equipmentStorage,
+  gameDataStorage,
+  realmDungeonStorage,
+  meridianStorage: meridianStorageSQLite
+};
+
+// ============================================================
+// CacheBreaker 缓存优化 (添加于 2026-03-10)
+// 防止缓存雪崩：single-flight + 概率性提前过期
+// ============================================================
+
+// 简单内存缓存实现 (用于演示)
+class SimpleCache {
+  constructor() {
+    this.cache = new Map();
+    this.timers = new Map();
+  }
+  
+  // 概率性提前过期 (10% 概率在 TTL 到达前刷新)
+  getWithProbabilisticExpiry(key, ttl, fetchFn) {
+    const now = Date.now();
+    const cached = this.cache.get(key);
+    
+    // 有缓存且随机数 > 0.1 (90% 概率直接返回)
+    if (cached && cached.expiresAt > now && Math.random() > 0.1) {
+      return Promise.resolve(cached.value);
+    }
+    
+    // 检查是否已有请求在进行 (single-flight)
+    if (this.promises && this.promises.has(key)) {
+      return this.promises.get(key);
+    }
+    
+    // 创建新请求
+    const promise = (async () => {
+      try {
+        const value = await fetchFn();
+        this.cache.set(key, {
+          value,
+          expiresAt: now + ttl
+        });
+        return value;
+      } finally {
+        if (this.promises) this.promises.delete(key);
+      }
+    })();
+    
+    if (!this.promises) this.promises = new Map();
+    this.promises.set(key, promise);
+    
+    return promise;
+  }
+  
+  // 清理过期缓存
+  cleanup() {
+    const now = Date.now();
+    for (const [key, entry] of this.cache) {
+      if (entry.expiresAt < now) {
+        this.cache.delete(key);
+      }
     }
   }
 }
 
-// 导出单例
-module.exports = new StorageAdapter();
+// 全局缓存实例
+global.gameCache = new SimpleCache();
+
+// 定期清理过期缓存 (每分钟)
+setInterval(() => {
+  if (global.gameCache) {
+    global.gameCache.cleanup();
+  }
+}, 60000);
+
+console.log('✅ CacheBreaker 缓存优化已加载');

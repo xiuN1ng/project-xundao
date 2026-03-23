@@ -39,7 +39,7 @@
           <!-- 角色立绘区 -->
           <div class="character-area">
             <div v-if="currentNode.speaker" class="character-portrait">
-              <div class="portrait-placeholder">👤</div>
+              <img :src="characterPortrait" class="portrait-img" :alt="currentNode.speaker" />
             </div>
           </div>
 
@@ -149,6 +149,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { usePlayerStore } from '../stores/player'
+import characterPortrait from '../assets/images/player/character-portrait-new.png'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -582,5 +583,38 @@ onMounted(() => {
   color: #fff;
   border-radius: 8px;
   cursor: pointer;
+}
+
+/* 角色立绘区 */
+.character-area {
+  position: absolute;
+  bottom: 120px;
+  right: 20px;
+  width: 200px;
+  height: 280px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.character-portrait {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.portrait-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px rgba(240,147,251,0.4)) drop-shadow(0 10px 30px rgba(0,0,0,0.5));
+  animation: portraitFloat 3s infinite ease-in-out;
+}
+
+@keyframes portraitFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 </style>

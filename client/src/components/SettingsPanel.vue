@@ -22,7 +22,13 @@
 <script setup>
 </script>
 <style scoped>
-.settings-panel { padding: 20px; }
+.settings-panel { 
+  padding: 20px; 
+  background-image: url('../../assets/ui-icons.jpg');
+  background-size: 180px;
+  background-position: right bottom;
+  background-repeat: no-repeat;
+}
 h2 { color: #f093fb; font-size: 24px; margin-bottom: 20px; }
 .settings-group { margin-bottom: 25px; }
 .settings-group h3 { color: #667eea; font-size: 16px; margin-bottom: 15px; }

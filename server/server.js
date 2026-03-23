@@ -2557,6 +2557,24 @@ try {
   Logger.info('宗门API不可用:', e.message);
 }
 
+// 世界BOSS系统 API
+try {
+  const worldbossApi = require('./backend/routes/worldboss');
+  app.use('/api/worldboss', worldbossApi);
+  Logger.info('✅ 世界BOSS系统 API 已加载');
+
+  // 仙侠奇遇系统 API
+  try {
+    const adventureRoute = require('./routes/adventure');
+    adventureRoute(app, db, authenticateToken, Logger);
+    Logger.info('✅ 奇遇系统 API 已加载');
+  } catch (e) {
+    Logger.info('奇遇API不可用:', e.message);
+  }
+} catch (e) {
+  Logger.info('世界BOSS API不可用:', e.message);
+}
+
 // 宗门战系统 API
 try {
   const sectWarApi = require('./src/sect_war');
@@ -3363,6 +3381,23 @@ app.post('/api/partner/accept', (req, res) => {
         exp_bonus: intimacyLevel.exp_bonus
       }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 拒绝结缘
+app.post('/api/partner/reject', (req, res) => {
+  try {
+    const { player_id, application_id } = req.body;
+    if (!player_id || !application_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    const result = db.prepare(`DELETE FROM partner_applications WHERE id = ? AND target_id = ? AND status = 'pending'`).run(application_id, player_id);
+    if (result.changes === 0) {
+      return res.status(400).json({ success: false, error: '申请不存在或已被处理' });
+    }
+    res.json({ success: true, message: '已拒绝结缘申请' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -8008,9 +8043,19 @@ app.use((req, res) => {
 try {
   const { loadRoutes } = require('./routes/index');
   // 保留现有路由，新增模块化路由可通过 loadRoutes(app, db, authenticateToken, Logger) 加载
-  Logger.info('✓ 路由模块加载器就绪');
+  loadRoutes(app, db, authenticateToken, Logger);
+  Logger.info('✓ 路由模块加载器已激活');
 } catch (e) {
   Logger.debug('模块化路由未启用，使用单体server.js');
+}
+
+// ==================== 装备套装路由 ====================
+try {
+  const equipmentRoutes = require('./backend/routes/equipment');
+  app.use('/api/equipment', equipmentRoutes);
+  Logger.info('✓ 装备套装路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 装备路由加载失败:', e.message);
 }
 
 // 导出db实例供其他模块使用

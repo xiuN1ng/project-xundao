@@ -43,24 +43,24 @@ const Resources = {
   // ==================== 主角立绘 ====================
   player: {
     male: {
-      mortal: null,
-      qi: null,
-      zhuJi: null,
-      jinDan: null,
-      yuanYing: null,
-      huaShen: null,
-      duJie: null,
-      xianWang: null
+      mortal: require('@/assets/images/player/character-portrait-new.png'),
+      qi: require('@/assets/images/player/character-portrait-new.png'),
+      zhuJi: require('@/assets/images/player/character-portrait-new.png'),
+      jinDan: require('@/assets/images/player/character-portrait-new.png'),
+      yuanYing: require('@/assets/images/player/character-portrait-new.png'),
+      huaShen: require('@/assets/images/player/character-portrait-new.png'),
+      duJie: require('@/assets/images/player/character-portrait-new.png'),
+      xianWang: require('@/assets/images/player/character-portrait-new.png')
     },
     female: {
-      mortal: null,
-      qi: null,
-      zhuJi: null,
-      jinDan: null,
-      yuanYing: null,
-      huaShen: null,
-      duJie: null,
-      xianWang: null
+      mortal: require('@/assets/images/player/character-portrait-new.png'),
+      qi: require('@/assets/images/player/character-portrait-new.png'),
+      zhuJi: require('@/assets/images/player/character-portrait-new.png'),
+      jinDan: require('@/assets/images/player/character-portrait-new.png'),
+      yuanYing: require('@/assets/images/player/character-portrait-new.png'),
+      huaShen: require('@/assets/images/player/character-portrait-new.png'),
+      duJie: require('@/assets/images/player/character-portrait-new.png'),
+      xianWang: require('@/assets/images/player/character-portrait-new.png')
     }
   },
 
@@ -78,7 +78,7 @@ const Resources = {
   // ==================== 灵兽 ====================
   beast: {
     fox: {
-      normal: null,
+      normal: require('@/assets/images/spirit-beast-fox.png'),
       mutation: null,
       evolution: null
     },
@@ -86,8 +86,10 @@ const Resources = {
     baiHu: null,
     zhuQue: null,
     xuanWu: null,
-    qiLin: null,
-    kunPeng: null
+    qiLin: require('@/assets/images/beast-qilin.png'),
+    kunPeng: null,
+    dragon: require('@/assets/images/beast-dragon.png'),
+    spiritFox: require('@/assets/images/spirit-beast-fox.png')
   },
 
   // ==================== 灵兽品质光效 ====================
@@ -215,7 +217,8 @@ const Resources = {
     bat: null,
     centipede: null,
     tiger: null,
-    bear: null
+    bear: null,
+    dragon: require('@/assets/images/flood_dragon.png')  // 蛟龙 (2026-03-22 art-cron生成)
   },
 
   // ==================== BOSS ====================
@@ -232,14 +235,17 @@ const Resources = {
 
   // ==================== 场景背景 ====================
   bg: {
-    cultivate: null,
-    battle: null,
+    cultivate: require('@/assets/images/bg-main-cultivation.png'),
+    battle: require('@/assets/images/bg-battle-dungeon.png'),
     sect: null,
     beast: null,
-    alchemy: null,
+    alchemy: require('@/assets/images/bg-alchemy.png'),
     battleField: null,
     battleArena: null,
-    battleSectWar: null
+    battleSectWar: require('@/assets/images/bg-sect-war.png'),
+    spiritRoot: require('@/assets/images/bg-spirit-root.png'),
+    tribulation: require('@/assets/images/bg-tribulation.png'),
+    debate: require('@/assets/images/bg-debate.png')
   },
 
   // ==================== 丹药物品 ====================

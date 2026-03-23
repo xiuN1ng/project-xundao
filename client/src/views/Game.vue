@@ -36,7 +36,11 @@
       <SpiritArtifactPanel v-if="activeTab === 'spirit-artifact'" />
       <LadderPanel v-if="activeTab === 'ladder'" />
       <DeityPanel v-if="activeTab === 'deity'" />
-      <ForgePanel v-if="activeTab === 'forge'" />
+      <TribulationPanel v-if="activeTab === 'tribulation'" />
+      <AdventurePanel v-if="activeTab === 'adventure'" />
+      <AbyssDungeonPanel v-if="activeTab === 'abyss'" />
+      <ClanPanel v-if="activeTab === 'clan'" />
+      <EquipmentEnhancePanel v-if="activeTab === 'equipment-enhance'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -65,9 +69,13 @@ import GongfaEffectsPanel from '../components/GongfaEffectsPanel.vue'
 import SpiritArtifactPanel from '../components/SpiritArtifactPanel.vue'
 import LadderPanel from '../components/LadderPanel.vue'
 import DeityPanel from '../components/DeityPanel.vue'
-import ForgePanel from '../components/ForgePanel.vue'
+import TribulationPanel from '../components/TribulationPanel.vue'
 import UpgradeAnimation from '../components/UpgradeAnimation.vue'
 import EquipmentAnimation from '../components/EquipmentAnimation.vue'
+import AdventurePanel from '../components/AdventurePanel.vue'
+import AbyssDungeonPanel from '../components/AbyssDungeonPanel.vue'
+import ClanPanel from '../components/ClanPanel.vue'
+import EquipmentEnhancePanel from '../components/EquipmentEnhancePanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -76,14 +84,18 @@ const activeTab = ref('cultivation')
 const tabs = [
   { id: 'cultivation', name: '修炼', icon: '🧘' },
   { id: 'sect', name: '宗门', icon: '🏛️' },
+  { id: 'clan', name: '家族', icon: '🏯' },
   { id: 'beast', name: '灵兽', icon: '🦊' },
   { id: 'alchemy', name: '炼丹', icon: '⚗️' },
   { id: 'equipment', name: '装备', icon: '⚔️' },
-  { id: 'forge', name: '炼器', icon: '🔨' },
+  { id: 'equipment-enhance', name: '强化', icon: '⚔️' },
+  { id: 'adventure', name: '奇遇', icon: '✨' },
+  { id: 'abyss', name: '深渊', icon: '🌀' },
   { id: 'spirit-artifact', name: '器灵', icon: '🔮' },
   { id: 'gongfa-effects', name: '功法', icon: '📚' },
   { id: 'arena', name: '竞技', icon: '⚔️' },
   { id: 'ladder', name: '天梯', icon: '🏆' },
+  { id: 'tribulation', name: '渡劫', icon: '⚡' },
   { id: 'deity', name: '封神', icon: '🎭' },
   { id: 'task', name: '任务', icon: '📋' },
   { id: 'story', name: '剧情', icon: '📖' },

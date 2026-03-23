@@ -15,7 +15,20 @@ function breakthrough() { spiritLevel.value++ }
 </script>
 
 <style scoped>
-.spirit-panel { padding: 20px; }
+.spirit-panel {
+  padding: 20px;
+  background-image: url('@/assets/images/bg-spirit-root.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.spirit-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.85);
+  pointer-events: none;
+}
 h2 { color: #f093fb; }
 .spirit-orbs { display: flex; justify-content: center; gap: 20px; margin: 30px 0; }
 .orb { width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-radius: 50%; }

@@ -108,7 +108,20 @@ async function craft(recipe) {
 </script>
 
 <style scoped>
-.alchemy-panel { padding: 20px; }
+.alchemy-panel {
+  padding: 20px;
+  background-image: url('@/assets/images/bg-alchemy.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.alchemy-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.8);
+  pointer-events: none;
+}
 
 h2 { color: #f093fb; font-size: 24px; margin-bottom: 25px; }
 h3 { color: #667eea; font-size: 16px; margin-bottom: 15px; }

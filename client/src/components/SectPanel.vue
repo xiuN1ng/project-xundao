@@ -1,5 +1,5 @@
 <template>
-  <div class="sect-panel" style="background-image: url('/assets/bg-sect-grand-hall.png') !important; background-size: cover; background-position: center;">
+  <div class="sect-panel" style="background: linear-gradient(135deg, rgba(20,20,50,0.92) 0%, rgba(10,10,30,0.90) 100%), url(@/assets/images/bg-sect-court-new.png) center/cover no-repeat fixed;">
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">加载中...</div>
     

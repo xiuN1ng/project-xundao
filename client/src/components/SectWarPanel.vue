@@ -1,5 +1,5 @@
 <template>
-  <div class="sect-war-panel" style="background-image: url('/assets/bg-sect-grand-hall.png') !important; background-size: cover; background-position: center;">
+  <div class="sect-war-panel" style="background-image: url('/assets/bg-sect-grand-hall.png'); background-size: cover; background-position: center;">
     <h2>⚔️ 宗门战</h2>
     <div class="war-status">
       <span class="status-badge">{{ status }}</span>
@@ -18,7 +18,21 @@ import { ref } from 'vue'
 const status = ref('即将开始')
 </script>
 <style scoped>
-.sect-war-panel { padding: 20px; }
+.sect-war-panel {
+  padding: 20px;
+  background-image: url('@/assets/images/bg-sect-war.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  min-height: 100%;
+}
+.sect-war-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.82);
+  pointer-events: none;
+}
 h2 { color: #f093fb; font-size: 24px; margin-bottom: 20px; }
 .war-status { text-align: center; margin-bottom: 30px; }
 .status-badge { display: inline-block; padding: 10px 25px; background: rgba(244,67,54,0.2); border: 1px solid rgba(244,67,54,0.5); border-radius: 25px; color: #f44336; font-weight: bold; }

@@ -23,7 +23,8 @@ function loadRoutes(app, db, authenticateToken, Logger) {
     'tribulation.js', // 天劫
     'arena.js',    // 竞技场
     'social.js',   // 社交
-    'vip.js'       // VIP
+    'vip.js',       // VIP
+    './backend/routes/mount.js' // 坐骑系统
   ];
   
   routeFiles.forEach(file => {
