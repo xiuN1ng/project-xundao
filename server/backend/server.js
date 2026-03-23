@@ -73,7 +73,7 @@ app.use('/api/cave', require('./routes/cave'));
 app.use('/api/fishing', require('./routes/fishing'));
 app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
-app.use('/api/abyss', require('./routes/abyss'));
+app.use('/api/abyssDungeon', require('./routes/abyss'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 

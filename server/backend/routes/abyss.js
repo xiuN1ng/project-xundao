@@ -200,6 +200,65 @@ function simpleBattle(playerAtk, playerDef, playerHp, demon) {
 // 路由接口
 // =====================
 
+// GET /config - 获取封魔渊完整配置（兼容前端 loadConfig）
+router.get('/config', (req, res) => {
+  const { userId } = req.query;
+  checkWeeklyReset();
+  const player = getOrCreatePlayer(userId);
+  
+  // 构建前端期望的 dungeon 列表格式
+  const dungeons = FLOOR_CONFIG.map(f => {
+    const difficulty = f.floor <= 3 ? 'normal' : f.floor <= 6 ? 'hard' : 'nightmare';
+    return {
+      id: `abyss_floor_${f.floor}`,
+      name: f.name,
+      floor: f.floor,
+      difficulty,
+      difficultyLabel: f.floor <= 3 ? '普通' : f.floor <= 6 ? '困难' : '噩梦',
+      reqLevel: f.reqLevel,
+      energy: f.energy,
+      rewardPreview: { crystals: [f.crystals || f.floor * 20, f.floor * 30], exp: f.floor * 50 },
+      maxProgress: player.maxFloor >= f.floor,
+      currentProgress: player.currentFloor >= f.floor,
+      bossName: DEMON_BESTIARY[f.boss]?.name || f.boss,
+      bossIcon: DEMON_BESTIARY[f.boss]?.icon || '👹'
+    };
+  });
+  
+  res.json({
+    success: true,
+    dungeons,
+    crystals: player.crystals,
+    currentFloor: player.currentFloor,
+    maxFloor: player.maxFloor,
+    todayEnterCount: player.todayEnterCount,
+    weeklyKillCount: player.weeklyKillCount,
+    weeklyCrystals: player.weeklyCrystals
+  });
+});
+
+// GET /list - 获取封魔渊副本列表
+router.get('/list', (req, res) => {
+  const { userId } = req.query;
+  const player = getOrCreatePlayer(userId);
+  
+  const dungeons = FLOOR_CONFIG.map(f => {
+    const difficulty = f.floor <= 3 ? 'normal' : f.floor <= 6 ? 'hard' : 'nightmare';
+    return {
+      id: `abyss_floor_${f.floor}`,
+      name: f.name,
+      floor: f.floor,
+      difficulty,
+      difficultyLabel: f.floor <= 3 ? '普通' : f.floor <= 6 ? '困难' : '噩梦',
+      reqLevel: f.reqLevel,
+      energy: f.energy,
+      maxProgress: player.maxFloor >= f.floor
+    };
+  });
+  
+  res.json({ success: true, dungeons });
+});
+
 router.get('/info', (req, res) => {
   const { userId } = req.query;
   checkWeeklyReset();
@@ -240,29 +299,40 @@ router.get('/bestiary', (req, res) => {
 });
 
 router.post('/enter', (req, res) => {
-  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  // 支持前端参数：dungeonId (格式: abyss_floor_X) 或直接 floor
+  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy, dungeonId } = req.body;
   checkWeeklyReset();
+  
+  // 从 dungeonId 解析楼层，如 "abyss_floor_3" -> 3
+  let targetFloor = floor;
+  if (!targetFloor && dungeonId && dungeonId.startsWith('abyss_floor_')) {
+    targetFloor = parseInt(dungeonId.replace('abyss_floor_', ''));
+  }
+  if (!targetFloor || targetFloor < 1) return res.json({ success: false, message: '无效的层数' });
+  
   const player = getOrCreatePlayer(userId);
-  const floorConfig = FLOOR_CONFIG[floor - 1];
+  const floorConfig = FLOOR_CONFIG[targetFloor - 1];
   
   if (!floorConfig) return res.json({ success: false, message: '无效的层数' });
-  if (floor > player.maxFloor + 1) return res.json({ success: false, message: '该层尚未解锁' });
+  if (targetFloor > player.maxFloor + 1) return res.json({ success: false, message: '该层尚未解锁' });
   if (playerLevel < floorConfig.reqLevel) return res.json({ success: false, message: `需要${floorConfig.reqLevel}级才能进入` });
   if (energy < floorConfig.energy) return res.json({ success: false, message: `体力不足，需要${floorConfig.energy}体力` });
   if (player.todayEnterCount >= 10) return res.json({ success: false, message: '今日已进入次数用完，明日再来' });
   
-  player.currentFloor = floor;
+  player.currentFloor = targetFloor;
   player.todayEnterCount++;
   
+  const sessionId = `abyss_${targetFloor}_${Date.now()}`;
   const encounters = [];
   for (let i = 0; i < 3; i++) {
     const type = floorConfig.demonTypes[Math.floor(Math.random() * floorConfig.demonTypes.length)];
-    encounters.push({ ...DEMON_BESTIARY[type], uid: `m${i}` });
+    encounters.push({ ...DEMON_BESTIARY[type], uid: `m${i}`, defeated: false, currentHp: DEMON_BESTIARY[type].hp });
   }
-  encounters.push({ ...DEMON_BESTIARY[floorConfig.boss], uid: 'boss', isBoss: true });
+  encounters.push({ ...DEMON_BESTIARY[floorConfig.boss], uid: 'boss', isBoss: true, defeated: false, currentHp: DEMON_BESTIARY[floorConfig.boss].hp });
   
   res.json({
     success: true,
+    session: { sessionId, dungeonId: dungeonId || `abyss_floor_${targetFloor}`, currentLayer: targetFloor, encounters },
     energySpent: floorConfig.energy,
     encounters,
     message: `进入${floorConfig.name}，遭遇${encounters.length}只魔兽`
@@ -270,16 +340,26 @@ router.post('/enter', (req, res) => {
 });
 
 router.post('/battle', (req, res) => {
-  const { userId, demonId, playerAtk, playerDef, playerHp, playerLevel } = req.body;
+  // 兼容前端参数格式 (playerDamage, playerDefense) 和后端格式 (playerAtk, playerDef)
+  const { userId, demonId, playerAtk, playerDef, playerHp, playerLevel,
+          playerDamage, playerDefense, sessionId, encounterIndex } = req.body;
+  
   const demon = DEMON_BESTIARY[demonId];
   if (!demon) return res.json({ success: false, message: '不存在的魔兽' });
   
   const player = getOrCreatePlayer(userId);
-  const levelBonus = 1 + (playerLevel - 1) * 0.05;
-  const finalPlayerAtk = Math.floor(playerAtk * levelBonus);
-  const finalPlayerDef = Math.floor(playerDef * levelBonus);
   
-  const result = simpleBattle(finalPlayerAtk, finalPlayerDef, playerHp, demon);
+  // 兼容两种参数名
+  const finalAtk = playerAtk || playerDamage || 100;
+  const finalDef = playerDef || playerDefense || 50;
+  const finalLevel = playerLevel || 1;
+  const finalHp = playerHp || 1000;
+  
+  const levelBonus = 1 + (finalLevel - 1) * 0.05;
+  const finalPlayerAtk = Math.floor(finalAtk * levelBonus);
+  const finalPlayerDef = Math.floor(finalDef * levelBonus);
+  
+  const result = simpleBattle(finalPlayerAtk, finalPlayerDef, finalHp, demon);
   const rewards = {
     exp: result.win ? demon.exp : 0,
     crystals: result.win ? dropCrystals(demon) : 0
@@ -295,6 +375,14 @@ router.post('/battle', (req, res) => {
   
   res.json({
     success: true,
+    battleResult: {
+      victory: result.win,
+      damageDealt: Math.max(0, demon.hp - result.demonHp),
+      playerHpLeft: result.playerHp,
+      demonHpLeft: result.demonHp,
+      rounds: result.rounds,
+      rewards
+    },
     win: result.win,
     playerHpLeft: result.playerHp,
     demonHpLeft: result.demonHp,
@@ -540,6 +628,129 @@ router.post('/weekly-reward/claim', (req, res) => {
     rewardDesc = artifactInfo.name;
   }
   res.json({ success: true, reward: targetReward.reward, rewardDesc });
+});
+
+// =====================
+// 额外路由：nextLayer / claim / defeat / starRift
+// =====================
+
+// POST /nextLayer - 进入下一层
+router.post('/nextLayer', (req, res) => {
+  const { userId, currentLayer, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  const nextFloor = currentLayer + 1;
+  const floorConfig = FLOOR_CONFIG[nextFloor - 1];
+  
+  if (!floorConfig) return res.json({ success: false, message: '已达到最高层' });
+  
+  const player = getOrCreatePlayer(userId);
+  
+  // 验证是否可以进入下一层（必须先通关当前层）
+  if (nextFloor > player.maxFloor + 1) return res.json({ success: false, message: '该层尚未解锁，请先通关当前层' });
+  if (playerLevel < floorConfig.reqLevel) return res.json({ success: false, message: `需要${floorConfig.reqLevel}级才能进入` });
+  if (energy < floorConfig.energy) return res.json({ success: false, message: `体力不足，需要${floorConfig.energy}体力` });
+  if (player.todayEnterCount >= 10) return res.json({ success: false, message: '今日已进入次数用完，明日再来' });
+  
+  // 消耗体力并进入下一层
+  player.currentFloor = nextFloor;
+  player.todayEnterCount++;
+  
+  // 生成新层遭遇
+  const encounters = floorConfig.demonTypes.map((type, i) => ({
+    ...DEMON_BESTIARY[type], uid: `m${i}`, defeated: false, currentHp: DEMON_BESTIARY[type].hp
+  }));
+  encounters.push({
+    ...DEMON_BESTIARY[floorConfig.boss], uid: 'boss', isBoss: true,
+    defeated: false, currentHp: DEMON_BESTIARY[floorConfig.boss].hp
+  });
+  
+  res.json({
+    success: true,
+    layer: nextFloor,
+    floorName: floorConfig.name,
+    energySpent: floorConfig.energy,
+    encounters,
+    message: `进入${floorConfig.name}，遭遇${encounters.length}只魔兽`
+  });
+});
+
+// POST /claim - 领取层通关奖励
+router.post('/claim', (req, res) => {
+  const { userId, layer, playerLevel } = req.body;
+  const player = getOrCreatePlayer(userId);
+  
+  if (layer !== player.currentFloor) return res.json({ success: false, message: '当前不在该层' });
+  
+  // 计算奖励
+  const baseCrystals = layer * 20;
+  const expReward = layer * 50;
+  
+  // 通关后解锁下一层
+  if (player.maxFloor < layer) {
+    player.maxFloor = layer;
+  }
+  
+  res.json({
+    success: true,
+    session: null,
+    rewards: {
+      crystals: baseCrystals,
+      exp: expReward
+    },
+    message: `通关第${layer}层，获得魔晶x${baseCrystals}，经验x${expReward}`
+  });
+});
+
+// POST /defeat - 放弃当前层
+router.post('/defeat', (req, res) => {
+  const { userId, defeatLayer } = req.body;
+  const player = getOrCreatePlayer(userId);
+  
+  // 重置当前层为已通关的最高层
+  const resetFloor = Math.min(player.currentFloor, player.maxFloor);
+  player.currentFloor = resetFloor;
+  
+  res.json({ success: true, currentFloor: resetFloor, message: `已退出第${defeatLayer}层` });
+});
+
+// 星渊裂缝相关（临时模拟数据）
+router.get('/starRift', (req, res) => {
+  // 返回可用裂缝层数
+  const floors = FLOOR_CONFIG.map(f => ({ floor: f.floor, name: f.name, reqLevel: f.reqLevel }));
+  res.json({ floors, message: '星渊裂缝可直达任意已解锁层' });
+});
+
+router.post('/starRift/enter', (req, res) => {
+  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  const player = getOrCreatePlayer(userId);
+  const floorConfig = FLOOR_CONFIG[floor - 1];
+  
+  if (!floorConfig) return res.json({ success: false, message: '无效的层数' });
+  if (floor > player.maxFloor) return res.json({ success: false, message: '该层尚未通关，请先通关后再使用星渊裂缝' });
+  if (playerLevel < floorConfig.reqLevel) return res.json({ success: false, message: `需要${floorConfig.reqLevel}级才能使用` });
+  if (energy < floorConfig.energy) return res.json({ success: false, message: `体力不足，需要${floorConfig.energy}体力` });
+  if (player.todayEnterCount >= 10) return res.json({ success: false, message: '今日已进入次数用完' });
+  
+  player.currentFloor = floor;
+  player.todayEnterCount++;
+  
+  const encounters = floorConfig.demonTypes.map((type, i) => ({
+    ...DEMON_BESTIARY[type], uid: `m${i}`, defeated: false, currentHp: DEMON_BESTIARY[type].hp
+  }));
+  encounters.push({
+    ...DEMON_BESTIARY[floorConfig.boss], uid: 'boss', isBoss: true,
+    defeated: false, currentHp: DEMON_BESTIARY[floorConfig.boss].hp
+  });
+  
+  res.json({
+    success: true,
+    session: {
+      dungeonId: `abyss_${floor}_${Date.now()}`,
+      currentLayer: floor,
+      encounters
+    },
+    encounters,
+    message: `通过星渊裂缝进入${floorConfig.name}`
+  });
 });
 
 module.exports = router;

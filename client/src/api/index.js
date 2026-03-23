@@ -88,19 +88,17 @@ export const secretApi = { get: () => api.get('/secret'), unlock: () => api.post
 export const titleApi = { get: () => api.get('/title'), activate: (id) => api.post('/title/activate', { id }) }
 export const tribulationApi = { getTypes: () => api.get('/api/tribulation/types'), attempt: (data) => api.post('/api/tribulation/attempt', data), preview: (params) => api.get('/api/tribulation/preview', { params }) }
 export const abyssApi = {
-  getConfig: () => api.get('/api/abyssDungeon/config'),
-  getList: () => api.get('/api/abyssDungeon/list'),
-  getInfo: (dungeonId) => api.get(`/api/abyssDungeon/info/${dungeonId}`),
+  getInfo: (userId) => api.get('/api/abyssDungeon/info', { params: { userId } }),
+  getFloors: () => api.get('/api/abyssDungeon/floors'),
+  getBestiary: () => api.get('/api/abyssDungeon/bestiary'),
   enter: (data) => api.post('/api/abyssDungeon/enter', data),
   battle: (data) => api.post('/api/abyssDungeon/battle', data),
-  nextLayer: (data) => api.post('/api/abyssDungeon/nextLayer', data),
-  claim: (data) => api.post('/api/abyssDungeon/claim', data),
-  defeat: (data) => api.post('/api/abyssDungeon/defeat', data),
-  getStarRift: () => api.get('/api/abyssDungeon/starRift'),
-  starRiftEnter: (data) => api.post('/api/abyssDungeon/starRift/enter', data),
-  getStats: () => api.get('/api/abyssDungeon/stats'),
+  explore: (data) => api.post('/api/abyssDungeon/explore', data),
+  getShop: () => api.get('/api/abyssDungeon/shop'),
+  buyShopItem: (data) => api.post('/api/abyssDungeon/shop/buy', data),
   getRankings: () => api.get('/api/abyssDungeon/rankings'),
-  getBoss: (bossId) => api.get(`/api/abyssDungeon/boss/${bossId}`)
+  getWeeklyReward: () => api.get('/api/abyssDungeon/weekly-reward'),
+  claimWeeklyReward: (data) => api.post('/api/abyssDungeon/weekly-reward/claim', data),
 }
 
 export default api
