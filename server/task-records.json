@@ -406,13 +406,33 @@
         "enter_session": "POST /enter 解析 dungeonId 并返回 session 对象"
       },
       "status": "completed"
+    },
+    {
+      "id": "backend-api-fix-20260324-001",
+      "timestamp": "2026-03-24T04:57:00+08:00",
+      "cronRun": "backend-20min 5AM",
+      "type": "backend-api-fix",
+      "description": "修复前后端API路由不匹配问题 (灵兽/装备/宗门)",
+      "files": [
+        "server/backend/routes/beast.js (+31行)",
+        "server/backend/routes/equipment.js (+130行)",
+        "server/backend/routes/sect.js (+130行)"
+      ],
+      "fixes": {
+        "beast_my_list": "新增 /my/list 路由 (前端调用 /beast/my/list)",
+        "beast_capture": "修复 /capture 接受 { beastId } 作为 templateId",
+        "beast_upgrade_feed": "新增 /upgrade 和 /feed 端点",
+        "equipment_apis": "新增 /equipped, /equip, /unequip, /refine, /augment, /socket/*, /inherit, /player/:id, /augment/history, /gems",
+        "sect_apis": "新增 /info, /bonus, /members, /member/kick, /member/promote, /member/transfer, /skills, /skill/learn, /dungeon, /dungeon/challenge, /redpackets, /redpacket/send, /redpacket/claim, /admin, /donate"
+      },
+      "status": "completed"
     }
   ],
   "summary": {
     "cronRun": "frontend-hourly",
-    "timestamp": "2026-03-23T08:26:00+08:00",
-    "lastTaskId": "backend-abyss-api-fix-20260323-001",
-    "totalTasksCompleted": 17,
+    "timestamp": "2026-03-24T04:57:00+08:00",
+    "lastTaskId": "backend-api-fix-20260324-001",
+    "totalTasksCompleted": 18,
     "notes": "装备强化进阶系统API对接 - EquipmentEnhancePanel.vue mock→真实API，8个equipmentApi方法新增"
   }
 }
