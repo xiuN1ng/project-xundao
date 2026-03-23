@@ -1,620 +1,657 @@
 <template>
   <div class="story-panel">
-    <!-- 章节选择视图 -->
-    <div v-if="view === 'chapters'" class="chapters-view">
-      <h2>📖 剧情故事</h2>
-      <div class="chapter-list">
+    <div class="panel-header">
+      <div class="header-title">📖 修仙剧情</div>
+      <button class="close-btn" @click="closePanel">✕</button>
+    </div>
+    
+    <div class="panel-content">
+      <!-- 剧情线列表 -->
+      <div class="story-lines" v-if="!currentStory">
         <div 
-          v-for="chapter in chapters" 
-          :key="chapter.id"
-          class="chapter-card"
-          :class="{ completed: chapter.is_completed, locked: !chapter.is_unlocked }"
-          @click="selectChapter(chapter)"
+          v-for="line in storyLines" 
+          :key="line.id"
+          class="story-line-card"
+          :class="{ 'locked': !line.isUnlocked, 'completed': line.isCompleted }"
+          @click="selectStoryLine(line)"
         >
-          <div class="chapter-icon">
-            {{ chapter.is_completed ? '✅' : (chapter.is_unlocked ? '📜' : '🔒') }}
-          </div>
-          <div class="chapter-info">
-            <h3>{{ chapter.title }}</h3>
-            <p>{{ chapter.description }}</p>
-            <span class="chapter-requirement" v-if="!chapter.is_unlocked">
-              需求: 等级{{ chapter.required_level }} 境界{{ chapter.required_realm }}
-            </span>
+          <div class="line-icon">{{ line.isUnlocked ? line.icon : '🔒' }}</div>
+          <div class="line-info">
+            <div class="line-name">{{ line.name }}</div>
+            <div class="line-desc">{{ line.description }}</div>
+            <div class="line-meta">
+              <span class="chapter-count">📑 {{ line.chapterCount }}章</span>
+              <span class="requirement" v-if="!line.isUnlocked">
+                需要境界: {{ line.requirement?.realm || 1 }}重
+              </span>
+              <span class="status completed" v-if="line.isCompleted">✅ 已完成</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 剧情进行视图 -->
-    <div v-else-if="view === 'story'" class="story-view">
-      <div class="story-header">
-        <button @click="backToChapters" class="back-btn">← 返回</button>
-        <h3>{{ currentChapter?.title }}</h3>
-      </div>
-
-      <!-- 对话框 -->
-      <div v-if="currentNode" class="story-content">
-        <!-- 背景 -->
-        <div class="story-bg" :class="currentNode.bg || 'default'">
-          <!-- 角色立绘区 -->
-          <div class="character-area">
-            <div v-if="currentNode.speaker" class="character-portrait">
-              <img :src="characterPortrait" class="portrait-img" :alt="currentNode.speaker" />
+      
+      <!-- 剧情线详情 -->
+      <div class="story-detail" v-else>
+        <button class="back-btn" @click="backToList">← 返回</button>
+        
+        <div class="detail-header">
+          <div class="detail-icon">{{ currentStory.icon }}</div>
+          <div class="detail-title">{{ currentStory.name }}</div>
+          <div class="detail-desc">{{ currentStory.description }}</div>
+        </div>
+        
+        <!-- 章节列表 -->
+        <div class="chapters-list">
+          <div 
+            v-for="chapter in currentStory.chapters" 
+            :key="chapter.id"
+            class="chapter-item"
+            :class="{ 
+              'unlocked': chapter.isUnlocked, 
+              'completed': chapter.isCompleted,
+              'current': chapter.isCurrent
+            }"
+            @click="viewChapter(chapter)"
+          >
+            <div class="chapter-status">
+              <span v-if="chapter.isCompleted">✅</span>
+              <span v-else-if="chapter.isCurrent">🔄</span>
+              <span v-else-if="chapter.isUnlocked">📄</span>
+              <span v-else>🔒</span>
+            </div>
+            <div class="chapter-info">
+              <div class="chapter-title">{{ chapter.title }}</div>
+              <div class="chapter-desc">{{ chapter.description }}</div>
             </div>
           </div>
-
-          <!-- 对话框 -->
-          <div class="dialogue-box" :class="{ 'has-choices': currentNode.type === 'choice' }">
-            <div class="speaker-name" v-if="currentNode.speaker">
-              {{ currentNode.speaker }}
-            </div>
-            <div class="dialogue-content">
-              {{ currentNode.content }}
-            </div>
-
-            <!-- 选择按钮 -->
-            <div v-if="currentNode.type === 'choice'" class="choices">
-              <button 
-                v-for="(choice, index) in currentNode.choices" 
+        </div>
+        
+        <!-- 开始剧情按钮 -->
+        <div class="start-section" v-if="!currentStory.hasStarted && currentStory.isUnlocked">
+          <button class="start-btn" @click="startStory">🚀 开始剧情</button>
+        </div>
+      </div>
+      
+      <!-- 剧情章节弹窗 -->
+      <div class="chapter-modal" v-if="viewingChapter">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="modal-title">{{ viewingChapter.title }}</div>
+            <button class="modal-close" @click="closeChapter">✕</button>
+          </div>
+          
+          <div class="chapter-content">
+            <div class="content-text" v-html="viewingChapter.content"></div>
+            
+            <!-- 剧情选项 -->
+            <div class="choice-section" v-if="viewingChapter.choices && viewingChapter.choices.length > 0">
+              <div class="choice-title">请选择：</div>
+              <div 
+                v-for="(choice, index) in viewingChapter.choices" 
                 :key="index"
-                class="choice-btn"
-                @click="makeChoice(index)"
+                class="choice-item"
+                @click="makeChoice(choice)"
               >
-                {{ choice.text }}
+                <span class="choice-index">{{ ['A', 'B', 'C', 'D'][index] }}</span>
+                <span class="choice-text">{{ choice.text }}</span>
+              </div>
+            </div>
+            
+            <!-- 章节奖励 -->
+            <div class="reward-section" v-if="viewingChapter.reward">
+              <div class="reward-title">🎁 本章奖励</div>
+              <div class="reward-items">
+                <span v-if="viewingChapter.reward.exp">✨ 经验 +{{ viewingChapter.reward.exp }}</span>
+                <span v-if="viewingChapter.reward.spirit_stones">💎 灵石 +{{ viewingChapter.reward.spirit_stones }}</span>
+              </div>
+            </div>
+            
+            <!-- 继续按钮 -->
+            <div class="continue-section" v-if="viewingChapter.nextChapter">
+              <button class="continue-btn" @click="continueStory">
+                继续 → 
               </button>
             </div>
-
-            <!-- 继续按钮 -->
-            <button 
-              v-else-if="!currentNode.is_ending" 
-              class="continue-btn"
-              @click="continueStory"
-            >
-              继续 →
-            </button>
-
-            <!-- 结束按钮 -->
-            <button 
-              v-if="currentNode.is_ending" 
-              class="finish-btn"
-              @click="finishChapter"
-            >
-              章节结束
-            </button>
-          </div>
-        </div>
-
-        <!-- 战斗场景 -->
-        <div v-if="currentNode.type === 'battle'" class="battle-scene">
-          <h3>{{ currentNode.title }}</h3>
-          <p>{{ currentNode.content }}</p>
-          <div class="enemy-info">
-            <div class="enemy-avatar">👹</div>
-            <div class="enemy-stats">
-              <h4>{{ currentNode.enemy?.name }}</h4>
-              <div class="hp-bar">
-                <div class="hp-fill" :style="{ width: battleProgress + '%' }"></div>
-              </div>
-              <p>HP: {{ currentNode.enemy?.hp || '???' }}</p>
+            
+            <!-- 完成提示 -->
+            <div class="complete-section" v-if="viewingChapter.nextChapter === null">
+              <div class="complete-message">🎉 剧情线已完成！</div>
+              <button class="back-list-btn" @click="backToList">返回剧情列表</button>
             </div>
           </div>
-          <button class="fight-btn" @click="startBattle">开始战斗</button>
         </div>
-      </div>
-
-      <!-- 奖励展示 -->
-      <div v-if="showReward" class="reward-modal">
-        <div class="reward-content">
-          <h3>🎉 获得奖励</h3>
-          <div class="reward-items">
-            <div v-if="lastReward.spirit_stones" class="reward-item">
-              💎 灵石 +{{ lastReward.spirit_stones }}
-            </div>
-            <div v-if="lastReward.exp" class="reward-item">
-              ✨ 经验 +{{ lastReward.exp }}
-            </div>
-            <div v-if="lastReward.gongfa" class="reward-item">
-              📚 功法: {{ lastReward.gongfa }}
-            </div>
-            <div v-if="lastReward.sect" class="reward-item">
-              🏛️ 宗门: {{ lastReward.sect }}
-            </div>
-            <div v-if="lastReward.realm" class="reward-item">
-              ⬆️ 境界提升至: {{ lastReward.realm }}
-            </div>
-            <div v-if="lastReward.title" class="reward-item">
-              🏅 称号: {{ lastReward.title }}
-            </div>
-          </div>
-          <button @click="closeReward">收下</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 章节完成视图 -->
-    <div v-else-if="view === 'completed'" class="completed-view">
-      <div class="completed-content">
-        <h2>🎊 章节完成!</h2>
-        <p>{{ currentChapter?.title }} 已完成</p>
-        <div v-if="chapterReward" class="chapter-reward">
-          <h4>章节奖励</h4>
-          <p>💎 灵石 +{{ chapterReward.spirit_stones }}</p>
-        </div>
-        <button @click="backToChapters">返回章节列表</button>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { usePlayerStore } from '../stores/player'
-import characterPortrait from '../assets/images/player/character-portrait-new.png'
-
-const playerStore = usePlayerStore()
-const player = playerStore.player
-
-const view = ref('chapters') // chapters | story | completed
-const chapters = ref([])
-const currentChapter = ref(null)
-const currentNode = ref(null)
-const showReward = ref(false)
-const lastReward = ref({})
-const chapterReward = ref(null)
-const battleProgress = ref(100)
-
-// 加载章节列表
-async function loadChapters() {
-  try {
-    const res = await fetch(`/api/story/chapters?player_id=${player.id}`)
-    const data = await res.json()
-    if (data.success) {
-      chapters.value = data.data
-    }
-  } catch (e) {
-    console.error('加载章节失败:', e)
-  }
-}
-
-// 选择章节
-async function selectChapter(chapter) {
-  if (!chapter.is_unlocked) return
-  
-  currentChapter.value = chapter
-  await loadStory(chapter.id)
-  view.value = 'story'
-}
-
-// 加载剧情
-async function loadStory(chapterId) {
-  try {
-    const res = await fetch(`/api/story/current?player_id=${player.id}&chapter_id=${chapterId}`)
-    const data = await res.json()
-    if (data.success) {
-      currentNode.value = data.data
-    }
-  } catch (e) {
-    console.error('加载剧情失败:', e)
-  }
-}
-
-// 继续剧情
-async function continueStory() {
-  await advanceStory(null)
-}
-
-// 选择分支
-async function makeChoice(index) {
-  await advanceStory(index)
-}
-
-// 推进剧情
-async function advanceStory(choiceIndex) {
-  try {
-    const res = await fetch('/api/story/advance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        player_id: player.id,
-        chapter_id: currentChapter.value.id,
-        choice_index: choiceIndex
-      })
-    })
-    const data = await res.json()
+<script>
+export default {
+  name: 'StoryPanel',
+  data() {
+    return {
+      storyLines: [],
+      currentStory: null,
+      viewingChapter: null,
+      loading: false
+    };
+  },
+  mounted() {
+    this.loadStoryLines();
+  },
+  methods: {
+    async loadStoryLines() {
+      this.loading = true;
+      try {
+        const playerId = this.$root.playerId || 'player_1';
+        const response = await fetch(`/api/plot/lines?player_id=${playerId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          this.storyLines = result.data;
+        }
+      } catch (error) {
+        console.error('加载剧情线失败:', error);
+      }
+      this.loading = false;
+    },
     
-    if (data.success) {
-      // 显示奖励
-      if (data.data.reward && Object.keys(data.data.reward).length > 0) {
-        lastReward.value = data.data.reward
-        showReward.value = true
-        return
+    async selectStoryLine(line) {
+      if (!line.isUnlocked) {
+        alert('境界不足，无法解锁此剧情线');
+        return;
       }
       
-      // 检查是否章节结束
-      if (data.data.chapter_completed) {
-        chapterReward.value = data.data.reward
-        view.value = 'completed'
-        return
+      this.loading = true;
+      try {
+        const playerId = this.$root.playerId || 'player_1';
+        const response = await fetch(`/api/plot/line/${line.id}?player_id=${playerId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          this.currentStory = result.data;
+        }
+      } catch (error) {
+        console.error('加载剧情详情失败:', error);
+      }
+      this.loading = false;
+    },
+    
+    async viewChapter(chapter) {
+      if (!chapter.isUnlocked) {
+        alert('请先完成前一章');
+        return;
       }
       
-      // 加载下一节点
-      if (data.data.next_node) {
-        currentNode.value = data.data.next_node
-      } else {
-        view.value = 'completed'
+      this.loading = true;
+      try {
+        const playerId = this.$root.playerId || 'player_1';
+        const response = await fetch(
+          `/api/plot/chapter/${this.currentStory.id}/${chapter.id}?player_id=${playerId}`
+        );
+        const result = await response.json();
+        
+        if (result.success) {
+          this.viewingChapter = result.data;
+        }
+      } catch (error) {
+        console.error('加载章节内容失败:', error);
+      }
+      this.loading = false;
+    },
+    
+    async startStory() {
+      if (!this.currentStory) return;
+      
+      this.loading = true;
+      try {
+        const playerId = this.$root.playerId || 'player_1';
+        const response = await fetch('/api/plot/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            player_id: playerId,
+            plot_line_id: this.currentStory.id
+          })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          alert(result.message);
+          // 刷新剧情线详情
+          this.selectStoryLine(this.currentStory);
+        } else {
+          alert(result.error || '开始剧情失败');
+        }
+      } catch (error) {
+        console.error('开始剧情失败:', error);
+      }
+      this.loading = false;
+    },
+    
+    async makeChoice(choice) {
+      this.loading = true;
+      try {
+        const playerId = this.$root.playerId || 'player_1';
+        const response = await fetch('/api/plot/choice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            player_id: playerId,
+            plot_line_id: this.currentStory.id,
+            chapter_id: this.viewingChapter.id,
+            choice_index: choice.index
+          })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+          // 显示选择结果
+          if (result.data && result.data.rewards) {
+            let rewardText = '选择成功！';
+            result.data.rewards.forEach(r => {
+              if (r.type === 'exp') rewardText += `\n✨ 经验 +${r.amount}`;
+              if (r.type === 'spirit_stones') rewardText += `\n💎 灵石 +${r.amount}`;
+            });
+            alert(rewardText);
+          }
+          // 刷新章节内容
+          this.viewChapter({ id: this.viewingChapter.id });
+          // 更新剧情线详情
+          this.selectStoryLine(this.currentStory);
+        } else {
+          alert(result.error || '选择失败');
+        }
+      } catch (error) {
+        console.error('选择失败:', error);
+      }
+      this.loading = false;
+    },
+    
+    continueStory() {
+      if (this.viewingChapter.nextChapter) {
+        this.viewChapter({ id: this.viewingChapter.nextChapter });
+      }
+    },
+    
+    closeChapter() {
+      this.viewingChapter = null;
+    },
+    
+    backToList() {
+      this.currentStory = null;
+      this.loadStoryLines();
+    },
+    
+    closePanel() {
+      if (this.$root.closePanel) {
+        this.$root.closePanel('StoryPanel');
       }
     }
-  } catch (e) {
-    console.error('推进剧情失败:', e)
   }
-}
-
-// 关闭奖励弹窗
-function closeReward() {
-  showReward.value = false
-  
-  // 继续到下一节点
-  if (currentNode.value && !currentNode.value.is_ending) {
-    loadStory(currentChapter.value.id)
-  } else if (currentNode.value?.is_ending) {
-    view.value = 'completed'
-  }
-}
-
-// 开始战斗
-function startBattle() {
-  battleProgress.value = 0
-  // 模拟战斗
-  const interval = setInterval(() => {
-    battleProgress.value += 20
-    if (battleProgress.value >= 100) {
-      clearInterval(interval)
-      continueStory()
-    }
-  }, 200)
-}
-
-// 完成章节
-function finishChapter() {
-  view.value = 'completed'
-}
-
-// 返回章节列表
-function backToChapters() {
-  view.value = 'chapters'
-  currentChapter.value = null
-  currentNode.value = null
-  chapterReward.value = null
-  loadChapters()
-}
-
-onMounted(() => {
-  loadChapters()
-})
+};
 </script>
 
 <style scoped>
 .story-panel {
-  padding: 15px;
-  background: #1a1a2e;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 12px;
-  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  overflow: hidden;
 }
 
-.story-panel h2 {
-  color: #f093fb;
-  margin-bottom: 20px;
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
 }
 
-/* 章节列表 */
-.chapter-list {
+.header-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.panel-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* 剧情线列表 */
+.story-lines {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.chapter-card {
+.story-line-card {
   display: flex;
-  gap: 15px;
-  padding: 15px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
   cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid rgba(102,126,234,0.2);
+  transition: all 0.3s ease;
 }
 
-.chapter-card:hover:not(.locked) {
-  background: rgba(102,126,234,0.15);
-  border-color: #667eea;
+.story-line-card:hover:not(.locked) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateX(4px);
 }
 
-.chapter-card.completed {
-  border-color: #4ade80;
+.story-line-card.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.chapter-card.locked {
+.story-line-card.completed {
+  border: 1px solid #4ade80;
+}
+
+.line-icon {
+  font-size: 36px;
+  margin-right: 16px;
+}
+
+.line-info {
+  flex: 1;
+}
+
+.line-name {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.line-desc {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 8px;
+}
+
+.line-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #888;
+}
+
+.requirement {
+  color: #f59e0b;
+}
+
+.status.completed {
+  color: #4ade80;
+}
+
+/* 剧情详情 */
+.back-btn {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.detail-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.detail-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.detail-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.detail-desc {
+  font-size: 14px;
+  color: #aaa;
+}
+
+.chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chapter-item {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chapter-item:hover:not(.locked) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chapter-item.locked {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.chapter-icon {
-  font-size: 32px;
+.chapter-item.completed {
+  border-left: 3px solid #4ade80;
 }
 
-.chapter-info h3 {
-  margin: 0 0 5px;
-  color: #fff;
+.chapter-item.current {
+  border-left: 3px solid #667eea;
+  background: rgba(102, 126, 234, 0.2);
 }
 
-.chapter-info p {
-  margin: 0;
-  font-size: 13px;
-  color: rgba(255,255,255,0.6);
+.chapter-status {
+  font-size: 20px;
+  margin-right: 12px;
 }
 
-.chapter-requirement {
-  font-size: 12px;
-  color: #fbbf24;
-}
-
-/* 剧情视图 */
-.story-header {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.back-btn {
-  padding: 8px 16px;
-  background: rgba(255,255,255,0.1);
-  border: none;
-  color: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.story-content {
-  position: relative;
-}
-
-.story-bg {
-  min-height: 350px;
-  background: linear-gradient(180deg, #2d1b4e 0%, #1a1a2e 100%);
-  border-radius: 12px;
-  padding: 20px;
-  position: relative;
-}
-
-.story-bg.mountain {
-  background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
-}
-
-/* 对话框 */
-.dialogue-box {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  right: 20px;
-  background: rgba(0,0,0,0.8);
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid rgba(102,126,234,0.3);
-}
-
-.speaker-name {
-  color: #f093fb;
+.chapter-title {
+  font-size: 14px;
   font-weight: bold;
-  margin-bottom: 10px;
+  margin-bottom: 2px;
 }
 
-.dialogue-content {
-  color: #fff;
-  line-height: 1.6;
-  margin-bottom: 15px;
+.chapter-desc {
+  font-size: 12px;
+  color: #888;
 }
 
-/* 选择按钮 */
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.start-section {
+  margin-top: 20px;
 }
 
-.choice-btn {
-  padding: 12px;
-  background: rgba(102,126,234,0.3);
-  border: 1px solid rgba(102,126,234,0.5);
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-align: left;
-}
-
-.choice-btn:hover {
-  background: rgba(102,126,234,0.5);
-}
-
-/* 继续/结束按钮 */
-.continue-btn, .finish-btn {
+.start-btn {
   width: 100%;
-  padding: 12px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border: none;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
+  padding: 14px;
   font-size: 16px;
-}
-
-.finish-btn {
-  background: linear-gradient(90deg, #4ade80, #22c55e);
-}
-
-/* 战斗场景 */
-.battle-scene {
-  background: rgba(0,0,0,0.6);
-  padding: 20px;
-  border-radius: 12px;
-  text-align: center;
-}
-
-.enemy-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin: 20px 0;
-}
-
-.enemy-avatar {
-  font-size: 64px;
-}
-
-.enemy-stats {
-  text-align: left;
-}
-
-.hp-bar {
-  width: 150px;
-  height: 20px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 10px 0;
-}
-
-.hp-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ef4444, #dc2626);
-  transition: width 0.3s;
-}
-
-.fight-btn {
-  padding: 15px 40px;
-  background: linear-gradient(90deg, #ef4444, #dc2626);
-  border: none;
+  font-weight: bold;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   color: #fff;
-  border-radius: 8px;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 18px;
+  transition: all 0.3s ease;
 }
 
-/* 奖励弹窗 */
-.reward-modal {
+.start-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* 章节弹窗 */
+.chapter-modal {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 1000;
 }
 
-.reward-content {
-  background: linear-gradient(180deg, #2d1b4e 0%, #1a1a2e 100%);
-  padding: 30px;
+.modal-content {
+  width: 90%;
+  max-height: 80%;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 16px;
-  text-align: center;
-  border: 2px solid #f093fb;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.reward-content h3 {
-  color: #f093fb;
-  font-size: 24px;
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.chapter-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.content-text {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #ddd;
   margin-bottom: 20px;
+  white-space: pre-wrap;
+}
+
+.choice-section {
+  margin-bottom: 20px;
+}
+
+.choice-title {
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 12px;
+}
+
+.choice-item {
+  display: flex;
+  align-items: center;
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.choice-item:hover {
+  background: rgba(102, 126, 234, 0.3);
+}
+
+.choice-index {
+  width: 28px;
+  height: 28px;
+  background: #667eea;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-right: 12px;
+}
+
+.reward-section {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+
+.reward-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #4ade80;
+  margin-bottom: 8px;
 }
 
 .reward-items {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.continue-section {
   margin-bottom: 20px;
 }
 
-.reward-item {
-  color: #fbbf24;
-  font-size: 16px;
-}
-
-.reward-content button {
-  padding: 12px 30px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border: none;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-/* 完成视图 */
-.completed-view {
-  text-align: center;
-  padding: 40px;
-}
-
-.completed-content {
-  background: rgba(255,255,255,0.05);
-  padding: 30px;
-  border-radius: 16px;
-}
-
-.completed-content h2 {
-  font-size: 28px;
-}
-
-.chapter-reward {
-  margin: 20px 0;
-  padding: 15px;
-  background: rgba(74,222,128,0.1);
-  border-radius: 8px;
-}
-
-.completed-content button {
-  margin-top: 20px;
-  padding: 12px 30px;
-  background: linear-gradient(90deg, #4ade80, #22c55e);
-  border: none;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-/* 角色立绘区 */
-.character-area {
-  position: absolute;
-  bottom: 120px;
-  right: 20px;
-  width: 200px;
-  height: 280px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.character-portrait {
+.continue-btn {
   width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: bold;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
 }
 
-.portrait-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 0 20px rgba(240,147,251,0.4)) drop-shadow(0 10px 30px rgba(0,0,0,0.5));
-  animation: portraitFloat 3s infinite ease-in-out;
+.complete-section {
+  text-align: center;
 }
 
-@keyframes portraitFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+.complete-message {
+  font-size: 18px;
+  font-weight: bold;
+  color: #4ade80;
+  margin-bottom: 16px;
+}
+
+.back-list-btn {
+  padding: 12px 24px;
+  font-size: 14px;
+  background: #667eea;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
 }
 </style>

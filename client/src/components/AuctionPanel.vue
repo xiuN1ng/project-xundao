@@ -1,40 +1,258 @@
 <template>
   <div class="auction-panel">
-    <h2>🔨 拍卖行</h2>
-    <div class="auction-tabs">
-      <button :class="{active:activeTab===t.id}" v-for="t in tabs" :key="t.id" @click="activeTab=t.id">{{t.name}}</button>
+    <div class="panel-header">
+      <h3>🎯 拍卖场</h3>
+      <button class="close-btn" @click="closePanel">×</button>
     </div>
+    
+    <div class="auction-tabs">
+      <button 
+        v-for="tab in tabs" 
+        :key="tab.key"
+        :class="['tab', { active: activeTab === tab.key }]"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.icon }} {{ tab.name }}
+      </button>
+    </div>
+    
     <div class="auction-list">
-      <div v-for="item in items" :key="item.id" class="auction-card">
-        <span class="item-icon">{{ item.icon }}</span>
-        <div class="item-info"><span class="name">{{ item.name }}</span><span class="seller">卖家: {{ item.seller }}</span></div>
-        <div class="item-price"><span class="current">{{ item.currentPrice }}</span><span class="count">{{ item.bidCount }}次出价</span></div>
-        <button class="bid-btn">出价</button>
+      <div v-if="auctions.length === 0" class="empty">
+        暂无拍卖品
+      </div>
+      <div 
+        v-for="auction in auctions" 
+        :key="auction.id" 
+        class="auction-item"
+      >
+        <div class="item-info">
+          <span class="item-name">{{ auction.item?.name || '物品' }}</span>
+          <span class="item-type">{{ auction.type }}</span>
+        </div>
+        <div class="price-info">
+          <span class="current-price">💰 {{ auction.highestBid }}</span>
+          <span class="bidder">{{ auction.highestBidder }} 出价</span>
+        </div>
+        <button class="bid-btn" @click="showBidDialog(auction)">
+          出价
+        </button>
+      </div>
+    </div>
+    
+    <div v-if="showBid" class="bid-dialog">
+      <div class="dialog-content">
+        <h4>出价</h4>
+        <input 
+          type="number" 
+          v-model.number="bidAmount" 
+          :min="currentAuction?.highestBid + 1"
+          placeholder="输入出价金额"
+        />
+        <div class="dialog-btns">
+          <button @click="confirmBid">确认</button>
+          <button @click="showBid = false">取消</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
+
 <script setup>
-import { ref } from 'vue'
-const activeTab = ref('all')
-const tabs = [{id:'all',name:'全部'},{id:'weapon',name:'武器'},{id:'armor',name:'防具'}]
-const items = ref([{id:1,icon:'⚔️',name:'紫金剑',seller:'剑仙',currentPrice:5000,bidCount:5}])
+import { ref, onMounted } from 'vue';
+
+const emit = defineEmits(['close']);
+
+const tabs = [
+  { key: 'all', name: '全部', icon: '📦' },
+  { key: 'equipment', name: '装备', icon: '⚔️' },
+  { key: 'material', name: '材料', icon: '💎' },
+  { key: 'treasure', name: '珍宝', icon: '🏆' }
+];
+
+const activeTab = ref('all');
+const auctions = ref([]);
+const showBid = ref(false);
+const bidAmount = ref(0);
+const currentAuction = ref(null);
+
+function closePanel() {
+  emit('close');
+}
+
+function showBidDialog(auction) {
+  currentAuction.value = auction;
+  bidAmount.value = auction.highestBid + 1;
+  showBid.value = true;
+}
+
+function confirmBid() {
+  // TODO: 调用API
+  showBid.value = false;
+}
+
+function loadAuctions() {
+  // TODO: 加载拍卖列表
+  auctions.value = [];
+}
+
+onMounted(() => {
+  loadAuctions();
+});
 </script>
+
 <style scoped>
-.auction-panel { padding: 20px; }
-h2 { color: #f093fb; font-size: 24px; margin-bottom: 20px; }
-.auction-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-.auction-tabs button { flex: 1; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: #fff; cursor: pointer; }
-.auction-tabs button.active { background: linear-gradient(135deg,#667eea,#764ba2); border-color: transparent; }
-.auction-list { display: flex; flex-direction: column; gap: 12px; }
-.auction-card { display: flex; align-items: center; gap: 15px; background: rgba(255,255,255,0.05); padding: 18px; border-radius: 15px; }
-.auction-card:hover { background: rgba(255,255,255,0.08); }
-.item-icon { font-size: 40px; }
-.item-info { flex: 1; }
-.item-info .name { display: block; color: #fff; font-weight: bold; }
-.item-info .seller { font-size: 12px; opacity: 0.7; }
-.item-price { text-align: right; }
-.item-price .current { display: block; color: #ffd700; font-weight: bold; font-size: 18px; }
-.item-price .count { font-size: 11px; opacity: 0.6; }
-.bid-btn { padding: 12px 25px; background: linear-gradient(135deg,#f093fb,#f5576c); border: none; border-radius: 25px; color: #fff; font-weight: bold; cursor: pointer; }
+.auction-panel {
+  width: 500px;
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  color: #fff;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.auction-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: #16213e;
+  border: none;
+  border-radius: 6px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #e94560;
+  color: #fff;
+}
+
+.auction-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.empty {
+  text-align: center;
+  color: #666;
+  padding: 40px;
+}
+
+.auction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #16213e;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-name {
+  font-weight: bold;
+}
+
+.item-type {
+  font-size: 12px;
+  color: #888;
+}
+
+.price-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.current-price {
+  color: #f39c12;
+  font-weight: bold;
+}
+
+.bidder {
+  font-size: 12px;
+  color: #888;
+}
+
+.bid-btn {
+  padding: 6px 16px;
+  background: #e94560;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.bid-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-content {
+  background: #1a1a2e;
+  padding: 24px;
+  border-radius: 12px;
+  width: 300px;
+}
+
+.dialog-content input {
+  width: 100%;
+  padding: 10px;
+  margin: 16px 0;
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #fff;
+}
+
+.dialog-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.dialog-btns button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dialog-btns button:first-child {
+  background: #e94560;
+  color: #fff;
+}
+
+.dialog-btns button:last-child {
+  background: #333;
+  color: #fff;
+}
 </style>

@@ -1,0 +1,38 @@
+# Cron Tasks Todo List
+
+## Frontend Tasks
+
+- [x] ✅ AdventurePanel.vue - 仙侠奇遇面板 (AdventurePanel.vue) - 2026-03-23
+  - 4个奇遇入口按钮（遗迹探索/仙人指路/妖兽袭击/遗失宝物）
+  - 当前奇遇状态展示
+  - 冷却倒计时
+  - 奇遇日志/历史记录
+  - Game.vue tab "奇遇✨" (adventure)
+  - ui-manager.js showAdventurePanel() registered
+
+- [x] ✅ EquipmentEnhancePanel.vue - 装备强化面板 (EquipmentEnhancePanel.vue) - 2026-03-23
+  - 强化界面（+1~+15滑动选择）
+  - 增幅界面（红字属性）
+  - 打孔界面（徽章孔位）
+  - 继承界面（材料选择）
+  - 强化结果动画（成功/失败特效）
+  - Game.vue tab "强化⚔️" (equipment-enhance)
+  - ui-manager.js showEquipmentEnhancePanel() registered
+
+## Art Resources Tasks
+
+- [x] ✅ Art 10 Images Generation & Application - 2026-03-23 (art-10-images-v2)
+  - bg-main-cultivation.png: 主界面修炼场景背景
+  - bg-battle-dungeon.png: 战斗副本场景背景
+  - bg-spirit-root.png: 灵根属性展示背景
+  - bg-sect-war.png: 宗门战/仙盟战场背景
+  - bg-tribulation.png: 渡劫天劫特效背景
+  - bg-alchemy.png: 炼器工坊背景
+  - bg-debate.png: 论道切磋场景背景
+  - beast-dragon.png: 灵兽立绘-龙
+  - beast-qilin.png: 灵兽立绘-麒麟
+  - equipment-set-icons.png: 装备套装图标集
+  - All images saved to idle-cultivation/src-vue/src/assets/images/
+  - resources.js updated with all image paths
+  - Panel backgrounds updated in: CultivationPanel, ArenaPanel, DungeonPanel, TribulationPanel, AlchemyPanel, GongfaEffectsPanel, SpiritPanel, ClanPanel, SectWarPanel, BeastPanel
+  - Git commit: 30184c0

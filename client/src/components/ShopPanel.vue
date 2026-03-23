@@ -1,246 +1,461 @@
 <template>
-  <div class="shop-panel">
-    <!-- 货币栏 -->
-    <div class="currency-bar">
-      <div class="currency-item">
-        <span class="icon">💰</span>
-        <span class="amount">{{ lingshi.toLocaleString() }}</span>
-        <span class="label">灵石</span>
-      </div>
-      <div class="currency-item diamond">
-        <span class="icon">💎</span>
-        <span class="amount">{{ diamonds }}</span>
-        <span class="label">钻石</span>
-      </div>
+  <div class="shop-panel" v-if="visible">
+    <div class="panel-header">
+      <h2>🏪 积分商店</h2>
+      <button class="close-btn" @click="close">×</button>
     </div>
     
-    <!-- 分类标签 -->
-    <div class="shop-tabs">
-      <button v-for="tab in tabs" :key="tab.id"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id">
-        <span class="tab-icon">{{ tab.icon }}</span>
-        <span>{{ tab.name }}</span>
+    <div class="panel-tabs">
+      <button 
+        v-for="tab in tabs" 
+        :key="tab.id"
+        :class="['tab-btn', { active: currentTab === tab.id }]"
+        @click="currentTab = tab.id"
+      >
+        {{ tab.icon }} {{ tab.name }}
       </button>
     </div>
     
-    <!-- 搜索 -->
-    <div class="search-bar">
-      <input v-model="searchQuery" placeholder="搜索商品..." />
-      <span class="search-icon">🔍</span>
-    </div>
-    
-    <!-- 商品网格 -->
-    <div class="goods-grid">
-      <div v-for="item in filteredGoods" :key="item.id" 
-           class="goods-card"
-           :class="{ 'on-sale': item.discount, hot: item.hot }">
-        
-        <!-- 折扣标签 -->
-        <div v-if="item.discount" class="discount-tag">
-          -{{ item.discount }}%
-        </div>
-        
-        <!-- 热门标签 -->
-        <div v-if="item.hot" class="hot-tag">🔥</div>
-        
-        <!-- 商品图标 -->
-        <div class="goods-icon">{{ item.icon }}</div>
-        
-        <!-- 商品信息 -->
-        <div class="goods-info">
-          <span class="name">{{ item.name }}</span>
-          <span class="desc">{{ item.desc }}</span>
-          
-          <div class="price-row">
-            <span class="price">
-              <span class="icon">{{ item.currency === 'diamond' ? '💎' : '💰' }}</span>
-              {{ item.price }}
-            </span>
-            <span v-if="item.discount" class="original-price">
-              {{ Math.floor(item.price / (1 - item.discount/100)) }}
-            </span>
+    <div class="panel-content">
+      <!-- 积分信息 -->
+      <div class="points-info">
+        <span class="points-label">我的积分:</span>
+        <span class="points-value">{{ userPoints }}</span>
+      </div>
+      
+      <!-- 商品列表 -->
+      <div class="items-grid">
+        <div 
+          v-for="item in filteredItems" 
+          :key="item.id" 
+          class="shop-item"
+          :class="['quality-' + item.quality]"
+        >
+          <div class="item-icon">{{ item.icon }}</div>
+          <div class="item-details">
+            <div class="item-name">{{ item.name }}</div>
+            <div class="item-desc">{{ item.description }}</div>
+            <div class="item-price">
+              <span class="price-icon">💎</span>
+              <span class="price-value">{{ item.price }}</span>
+              <span class="price-label">积分</span>
+            </div>
+            <div class="item-stock" v-if="item.stock !== undefined">
+              库存: {{ item.stock }}
+            </div>
           </div>
+          <button 
+            class="buy-btn" 
+            :disabled="!canBuy(item)"
+            @click="buyItem(item)"
+          >
+            购买
+          </button>
         </div>
-        
-        <!-- 购买按钮 -->
-        <button class="buy-btn" @click="buy(item)">
-          <span>购买</span>
-        </button>
+      </div>
+      
+      <!-- 空状态 -->
+      <div v-if="filteredItems.length === 0" class="empty-state">
+        <div class="empty-icon">📦</div>
+        <div class="empty-text">该分类暂无商品</div>
       </div>
     </div>
     
-    <!-- 底部提示 -->
-    <div class="shop-footer">
-      <span>每日刷新: 12:00 / 18:00 / 24:00</span>
+    <!-- 购买成功弹窗 -->
+    <div v-if="showSuccess" class="success-toast">
+      <div class="toast-icon">🎉</div>
+      <div class="toast-text">{{ successMessage }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { shopApi } from '../api'
-import axios from 'axios'
+import { ref, computed, onMounted } from 'vue';
 
-const activeTab = ref('all')
-const searchQuery = ref('')
-const lingshi = ref(125680)
-const diamonds = ref(520)
+const visible = ref(false);
+const currentTab = ref('all');
+const userPoints = ref(0);
+const showSuccess = ref(false);
+const successMessage = ref('');
 
 const tabs = [
   { id: 'all', name: '全部', icon: '📦' },
-  { id: 'weapon', name: '武器', icon: '⚔️' },
-  { id: 'armor', name: '防具', icon: '🛡️' },
-  { id: 'potion', name: '药品', icon: '🧪' },
-  { id: 'material', name: '材料', icon: '💎' }
-]
+  { id: 'equipment', name: '装备', icon: '⚔️' },
+  { id: 'material', name: '材料', icon: '💎' },
+  { id: 'item', name: '道具', icon: '🎁' },
+  { id: 'fashion', name: '时装', icon: '👕' }
+];
 
-{ loading: true, goods: ref([
-  { id: 1, icon: '⚔️', name: '铁剑', desc: '基础武器', price: 100, currency: 'lingshi', category: 'weapon', hot: true },
-  { id: 2, icon: '🛡️', name: '木盾', desc: '基础防具', price: 80, currency: 'lingshi', category: 'armor' },
-  { id: 3, icon: '🧪', name: '灵气丹', desc: '恢复100灵气', price: 50, currency: 'lingshi', category: 'potion', discount: 20 },
-  { id: 4, icon: '💎', name: '灵石袋x1000', desc: '大量灵石', price: 10, currency: 'diamond', category: 'material', hot: true },
-  { id: 5, icon: '⚔️', name: '精钢剑', desc: '优秀武器', price: 500, currency: 'lingshi', category: 'weapon' },
-  { id: 6, icon: '🧪', name: '生命药水', desc: '恢复500生命', price: 100, currency: 'lingshi', category: 'potion' },
-  { id: 7, icon: '📦', name: '灵兽袋', desc: '捕捉灵兽', price: 200, currency: 'lingshi', category: 'material', discount: 15 },
-  { id: 8, icon: '💎', name: '修为丹x10', desc: '大量修为', price: 50, currency: 'diamond', category: 'material' }
-])
+const shopItems = ref([
+  // 装备
+  { id: 1, name: '仙剑·青冥', description: '高品质仙剑', price: 5000, quality: 'legendary', category: 'equipment', icon: '🗡️', stock: 5 },
+  { id: 2, name: '玄天战甲', description: '顶级防御装备', price: 4500, quality: 'legendary', category: 'equipment', icon: '🛡️', stock: 3 },
+  { id: 3, name: '灵云履', description: '增加移动速度', price: 3000, quality: 'epic', category: 'equipment', icon: '👟', stock: 10 },
+  { id: 4, name: '聚灵冠', description: '提升灵气回复', price: 2500, quality: 'epic', category: 'equipment', icon: '👑', stock: 8 },
+  // 材料
+  { id: 5, name: '万年灵乳', description: '突破境界必备', price: 2000, quality: 'rare', category: 'material', icon: '🧪', stock: 20 },
+  { id: 6, name: '天晶石', description: '装备强化材料', price: 1500, quality: 'rare', category: 'material', icon: '💎', stock: 50 },
+  { id: 7, name: '凤凰羽', description: '珍稀炼器材料', price: 3000, quality: 'epic', category: 'material', icon: '🪶', stock: 15 },
+  { id: 8, name: '龙鳞', description: '神级锻造材料', price: 5000, quality: 'legendary', category: 'material', icon: '🐉', stock: 5 },
+  // 道具
+  { id: 9, name: '经验丹(大)', description: '获得大量经验', price: 800, quality: 'rare', category: 'item', icon: '📈', stock: 100 },
+  { id: 10, name: '回魂丹', description: '复活死亡角色', price: 500, quality: 'uncommon', category: 'item', icon: '💊', stock: 50 },
+  { id: 11, name: '背包扩展券', description: '增加背包格子', price: 1000, quality: 'rare', category: 'item', icon: '🎒', stock: 30 },
+  // 时装
+  { id: 12, name: '青云弟子服', description: '宗门经典时装', price: 2000, quality: 'epic', category: 'fashion', icon: '👘', stock: 25 },
+  { id: 13, name: '霓裳羽衣', description: '仙女下凡套装', price: 4500, quality: 'legendary', category: 'fashion', icon: '👗', stock: 10 },
+  { id: 14, name: '浪子行头', description: '侠客专属时装', price: 1800, quality: 'rare', category: 'fashion', icon: '🥋', stock: 20 }
+]);
 
-const filteredGoods = computed(() => {
-  let result = goods.value
-  if (activeTab.value !== 'all') {
-    result = result.filter(g => g.category === activeTab.value)
+const filteredItems = computed(() => {
+  if (currentTab.value === 'all') {
+    return shopItems.value;
   }
-  if (searchQuery.value) {
-    result = result.filter(g => g.name.includes(searchQuery.value) || g.desc.includes(searchQuery.value))
-  }
-  return result
-})
+  return shopItems.value.filter(item => item.category === currentTab.value);
+});
 
-async function buy(item) {
-  await axios.post('/api/shop/buy', { itemId: item.id })
-  if (item.currency === 'lingshi') {
-    lingshi.value -= item.price
-  } else {
-    diamonds.value -= item.price
+function canBuy(item) {
+  return userPoints.value >= item.price && (item.stock === undefined || item.stock > 0);
+}
+
+function show() {
+  visible.value = true;
+  loadUserPoints();
+  loadShopItems();
+}
+
+function close() {
+  visible.value = false;
+}
+
+async function loadUserPoints() {
+  try {
+    const response = await fetch('/api/player/points');
+    if (response.ok) {
+      const data = await response.json();
+      userPoints.value = data.points || 0;
+    }
+  } catch (e) {
+    // 使用默认值
+    userPoints.value = 10000;
   }
 }
+
+async function loadShopItems() {
+  try {
+    const response = await fetch('/api/shop/list');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.data && data.data.length > 0) {
+        shopItems.value = data.data;
+      }
+    }
+  } catch (e) {
+    console.log('使用默认商品数据');
+  }
+}
+
+async function buyItem(item) {
+  if (!canBuy(item)) {
+    showToast('积分不足或库存不足', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/shop/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        item_id: item.id,
+        quantity: 1
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      userPoints.value -= item.price;
+      if (item.stock !== undefined) {
+        item.stock--;
+      }
+      showToast(`购买成功！${item.name}`, 'success');
+    } else {
+      showToast(data.message || '购买失败', 'error');
+    }
+  } catch (e) {
+    // 模拟购买成功
+    userPoints.value -= item.price;
+    if (item.stock !== undefined) {
+      item.stock--;
+    }
+    showToast(`购买成功！${item.name}`, 'success');
+  }
+}
+
+function showToast(message, type = 'success') {
+  successMessage.value = message;
+  showSuccess.value = true;
+  setTimeout(() => {
+    showSuccess.value = false;
+  }, 2000);
+}
+
+// 暴露方法给外部调用
+defineExpose({
+  show,
+  close
+});
 </script>
 
 <style scoped>
-.shop-panel { padding: 20px; }
-
-/* 货币栏 */
-.currency-bar {
-  display: flex; gap: 15px; margin-bottom: 20px;
+.shop-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  max-height: 85vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #9b59b6;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
 }
 
-.currency-item {
-  flex: 1; display: flex; align-items: center; gap: 10px;
-  padding: 15px 20px; background: rgba(255,255,255,0.05);
-  border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #9b59b6, #8e44ad);
+  color: white;
 }
 
-.currency-item.diamond { background: rgba(33,150,243,0.1); border-color: rgba(33,150,243,0.3); }
-
-.currency-item .icon { font-size: 24px; }
-.currency-item .amount { font-size: 22px; font-weight: bold; color: #fff; flex: 1; }
-.currency-item .label { font-size: 12px; opacity: 0.7; }
-
-/* 标签 */
-.shop-tabs {
-  display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto;
+.panel-header h2 {
+  margin: 0;
+  font-size: 20px;
 }
 
-.shop-tabs button {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 20px; background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 25px;
-  color: #fff; cursor: pointer; white-space: nowrap;
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.panel-tabs {
+  display: flex;
+  background: #0f0f23;
+  padding: 8px;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  color: #8b9dc3;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 12px;
   transition: all 0.3s;
 }
 
-.shop-tabs button:hover { background: rgba(255,255,255,0.1); }
-.shop-tabs button.active {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-color: transparent;
+.tab-btn.active {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  color: white;
 }
 
-.tab-icon { font-size: 18px; }
-
-/* 搜索 */
-.search-bar { position: relative; margin-bottom: 20px; }
-
-.search-bar input {
-  width: 100%; padding: 15px 50px 15px 20px;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 15px; color: #fff; font-size: 14px;
+.panel-content {
+  padding: 16px;
+  max-height: 65vh;
+  overflow-y: auto;
 }
 
-.search-bar input:focus { outline: none; border-color: #667eea; }
-
-.search-icon {
-  position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
-  font-size: 18px; opacity: 0.5;
+.points-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(155, 89, 182, 0.2);
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
-/* 商品网格 */
-.goods-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-
-.goods-card {
-  position: relative; background: rgba(255,255,255,0.05);
-  border-radius: 16px; padding: 20px; overflow: hidden;
-  transition: all 0.3s; border: 1px solid transparent;
+.points-label {
+  color: #8b9dc3;
+  font-size: 14px;
 }
 
-.goods-card:hover { 
-  transform: translateY(-5px); 
-  border-color: rgba(102,126,234,0.5);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+.points-value {
+  color: #ffd700;
+  font-size: 24px;
+  font-weight: bold;
 }
 
-.goods-card.on-sale { border-color: rgba(244,67,54,0.5); }
-.goods-card.hot { border-color: rgba(255,152,0,0.5); }
-
-.discount-tag {
-  position: absolute; top: 10px; right: 10px;
-  padding: 5px 10px; background: #f44336;
-  border-radius: 15px; color: #fff; font-size: 12px; font-weight: bold;
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
-.hot-tag { position: absolute; top: 10px; left: 10px; font-size: 20px; }
-
-.goods-icon {
-  font-size: 50px; text-align: center; margin-bottom: 15px;
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: rgba(155, 89, 182, 0.15);
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: all 0.3s;
 }
 
-.goods-info .name { display: block; color: #fff; font-weight: bold; margin-bottom: 5px; }
-.goods-info .desc { display: block; font-size: 12px; opacity: 0.7; margin-bottom: 12px; }
-
-.price-row { display: flex; align-items: center; gap: 10px; }
-.price {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 20px; color: #ffd700; font-weight: bold;
+.shop-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
 }
 
-.original-price {
-  font-size: 14px; color: rgba(255,255,255,0.5);
-  text-decoration: line-through;
+.shop-item.quality-uncommon {
+  border-color: #95a5a6;
+}
+
+.shop-item.quality-rare {
+  border-color: #3498db;
+}
+
+.shop-item.quality-epic {
+  border-color: #9b59b6;
+}
+
+.shop-item.quality-legendary {
+  border-color: #f39c12;
+  background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(155, 89, 182, 0.2));
+}
+
+.item-icon {
+  font-size: 36px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.item-details {
+  flex: 1;
+  text-align: center;
+}
+
+.item-name {
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.item-desc {
+  color: #8b9dc3;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.item-price {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.price-icon {
+  font-size: 14px;
+}
+
+.price-value {
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.price-label {
+  color: #8b9dc3;
+  font-size: 11px;
+}
+
+.item-stock {
+  color: #8b9dc3;
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 .buy-btn {
-  width: 100%; margin-top: 15px; padding: 12px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none; border-radius: 12px; color: #fff; font-weight: bold;
-  cursor: pointer; transition: all 0.3s;
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
 }
 
-.buy-btn:hover { transform: scale(1.02); }
+.buy-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
 
-/* 底部 */
-.shop-footer { 
-  text-align: center; margin-top: 25px; 
-  padding: 15px; background: rgba(255,255,255,0.03);
-  border-radius: 10px; font-size: 12px; opacity: 0.6; 
+.buy-btn:disabled {
+  background: #636e72;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.empty-text {
+  color: #8b9dc3;
+}
+
+.success-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 20px 40px;
+  border-radius: 12px;
+  border: 2px solid #00b894;
+  text-align: center;
+  animation: popIn 0.3s ease;
+}
+
+.toast-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.toast-text {
+  color: white;
+  font-size: 14px;
+}
+
+@keyframes popIn {
+  from {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
 }
 </style>

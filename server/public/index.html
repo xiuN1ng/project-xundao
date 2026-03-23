@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>挂机修仙 - 休闲放置游戏</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Microsoft YaHei', sans-serif; 
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    header { 
+      text-align: center; 
+      padding: 40px 0;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    h1 { font-size: 3em; margin-bottom: 10px; }
+    .subtitle { font-size: 1.2em; opacity: 0.8; }
+    .game-info { 
+      background: rgba(255,255,255,0.1); 
+      border-radius: 15px; 
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .player-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .stat { 
+      background: rgba(0,0,0,0.3); 
+      padding: 15px; 
+      border-radius: 10px;
+      text-align: center;
+    }
+    .stat-value { font-size: 1.5em; font-weight: bold; color: #ffd700; }
+    .stat-label { font-size: 0.9em; opacity: 0.7; }
+    .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
+    button {
+      padding: 15px 30px;
+      font-size: 1.1em;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
+    .btn-secondary { background: linear-gradient(135deg, #f093fb, #f5576c); color: #fff; }
+    .btn-secondary:hover { transform: translateY(-2px); }
+    .btn-success { background: linear-gradient(135deg, #4facfe, #00f2fe); color: #fff; }
+    .btn-success:hover { transform: translateY(-2px); }
+    .log { 
+      background: rgba(0,0,0,0.5); 
+      border-radius: 10px; 
+      padding: 15px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    .log-item { margin: 5px 0; opacity: 0.8; }
+    .log-item::before { content: "> "; color: #667eea; }
+    footer { text-align: center; padding: 20px; opacity: 0.5; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧧 挂机修仙</h1>
+      <p class="subtitle">休闲放置手游 - 问道修仙之路</p>
+    </header>
+    
+    <div class="game-info">
+      <h2>📊 角色属性</h2>
+      <div class="player-stats">
+        <div class="stat">
+          <div class="stat-value" id="realm">凡人</div>
+          <div class="stat-label">境界</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="spirit">1000</div>
+          <div class="stat-label">灵气</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stones">1000</div>
+          <div class="stat-label">灵石</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="level">1</div>
+          <div class="stat-label">等级</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="atk">10</div>
+          <div class="stat-label">攻击</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="def">2</div>
+          <div class="stat-label">防御</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <button class="btn-primary" onclick="cultivate()">🧘 修炼</button>
+      <button class="btn-secondary" onclick="breakthrough()">🚀 突破境界</button>
+      <button class="btn-success" onclick="battle()">⚔️ 挑战副本</button>
+      <button class="btn-primary" onclick="shop()">🏪 商店</button>
+    </div>
+    
+    <div class="game-info">
+      <h2>📝 游戏日志</h2>
+      <div class="log" id="gameLog">
+        <div class="log-item">欢迎来到挂机修仙世界！</div>
+        <div class="log-item">点击修炼获得灵气</div>
+      </div>
+    </div>
+    
+    <footer>
+      <p>挂机修仙 v3.1 | © 2026</p>
+    </footer>
+  </div>
+  
+  <script>
+    // 简单的前端状态
+    const gameState = {
+      realm: '凡人',
+      realmLevel: 0,
+      spirit: 1000,
+      stones: 1000,
+      level: 1,
+      atk: 10,
+      def: 2,
+      hp: 100
+    };
+    
+    function log(msg) {
+      const logEl = document.getElementById('gameLog');
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.textContent = msg;
+      logEl.insertBefore(item, logEl.firstChild);
+    }
+    
+    function updateUI() {
+      document.getElementById('realm').textContent = gameState.realm;
+      document.getElementById('spirit').textContent = Math.floor(gameState.spirit);
+      document.getElementById('stones').textContent = gameState.stones;
+      document.getElementById('level').textContent = gameState.level;
+      document.getElementById('atk').textContent = gameState.atk;
+      document.getElementById('def').textContent = gameState.def;
+    }
+    
+    // 修炼
+    function cultivate() {
+      const gain = 10 + gameState.realmLevel * 2;
+      gameState.spirit += gain;
+      gameState.stones += Math.floor(gain / 10);
+      log(`修炼获得 +${gain} 灵气`);
+      updateUI();
+    }
+    
+    // 突破
+    function breakthrough() {
+      const cost = Math.floor(100 * Math.pow(1.5, gameState.realmLevel));
+      if (gameState.spirit < cost) {
+        log(`突破需要 ${cost} 灵气，当前不足！`);
+        return;
+      }
+      gameState.spirit -= cost;
+      gameState.realmLevel++;
+      const realms = ['凡人', '练气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '仙人'];
+      gameState.realm = realms[Math.min(gameState.realmLevel, 10)];
+      gameState.atk = Math.floor(10 * Math.pow(1.1, gameState.realmLevel));
+      gameState.def = Math.floor(2 * Math.pow(1.1, gameState.realmLevel));
+      log(`突破成功！境界提升至 ${gameState.realm}`);
+      updateUI();
+    }
+    
+    // 战斗
+    function battle() {
+      const enemyHp = 50 + gameState.realmLevel * 10;
+      const damage = Math.max(1, gameState.atk - (enemyHp * 0.1));
+      const win = damage >= enemyHp * 0.3;
+      
+      if (win) {
+        const reward = 20 + gameState.realmLevel * 5;
+        gameState.stones += reward;
+        log(`战斗胜利！获得 ${reward} 灵石`);
+      } else {
+        log('战斗失败，请提升实力后再来');
+      }
+      updateUI();
+    }
+    
+    // 商店
+    function shop() {
+      log('商店功能开发中...');
+    }
+    
+    // 初始更新
+    updateUI();
+  </script>
+</body>
+</html>

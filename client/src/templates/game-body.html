@@ -1,0 +1,986 @@
+<body>
+  <!-- 初始加载遮罩 -->
+  <div class="loading-overlay" id="initialLoading">
+    <div class="loading-logo">🎮</div>
+    <div class="loading-spinner"></div>
+    <div class="loading-text">正在初始化修仙世界...</div>
+    <div class="loading-subtext">Loading Cultivation World...</div>
+  </div>
+  
+  <!-- 移动端顶部状态栏 -->
+  <div class="top-bar mobile-only">
+    <div class="top-bar-left">
+      <div class="top-bar-item stamina">
+        <span class="icon">⚡</span>
+        <span id="mobileStamina">100</span>
+      </div>
+      <div class="top-bar-item spirit-stone">
+        <span class="icon">💰</span>
+        <span id="mobileSpiritStones">0</span>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <button class="top-bar-btn" onclick="showMailPanel()" title="邮件">📧</button>
+      <button class="top-bar-btn" onclick="showSignInMakeupPanel()" title="签到/补签">📅</button>
+      <button class="top-bar-btn" onclick="showTitlePanel()" title="称号">👑</button>
+      <button class="top-bar-btn" onclick="showBattleEffectPanel()" title="战斗特效">⚔️</button>
+      <button class="top-bar-btn" onclick="showEquipmentRefinePanel()" title="装备精炼">⚒️</button>
+      <button class="top-bar-btn" onclick="showSkillTreePanel()" title="技能树">🌲</button>
+      <button class="top-bar-btn" onclick="showEnhancementPanel()" title="装备强化">🔧</button>
+      <button class="top-bar-btn" onclick="showActivityPanel()" title="活动面板">🎉</button>
+      <button class="top-bar-btn" onclick="showPetEvolutionPanel()" title="宠物进化">🐾</button>
+      <button class="top-bar-btn" onclick="showWelfarePanel()" title="福利中心">💎</button>
+      <!-- V15 新增功能按钮 -->
+      <button class="top-bar-btn" onclick="showTaskTrackerPanel()" title="任务追踪" id="taskTrackerBtn">📋</button>
+      <button class="top-bar-btn" onclick="showOfflinePanel()" title="离线收益">⏰</button>
+      <button class="top-bar-btn" onclick="showStoryPanel()" title="修仙剧情">📖</button>
+      <button class="top-bar-btn" onclick="showBattleReportPanel()" title="战报-战斗回放">📜</button>
+      <!-- V40 跨服战场按钮 -->
+      <button class="top-bar-btn" onclick="showInterSectWarPanel()" title="跨服战场">🏟️</button>
+      <button class="top-bar-btn" onclick="openSettingsModal()" title="设置">⚙️</button>
+      <!-- 新手引导按钮 -->
+      <button class="top-bar-btn npg-guide-btn" onclick="showNewPlayerGuidePanel()" title="新手引导" id="newPlayerGuideBtn">🧙</button>
+    </div>
+  </div>
+
+  <!-- 登录/注册界面 -->
+  <div class="auth-container" id="authContainer">
+    <div class="auth-wrapper">
+      <!-- 背景装饰 -->
+      <div class="auth-bg-decoration">
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
+        <div class="deco-circle deco-3"></div>
+        <div class="deco-line line-1"></div>
+        <div class="deco-line line-2"></div>
+        <div class="deco-line line-3"></div>
+      </div>
+      
+      <!--  <div class="auth-header">
+       标题区域 -->
+      <div class="auth-logo">🧘</div>
+        <h1 class="auth-title">寻道修仙</h1>
+        <p class="auth-subtitle">踏入仙途，修炼成仙</p>
+      </div>
+      
+      <!-- 标签切换 -->
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">登录</button>
+        <button type="button" class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">注册</button>
+      </div>
+      
+      <!-- 登录表单 -->
+      <form class="auth-form" id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input type="text" id="loginUsername" placeholder="请输入用户名" required autocomplete="username">
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="loginPassword" placeholder="请输入密码" required autocomplete="current-password">
+            <button type="button" class="password-toggle" onclick="togglePassword('loginPassword')">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+        </div>
+        <div class="form-options">
+          <label class="remember-me">
+            <input type="checkbox" id="rememberMe">
+            <span class="checkmark"></span>
+            记住我
+          </label>
+          <a href="#" class="forgot-link" onclick="showForgotPassword(event)">忘记密码?</a>
+        </div>
+        <button type="submit" class="btn btn-primary btn-login">
+          <span class="btn-text">开始修仙</span>
+          <span class="btn-glow"></span>
+        </button>
+      </form>
+      
+      <!-- 注册表单 -->
+      <form class="auth-form" id="registerForm" style="display:none" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input type="text" id="registerUsername" placeholder="用户名 (3-16位字母数字)" required pattern="[a-zA-Z0-9]{3,16}">
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="registerPassword" placeholder="密码 (6-20位)" required minlength="6" maxlength="20">
+            <button type="button" class="password-toggle" onclick="togglePassword('registerPassword')">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="registerConfirmPassword" placeholder="确认密码" required>
+            <button type="button" class="password-toggle" onclick="togglePassword('registerConfirmPassword')">
+              <span class="eye-icon">👁️</span>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="input-wrapper">
+            <span class="input-icon">📧</span>
+            <input type="email" id="registerEmail" placeholder="邮箱 (选填，用于找回密码)">
+          </div>
+        </div>
+        <div class="form-options">
+          <label class="remember-me">
+            <input type="checkbox" id="agreeTerms" required>
+            <span class="checkmark"></span>
+            我已阅读并同意 <a href="#" onclick="showTerms(event)">《用户协议》</a>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-login">
+          <span class="btn-text">创建角色</span>
+          <span class="btn-glow"></span>
+        </button>
+      </form>
+      
+      <!-- 分割线 -->
+      <div class="auth-divider">
+        <span>其他登录方式</span>
+      </div>
+      
+      <!-- 第三方登录 -->
+      <div class="social-login">
+        <button type="button" class="social-btn" onclick="socialLogin('wechat')" title="微信">
+          <span class="social-icon">💬</span>
+        </button>
+        <button type="button" class="social-btn" onclick="socialLogin('qq')" title="QQ">
+          <span class="social-icon">🐧</span>
+        </button>
+        <button type="button" class="social-btn" onclick="socialLogin('guest')" title="游客登录">
+          <span class="social-icon">🎮</span>
+        </button>
+      </div>
+      
+      <!-- 底部信息 -->
+      <div class="auth-footer">
+        <p>即表示同意我们的 <a href="#" onclick="showPrivacy(event)">隐私政策</a></p>
+      </div>
+    </div>
+    
+    <!-- 游客提示 -->
+    <div class="guest-tip" id="guestTip">
+      <span class="tip-icon">💡</span>
+      <span>游客登录可在设置中绑定账号，数据可保留</span>
+    </div>
+  </div>
+
+  <!-- 资源加载界面 - 已移除 -->
+
+  <!-- 新手欢迎弹窗 -->
+  <div class="modal-overlay" id="welcomeModal">
+    <div class="modal-content" style="max-width:500px">
+      <div class="modal-header" style="justify-content:center;border:none">
+        <div class="modal-title" style="font-size:28px">🎮 寻道修仙</div>
+      </div>
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:64px;margin-bottom:20px">🧘‍♂️</div>
+        <h2 style="color:#ffd700;margin-bottom:15px">欢迎来到修仙世界！</h2>
+        <p style="color:#aaa;margin-bottom:25px;line-height:1.8">
+          这是一个挂机修仙游戏，你需要通过修炼提升境界，挑战怪物获得装备，<br>
+          加入宗门与其他修仙者一起闯荡，最终得道成仙！
+        </p>
+        <div style="text-align:left;background:rgba(0,0,0,0.3);border-radius:12px;padding:20px;margin-bottom:25px">
+          <div style="color:#4ecdc4;font-weight:bold;margin-bottom:15px">📖 新手攻略</div>
+          <div style="display:flex;align-items:center;margin-bottom:10px">
+            <span style="font-size:20px;margin-right:10px">🧘</span>
+            <span>修炼：点击「修炼」获得灵气，提升境界</span>
+          </div>
+          <div style="display:flex;align-items:center;margin-bottom:10px">
+            <span style="font-size:20px;margin-right:10px">⚔️</span>
+            <span>战斗：挑战怪物获得经验和灵石</span>
+          </div>
+          <div style="display:flex;align-items:center;margin-bottom:10px">
+            <span style="font-size:20px;margin-right:10px">🏛️</span>
+            <span>宗门：加入宗门获得属性加成</span>
+          </div>
+          <div style="display:flex;align-items:center">
+            <span style="font-size:20px;margin-right:10px">🦊</span>
+            <span>灵兽：培养灵兽提升战力</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:15px;font-size:16px" onclick="closeWelcomeModal()">
+          🚀 开始修仙之旅
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 左侧 -->
+    <div class="left-panel">
+      <!-- 玩家信息 -->
+      <div class="card player-card">
+        <!-- 法宝环绕圈 -->
+        <div class="artifact-ring">
+          <div class="artifact-ring-inner"></div>
+          <!-- 飞剑 - 上 -->
+          <div class="artifact-slot weapon" id="artifactSlotWeapon" onclick="showArtifactPanel('weapon')" title="飞剑">
+            <span class="slot-icon">⚔️</span>
+          </div>
+          <!-- 宝甲 - 下 -->
+          <div class="artifact-slot armor" id="artifactSlotArmor" onclick="showArtifactPanel('armor')" title="宝甲">
+            <span class="slot-icon">🛡️</span>
+          </div>
+          <!-- 配饰 - 左 -->
+          <div class="artifact-slot accessory" id="artifactSlotAccessory" onclick="showArtifactPanel('accessory')" title="配饰">
+            <span class="slot-icon">💍</span>
+          </div>
+          <!-- 伴生 - 右 -->
+          <div class="artifact-slot companion" id="artifactSlotCompanion" onclick="showArtifactPanel('companion')" title="伴生">
+            <span class="slot-icon">🔮</span>
+          </div>
+        </div>
+
+        <!-- 炼丹按钮 -->
+        <div class="alchemy-btn-container" style="margin-top: 12px;">
+          <button class="btn btn-gold" onclick="showAlchemyPanel()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span>🔥</span>
+            <span>炼丹</span>
+          </button>
+        </div>
+        
+        <div class="player-avatar" id="playerAvatar">🧑</div>
+        <div class="player-name" id="playerName">无名修士</div>
+        <div class="player-realm" id="playerRealm">凡人</div>
+        <div class="player-level" id="playerLevel">Lv.1</div>
+      </div>
+
+      <!-- 境界 -->
+      <div class="card">
+        <div class="card-title">境界</div>
+        <div class="realm-display">
+          <div class="realm-icon" id="realmIcon">🧘</div>
+          <div class="realm-name" id="currentRealm">凡人</div>
+          <div class="realm-next" id="nextRealmText">下一境界: 练气期</div>
+          <div class="realm-progress-container">
+            <div class="realm-progress-bar">
+              <div class="realm-progress-fill" id="realmProgressFill" style="width: 0%"></div>
+              <div class="realm-progress-glow"></div>
+            </div>
+            <div class="realm-progress-text" id="realmProgressText">0 / 100 灵气</div>
+          </div>
+        </div>
+        <button class="btn btn-success" id="btnBreakthrough" onclick="handleBreakthrough(this)">🚀 突破境界</button>
+        <button class="btn btn-warning" style="margin-top:8px;width:100%" onclick="handleTribulation(this)">⚡ 渡劫系统</button>
+      </div>
+
+      <!-- 战斗 -->
+      <div class="card battle-panel">
+        <div class="card-title">⚔️ 战斗</div>
+        <div id="battleView">
+          <div class="battle-status">
+            <div class="battle-avatar" id="playerBattleAvatar">⚔️</div>
+            <div class="battle-info">
+              <div>HP: <span id="playerHp">100</span>/<span id="playerMaxHp">100</span></div>
+              <div class="battle-hp-bar"><div class="battle-hp-fill" id="playerHpBar" style="width:100%"></div></div>
+              <div style="font-size:10px;margin-top:4px">攻击: <span id="playerAtk">10</span> | 防御: <span id="playerDef">0</span></div>
+            </div>
+          </div>
+        </div>
+        <div id="enemySection">
+          <div class="enemy-list" id="enemyList"></div>
+        </div>
+        <div class="dungeon-list" id="dungeonList" style="margin-top:10px"></div>
+      </div>
+
+      <!-- 洞府 -->
+      <div class="card cave-panel">
+        <div class="card-title">🏠 洞府</div>
+        <div class="cave-resources">
+          <div class="cave-resource"><div class="cave-res-icon">🌿</div><div class="cave-res-value" id="resHerbs">0</div><div class="cave-res-label">草药</div></div>
+          <div class="cave-resource"><div class="cave-res-icon">💊</div><div class="cave-res-value" id="resPills">0</div><div class="cave-res-label">丹药</div></div>
+          <div class="cave-resource"><div class="cave-res-icon">🔧</div><div class="cave-res-value" id="resMaterials">0</div><div class="cave-res-label">材料</div></div>
+          <div class="cave-resource"><div class="cave-res-icon">⚔️</div><div class="cave-res-value" id="resEquipment">0</div><div class="cave-res-label">装备</div></div>
+        </div>
+        <button class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);margin-bottom:10px" onclick="handleCollectResources(this)">📦 收集资源</button>
+        <button class="btn" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);margin-bottom:10px;width:100%" onclick="showCaveDwellingPanel()">🏔️ 洞府管理</button>
+        <div class="building-grid" id="buildingList"></div>
+      </div>
+
+      <!-- 功法 -->
+      <div class="card tech-panel">
+        <div class="card-title">📚 功法</div>
+        <div style="text-align:center;margin-bottom:10px">
+          <span style="font-size:20px;color:#8e2de2" id="techniquePoints">0</span>
+          <span style="font-size:12px;color:#888"> 功法点</span>
+        </div>
+        <div id="techniquePanels"></div>
+      </div>
+
+      <!-- 资源 -->
+      <div class="card">
+        <div class="card-title">资源</div>
+        <div class="progress-container">
+          <div class="progress-label"><span>灵气</span><span class="progress-value" id="spiritText">0/100</span></div>
+          <div class="progress-bar"><div class="progress-fill spirit" id="spiritBar" style="width:0%"></div><span class="progress-text" id="spiritPercent">0%</span></div>
+        </div>
+        <div class="progress-container">
+          <div class="progress-label"><span>经验</span><span class="progress-value" id="expText">Lv.1</span></div>
+          <div class="progress-bar"><div class="progress-fill exp" id="expBar" style="width:0%"></div><span class="progress-text" id="expPercent">0%</span></div>
+        </div>
+        <div style="font-size:16px;margin:10px 0">灵石: 💎 <span id="spiritStones" style="color:#ffd700;font-weight:bold;transition:all 0.3s">0</span></div>
+
+        <!-- 仙侠奇遇 widget -->
+        <div class="adventure-widget" id="adventureWidget">
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#667eea,#764ba2);margin-bottom:4px" onclick="triggerAdventure()">🔮 奇遇</button>
+          <div id="adventureBuffs"></div>
+          <div id="adventureCooldown" style="font-size:10px;color:#888">可触发</div>
+        </div>
+
+        <button class="btn btn-primary" id="cultivateBtn" onclick="handleCultivate(this)">✋ 修炼 (+<span id="manualGain">5</span>)</button>
+        <button class="btn btn-warning" id="upgradeBtn" onclick="handleUpgradeSpiritCap(this)">🔮 升级 (<span id="upgradeCost">10</span>💎)</button>
+      </div>
+
+      <!-- 统计 -->
+      <div class="card">
+        <div class="card-title">统计</div>
+        <div class="stats-grid">
+          <div class="stat-item"><div class="stat-value" id="totalSpirit">0</div><div class="stat-label">累计灵气</div></div>
+          <div class="stat-item"><div class="stat-value" id="combatWins">0</div><div class="stat-label">战斗胜利</div></div>
+        </div>
+      </div>
+
+      <!-- 新系统快捷入口 -->
+      <div class="card" style="border-left:3px solid #ff00ff">
+        <div class="card-title">🎮 更多系统</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn btn-sm" onclick="showBeastPanel()">🦊 灵兽</button>
+          <button class="btn btn-sm" onclick="showPetPanel()">🐾 灵兽(新)</button>
+          <button class="btn btn-sm" onclick="showSectPanel()">🏛️ 宗门</button>
+          <button class="btn btn-sm" onclick="showBossPanel()">👹 BOSS</button>
+          <button class="btn btn-sm" onclick="showMarketPanel()">💰 市场</button>
+          <button class="btn btn-sm" onclick="showMasterPanel()">🎓 师徒</button>
+          <button class="btn btn-sm" onclick="showPartnerPanel()">💕 仙侣</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)" onclick="showVipPanel()">💎 VIP会员</button>
+          <button class="btn btn-sm" onclick="showRealmDungeonPanel()">🏰 境界副本</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)" onclick="showResourceDungeonPanel()">📦 资源副本</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#f59e0b,#d97706)" onclick="showDailyBonusPanel()">🎁 每日奖励</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#6366f1,#4f46e5)" onclick="showOfflinePanel()">⏰ 离线收益</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ec4899,#be185d)" onclick="showAchievementPanel()">🏅 成就</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)" onclick="showPlotPanel()">📖 剧情</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ff6b6b,#ee5a5a)" onclick="showEventPanel()">🎉 活动</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ec4899,#be185d)" onclick="showFashionPanel()">👗 时装</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#10b981,#059669)" onclick="showShopPanel()">🛒 商城</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ffd700,#ff8c00)" onclick="showRankingPanel()">🏆 排行榜</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#9b59b6,#8e44ad)" onclick="showFengshenPanel()">🔱 封神榜</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#667eea,#764ba2)" onclick="showLadderPanel()">⚔️ 天梯</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#daa520,#b8860b)" onclick="showLundaoPanel()">📜 论道</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#e67e22,#d35400)" onclick="showCaveDwellingPanel()">🏔️ 洞府</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#3b82f6,#2563eb)" onclick="showFriendPanel()">👥 好友</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ef4444,#dc2626)" onclick="showSectWarPanel()">⚔️ 宗门战</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ff6600,#ff3300)" onclick="showAlchemyPanel()">🔥 炼丹</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#00ffff,#00cc99)" onclick="showResonancePanel()">✨ 共鸣</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#00ff88,#00cc66)" onclick="showParadisePanel()">🏞️ 福地</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#9966ff,#6633cc)" onclick="showImmortalRealmPanel()">🌟 仙界</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#ff0044,#cc0033)" onclick="showBossBattlePanel()">👹 世界BOSS</button>
+          <button class="btn btn-sm" style="background:linear-gradient(135deg,#667eea,#764ba2);grid-column:span 2" onclick="showMailPanel()">📧 邮件</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧 -->
+    <div class="right-panel">
+      <div class="card log-panel">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>📜 修炼日志</span>
+          <span class="log-count" id="logCount" style="font-size:11px;color:#666">0条</span>
+        </div>
+        <div class="log-container" id="logContainer">
+          <div class="log-entry">欢迎来到挂机修仙世界！</div>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>挂机修炼中</span>
+        </div>
+        <div>
+          <button class="btn btn-sm" onclick="showMailPanel()">📧 邮件</button>
+          速率: <span id="spiritRate">1</span>/s | 💾 自动存档
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 法宝面板 -->
+  <div class="modal-overlay" id="artifactModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">🔮 法宝系统</div>
+        <div class="modal-close" onclick="closeArtifactModal()">×</div>
+      </div>
+      
+      <!-- 材料背包 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(0,0,0,0.3)">
+        <div class="card-title">🎒 材料背包</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="materialInventory"></div>
+      </div>
+      
+      <!-- 法宝列表 -->
+      <div class="card" style="margin-bottom:15px">
+        <div class="card-title">⚔️ 我的法宝</div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="ownedArtifacts"></div>
+      </div>
+      
+      <!-- 强化 -->
+      <div class="enhance-section" id="enhanceSection">
+        <div class="enhance-title">⚡ 强化系统</div>
+        <div class="enhance-select" id="enhanceSelect"></div>
+        <div class="enhance-info" id="enhanceInfo">
+          <div style="color:#666;text-align:center;padding:20px">选择一个法宝进行强化</div>
+        </div>
+      </div>
+      
+      <!-- 炼器 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,215,0,0.1)">
+        <div class="card-title">🔨 炼器合成</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="forgeRecipes"></div>
+      </div>
+      
+      <!-- 天材地宝 -->
+      <div class="card" style="background:rgba(138,43,226,0.2)">
+        <div class="card-title">🌿 天材地宝</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px" id="heavenTreasures"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 时装面板 -->
+  <div class="modal-overlay" id="fashionModal">
+    <div class="modal-content" style="max-width:700px;min-width:500px">
+      <div class="modal-header">
+        <div class="modal-title">👗 时装系统</div>
+        <div class="modal-close" onclick="closeModal('fashionModal')">×</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap" id="fashionTabs">
+        <button class="tab-btn active" onclick="switchFashionTab('owned')">已拥有</button>
+        <button class="tab-btn" onclick="switchFashionTab('wear')">穿戴</button>
+        <button class="tab-btn" onclick="switchFashionTab('shop')">商店</button>
+      </div>
+      <div id="fashionContent"></div>
+    </div>
+  </div>
+
+  <!-- 灵兽面板 -->
+  <div class="modal-overlay" id="beastModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">🦊 灵兽系统</div>
+        <div class="modal-close" onclick="closeModal('beastModal')">×</div>
+      </div>
+      <div id="beastList"></div>
+    </div>
+  </div>
+
+  <!-- 宗门面板 -->
+  <div class="modal-overlay" id="sectModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">🏛️ 宗门系统</div>
+        <div class="modal-close" onclick="closeModal('sectModal')">×</div>
+      </div>
+      <div id="sectInfo"></div>
+    </div>
+  </div>
+
+  <!-- 聊天面板 -->
+  <div class="modal-overlay" id="chatModal">
+    <div class="modal-content" style="max-width:600px;width:95%;height:80vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <div class="modal-title">💬 聊天系统</div>
+        <div class="modal-close" onclick="closeModal('chatModal')">×</div>
+      </div>
+      <div class="chat-tabs" style="display:flex;gap:8px;padding:10px;border-bottom:1px solid rgba(255,255,255,0.1)">
+        <button class="chat-tab-btn active" data-channel="world" onclick="switchChatChannel('world')">🌍 世界</button>
+        <button class="chat-tab-btn" data-channel="sect" onclick="switchChatChannel('sect')">🏛️ 宗门</button>
+        <button class="chat-tab-btn" data-channel="private" onclick="switchChatChannel('private')">✉️ 私信</button>
+      </div>
+      <div class="chat-messages" id="chatMessages" style="flex:1;overflow-y:auto;padding:10px;background:rgba(0,0,0,0.3);min-height:300px">
+        <div class="chat-loading" style="text-align:center;color:#888;padding:20px">加载中...</div>
+      </div>
+      <div class="chat-input-area" style="padding:10px;border-top:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.5)">
+        <div id="privateReceiverSelect" style="display:none;margin-bottom:8px">
+          <select id="privateReceiver" style="width:100%;padding:8px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:6px">
+            <option value="">选择收件人...</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="chatMessageInput" placeholder="输入消息..." style="flex:1;padding:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;font-size:14px" onkeypress="handleChatKeyPress(event)">
+          <button onclick="sendChatMessage()" style="padding:12px 20px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;color:#fff;font-size:14px;cursor:pointer">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 世界BOSS面板 -->
+  <div class="modal-overlay" id="bossModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">👹 世界BOSS</div>
+        <div class="modal-close" onclick="closeModal('bossModal')">×</div>
+      </div>
+      <div id="bossInfo"></div>
+    </div>
+  </div>
+
+  <!-- 交易市场面板 -->
+  <div class="modal-overlay" id="marketModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">💰 交易市场</div>
+        <div class="modal-close" onclick="closeModal('marketModal')">×</div>
+      </div>
+      <div id="marketInfo"></div>
+    </div>
+  </div>
+
+  <!-- 师徒面板 -->
+  <div class="modal-overlay" id="masterModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">🎓 师徒系统</div>
+        <div class="modal-close" onclick="closeModal('masterModal')">×</div>
+      </div>
+      <div id="masterInfo"></div>
+    </div>
+  </div>
+
+  <!-- 境界副本面板 -->
+  <div class="modal-overlay" id="realmDungeonModal">
+    <div class="modal-content" style="max-width:700px">
+      <div class="modal-header">
+        <div class="modal-title">🏰 境界副本</div>
+        <div class="modal-close" onclick="closeModal('realmDungeonModal')">×</div>
+      </div>
+      <div id="realmDungeonInfo"></div>
+    </div>
+  </div>
+
+  <!-- 渡劫系统面板 -->
+  <div class="modal-overlay" id="tribulationModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">⚡ 渡劫系统</div>
+        <div class="modal-close" onclick="closeModal('tribulationModal')">×</div>
+      </div>
+      <div id="tribulationInfo"></div>
+    </div>
+  </div>
+
+  <!-- 仙侣系统面板 -->
+  <div class="modal-overlay" id="partnerModal">
+    <div class="modal-content partner-modal-content">
+      <div class="modal-header">
+        <div class="modal-title">💕 仙侣系统</div>
+        <div class="modal-close" onclick="closePartnerPanel()">×</div>
+      </div>
+      <div id="partnerContent"></div>
+    </div>
+  </div>
+
+  <!-- VIP系统面板 -->
+  <div class="modal-overlay" id="vipModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">💎 VIP会员</div>
+        <div class="modal-close" onclick="closeModal('vipModal')">×</div>
+      </div>
+      <div id="vipContent"></div>
+    </div>
+  </div>
+
+  <!-- 邮件系统面板 -->
+  <div class="modal-overlay" id="mailModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">📧 邮件系统</div>
+        <div class="modal-close" onclick="closeModal('mailModal')">×</div>
+      </div>
+      <div id="mailContent"></div>
+    </div>
+  </div>
+
+  <!-- 每日奖励面板 -->
+  <div class="modal-overlay" id="dailyBonusModal">
+    <div class="modal-content" style="max-width:550px">
+      <div class="modal-header">
+        <div class="modal-title">🎁 每日奖励</div>
+        <div class="modal-close" onclick="closeModal('dailyBonusModal')">×</div>
+      </div>
+      <div id="dailyBonusContent"></div>
+    </div>
+  </div>
+
+  <!-- 离线收益面板 -->
+  <div class="modal-overlay" id="offlineModal">
+    <div class="modal-content" style="max-width:480px">
+      <div class="modal-header">
+        <div class="modal-title">⏰ 离线收益</div>
+        <div class="modal-close" onclick="closeModal('offlineModal')">×</div>
+      </div>
+      <div id="offlineContent" class="offline-content">
+        <!-- 离线收益内容将通过JS动态填充 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 成就系统面板 -->
+  <div class="modal-overlay" id="achievementModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">🏅 成就系统</div>
+        <div class="modal-close" onclick="closeModal('achievementModal')">×</div>
+      </div>
+      <div id="achievementContent"></div>
+    </div>
+  </div>
+
+  <!-- 商城面板 -->
+  <div class="modal-overlay" id="shopModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">🛒 商城</div>
+        <div class="modal-close" onclick="closeModal('shopModal')">×</div>
+      </div>
+      <div id="shopContent"></div>
+    </div>
+  </div>
+
+  <!-- 活动面板 -->
+  <div class="modal-overlay" id="eventModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">🎉 活动</div>
+        <div class="modal-close" onclick="closeModal('eventModal')">×</div>
+      </div>
+      <div id="eventContent"></div>
+    </div>
+  </div>
+
+  <!-- 排行榜面板 -->
+  <div class="modal-overlay" id="rankingModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">🏆 排行榜</div>
+        <div class="modal-close" onclick="closeModal('rankingModal')">×</div>
+      </div>
+      <div id="rankingContent"></div>
+    </div>
+  </div>
+
+  <!-- 封神榜面板 -->
+  <div class="modal-overlay" id="fengshenModal">
+    <div class="modal-content" style="max-width:550px">
+      <div class="modal-header">
+        <div class="modal-title">🔱 封神榜</div>
+        <div class="modal-close" onclick="closeModal('fengshenModal')">×</div>
+      </div>
+      <div id="fengshenContent"></div>
+    </div>
+  </div>
+
+  <!-- 天梯面板 -->
+  <div class="modal-overlay" id="ladderModal">
+    <div class="modal-content" style="max-width:500px">
+      <div class="modal-header">
+        <div class="modal-title">⚔️ 天梯</div>
+        <div class="modal-close" onclick="closeModal('ladderModal')">×</div>
+      </div>
+      <div id="ladderContent"></div>
+    </div>
+  </div>
+
+  <!-- 好友面板 -->
+  <div class="modal-overlay" id="friendModal">
+    <div class="modal-content" style="max-width:550px">
+      <div class="modal-header">
+        <div class="modal-title">👥 好友系统</div>
+        <div class="modal-close" onclick="closeModal('friendModal')">×</div>
+      </div>
+      <div id="friendContent"></div>
+    </div>
+  </div>
+
+  <!-- 宗门战面板 -->
+  <div class="modal-overlay" id="sectWarModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">⚔️ 宗门战</div>
+        <div class="modal-close" onclick="closeModal('sectWarModal')">×</div>
+      </div>
+      <div id="sectWarContent"></div>
+    </div>
+  </div>
+
+  <!-- 炼丹交互UI -->
+  <div class="modal-overlay" id="alchemyModal">
+    <div class="modal-content" style="max-width:600px">
+      <div class="modal-header">
+        <div class="modal-title">🔥 炼丹交互</div>
+        <div class="modal-close" onclick="closeModal('alchemyModal')">×</div>
+      </div>
+      
+      <!-- 火候控制 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,100,0,0.1)">
+        <div class="card-title">🔥 火候控制</div>
+        <div class="alchemy-furnace">
+          <div class="furnace-temp-bar">
+            <div class="temp-fill" id="tempFill" style="width:50%"></div>
+            <div class="temp-marker" id="tempMarker" style="left:50%"></div>
+          </div>
+          <div class="temp-labels">
+            <span>文火</span>
+            <span>中火</span>
+            <span>武火</span>
+          </div>
+          <div class="temp-controls">
+            <button class="btn btn-sm" onclick="adjustTemp(-10)">-</button>
+            <span id="tempValue">50°C</span>
+            <button class="btn btn-sm" onclick="adjustTemp(10)">+</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 投药时机 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(0,255,100,0.1)">
+        <div class="card-title">🌿 投药时机</div>
+        <div class="alchemy-timing">
+          <div class="timing-circle" id="timingCircle">
+            <div class="timing-indicator" id="timingIndicator"></div>
+            <div class="timing-zones">
+              <div class="zone zone-bad"></div>
+              生<div class="zone zone-ok">熟</div>
+              <div class="zone zone-good">金丹</div>
+              <div class="zone zone-perfect">完美</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="addHerbBtn" onclick="addHerb()">投药</button>
+        </div>
+      </div>
+      
+      <!-- 炼丹结果 -->
+      <div class="card" style="background:rgba(138,43,226,0.2)">
+        <div class="card-title">🎁 炼丹结果</div>
+        <div id="alchemyResult" class="alchemy-result">
+          <div style="color:#666;text-align:center;padding:20px">等待炼丹...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 共鸣效果展示 -->
+  <div class="modal-overlay" id="resonanceModal">
+    <div class="modal-content" style="max-width:700px">
+      <div class="modal-header">
+        <div class="modal-title">✨ 共鸣系统</div>
+        <div class="modal-close" onclick="closeModal('resonanceModal')">×</div>
+      </div>
+      
+      <!-- 功法共鸣 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,215,0,0.1)">
+        <div class="card-title">📜 功法共鸣</div>
+        <div id="techniqueResonance" class="resonance-grid"></div>
+      </div>
+      
+      <!-- 法宝共鸣 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(0,255,255,0.1)">
+        <div class="card-title">🔮 法宝共鸣</div>
+        <div id="artifactResonance" class="resonance-grid"></div>
+      </div>
+      
+      <!-- 共鸣加成 -->
+      <div class="card" style="background:rgba(138,43,226,0.2)">
+        <div class="card-title">⚡ 总共鸣加成</div>
+        <div id="resonanceBonus" class="resonance-bonus">
+          <div class="bonus-item">
+            <span>攻击加成:</span>
+            <span class="bonus-value" id="atkBonus">+0%</span>
+          </div>
+          <div class="bonus-item">
+            <span>防御加成:</span>
+            <span class="bonus-value" id="defBonus">+0%</span>
+          </div>
+          <div class="bonus-item">
+            <span>灵气加成:</span>
+            <span class="bonus-value" id="spiritBonus">+0%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 福地UI扩展 -->
+  <div class="modal-overlay" id="realmUpgradeModal">
+    <div class="modal-content" style="max-width:650px">
+      <div class="modal-header">
+        <div class="modal-title">🏞️ 洞天福地</div>
+        <div class="modal-close" onclick="closeModal('realmUpgradeModal')">×</div>
+      </div>
+      
+      <!-- 福地升级 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(0,255,100,0.1)">
+        <div class="card-title">⬆️ 福地升级</div>
+        <div id="realmUpgradeContent" class="upgrade-list"></div>
+      </div>
+      
+      <!-- 福地任务 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,200,0,0.1)">
+        <div class="card-title">📋 探索任务</div>
+        <div id="realmQuestContent" class="quest-list"></div>
+      </div>
+      
+      <!-- 灵气产出 -->
+      <div class="card" style="background:rgba(0,255,255,0.1)">
+        <div class="card-title">💎 灵气产出</div>
+        <div class="spirit-output">
+          <div class="output-item">
+            <span>基础产出:</span>
+            <span id="baseOutput">+0/s</span>
+          </div>
+          <div class="output-item">
+            <span>升级加成:</span>
+            <span id="upgradeBonus">+0%</span>
+          </div>
+          <div class="output-item">
+            <span>总计:</span>
+            <span id="totalOutput" style="color:var(--color-success)">+0/s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 仙界展示 -->
+  <div class="modal-overlay" id="immortalRealmModal">
+    <div class="modal-content" style="max-width:800px">
+      <div class="modal-header">
+        <div class="modal-title">🌟 仙界篇</div>
+        <div class="modal-close" onclick="closeModal('immortalRealmModal')">×</div>
+      </div>
+      
+      <!-- 仙界地图 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(138,43,226,0.2)">
+        <div class="card-title">🗺️ 仙界地图</div>
+        <div id="immortalMap" class="immortal-map">
+          <div class="map-realm" data-realm="xian" onclick="selectImmortalRealm('xian')">
+            <span>🌸 真仙域</span>
+          </div>
+          <div class="map-realm" data-realm="jin" onclick="selectImmortalRealm('jin')">
+            <span>⭐ 金仙阁</span>
+          </div>
+          <div class="map-realm" data-realm="daluo" onclick="selectImmortalRealm('daluo')">
+            <span>🏰 大罗天</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 仙人境界 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,215,0,0.1)">
+        <div class="card-title">📊 仙人境界</div>
+        <div id="immortalRealmDisplay" class="realm-display"></div>
+      </div>
+      
+      <!-- 仙界任务 -->
+      <div class="card" style="background:rgba(0,255,255,0.1)">
+        <div class="card-title">📜 仙界任务</div>
+        <div id="immortalQuests" class="immortal-quest-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOSS战斗UI增强 -->
+  <div class="modal-overlay" id="bossBattleModal">
+    <div class="modal-content" style="max-width:700px">
+      <div class="modal-header">
+        <div class="modal-title">👹 世界BOSS</div>
+        <div class="modal-close" onclick="closeModal('bossBattleModal')">×</div>
+      </div>
+      
+      <!-- 倒计时 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,0,0,0.1)">
+        <div class="card-title">⏰ 挑战倒计时</div>
+        <div class="boss-countdown" id="bossCountdown">
+          <div class="countdown-timer" id="countdownTimer">00:00:00</div>
+          <div class="countdown-label">距离开战</div>
+        </div>
+      </div>
+      
+      <!-- BOSS信息 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(139,0,0,0.2)">
+        <div class="card-title">👹 BOSS信息</div>
+        <div id="bossInfo" class="boss-info">
+          <div class="boss-name" id="bossName">---</div>
+          <div class="boss-hp-bar">
+            <div class="hp-fill" id="bossHpFill" style="width:100%"></div>
+            <span class="hp-text" id="bossHpText">0/0</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 伤害排行 -->
+      <div class="card" style="margin-bottom:15px;background:rgba(255,215,0,0.1)">
+        <div class="card-title">🏆 伤害排行榜</div>
+        <div id="damageRanking" class="damage-ranking"></div>
+      </div>
+      
+      <!-- 实时伤害显示 -->
+      <div class="card" style="background:rgba(0,255,100,0.1)">
+        <div class="card-title">💥 实时伤害</div>
+        <div class="damage-stats">
+          <div class="stat-item">
+            <span>本次伤害:</span>
+            <span id="myDamage" class="damage-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span>总贡献:</span>
+            <span id="totalContribution" class="damage-value">0%</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="attackBossBtn" onclick="attackBoss()">⚔️ 攻击BOSS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 移动端底部导航栏 -->
+  <div class="bottom-nav mobile-only">
+    <div class="nav-item active" data-tab="main" onclick="switchMobileTab('main')">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">主页</span>
+    </div>
+    <div class="nav-item" data-tab="inventory" onclick="switchMobileTab('inventory')">
+      <span class="nav-icon">📦</span>
+      <span class="nav-label">背包</span>
+      <span class="nav-badge" id="inventoryBadge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" data-tab="sect" onclick="switchMobileTab('sect')">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">宗门</span>
+    </div>
+    <div class="nav-item" data-tab="chat" onclick="switchMobileTab('chat')">
+      <span class="nav-icon">💬</span>
+      <span class="nav-label">聊天</span>
+    </div>
+    <div class="nav-item" data-tab="plot" onclick="switchMobileTab('plot')">
+      <span class="nav-icon">📖</span>
+      <span class="nav-label">剧情</span>
+      <span class="nav-badge" id="plotBadge" style="display:none">0</span>
+    </div>
+    <div class="nav-item" data-tab="settings" onclick="switchMobileTab('settings')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">设置</span>
+    </div>
+  </div>
+
+  <!-- Vue3 CDN -->
