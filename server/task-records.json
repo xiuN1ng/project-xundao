@@ -383,13 +383,32 @@
       },
       "taskFrom": "cron-tasks-todo.txt [P2] 装备强化进阶系统",
       "status": "completed"
+    },
+    {
+      "id": "backend-abyss-api-fix-20260323-001",
+      "timestamp": "2026-03-23T21:20:00+08:00",
+      "cronRun": "backend-20min 9:20PM",
+      "type": "backend-abyss-api-fix",
+      "description": "修复封魔渊前后端API路由不匹配问题",
+      "files": [
+        "server/backend/server.js (路由 /api/abyss -> /api/abyssDungeon)",
+        "server/backend/routes/abyss.js (+233行: /config, /list, /nextLayer, /claim, /defeat, /starRift, /starRift/enter, /battle兼容)",
+        "client/src/api/index.js (abyssApi 8端点对齐后端)"
+      ],
+      "fixes": {
+        "route_mismatch": "/api/abyss -> /api/abyssDungeon (匹配前端)",
+        "missing_endpoints": "新增8个缺失端点: /config, /list, /nextLayer, /claim, /defeat, /starRift, /starRift/enter",
+        "battle_compat": "POST /battle 兼容前端参数格式 (playerDamage/playerDefense)",
+        "enter_session": "POST /enter 解析 dungeonId 并返回 session 对象"
+      },
+      "status": "completed"
     }
   ],
   "summary": {
     "cronRun": "frontend-hourly",
     "timestamp": "2026-03-23T08:26:00+08:00",
-    "lastTaskId": "frontend-equip-enhancement-api-20260323-001",
-    "totalTasksCompleted": 16,
+    "lastTaskId": "backend-abyss-api-fix-20260323-001",
+    "totalTasksCompleted": 17,
     "notes": "装备强化进阶系统API对接 - EquipmentEnhancePanel.vue mock→真实API，8个equipmentApi方法新增"
   }
 }
