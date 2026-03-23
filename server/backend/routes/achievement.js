@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
+// 共享玩家数据引用
+let playerRef = null;
+router.setPlayerRef = (ref) => { playerRef = ref; };
+router.getPlayerRef = () => playerRef;
+
 // 成就配置
 const achievementTemplates = [
   // 修炼成就
@@ -111,9 +116,12 @@ router.post('/update', (req, res) => {
       userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
     }
     
-    userAchievements[userId][ach.id].progress = value;
+    // 使用max确保进度只进不退
+    const current = userAchievements[userId][ach.id].progress;
+    const newProgress = Math.max(current, value);
+    userAchievements[userId][ach.id].progress = newProgress;
     
-    if (value >= ach.target) {
+    if (newProgress >= ach.target) {
       userAchievements[userId][ach.id].completed = true;
     }
   });
@@ -146,9 +154,17 @@ router.post('/claim', (req, res) => {
   
   userAch.claimed = true;
   
+  // 实际添加奖励到玩家账户
+  if (playerRef) {
+    if (achievement.reward.diamonds) playerRef.diamonds += achievement.reward.diamonds;
+    if (achievement.reward.lingshi) playerRef.lingshi += achievement.reward.lingshi;
+  }
+  
   res.json({
     success: true,
     reward: achievement.reward,
+    diamonds: playerRef ? playerRef.diamonds : null,
+    lingshi: playerRef ? playerRef.lingshi : null,
     message: `成就达成！获得${achievement.reward.diamonds || 0}钻石, ${achievement.reward.lingshi || 0}灵石`
   });
 });

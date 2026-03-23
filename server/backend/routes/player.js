@@ -45,3 +45,4 @@ router.post('/resources', (req, res) => {
 });
 
 module.exports = router;
+module.exports._player = player;

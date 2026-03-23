@@ -77,4 +77,9 @@ app.use('/api/abyssDungeon', require('./routes/abyss'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 
+// 注入玩家数据引用到成就系统 (成就奖励需要更新玩家资源)
+const achievementRouter = require('./routes/achievement');
+const playerModule = require('./routes/player');
+achievementRouter.setPlayerRef(playerModule._player);
+
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
