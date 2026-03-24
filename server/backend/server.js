@@ -3,6 +3,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 
+// 初始化婚姻系统数据库表
+try {
+  const marriageStorage = require('../game/marriage_storage');
+  if (marriageStorage.initMarriageTables) {
+    marriageStorage.initMarriageTables();
+  }
+} catch (e) {
+  console.log('婚姻系统存储层初始化:', e.message);
+}
+
 const app = express();
 const PORT = 3001;
 
@@ -74,6 +84,7 @@ app.use('/api/fishing', require('./routes/fishing'));
 app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));
+app.use('/api/marriage', require('./routes/marriage'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 
