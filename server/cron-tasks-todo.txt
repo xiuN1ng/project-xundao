@@ -36,3 +36,60 @@
   - resources.js updated with all image paths
   - Panel backgrounds updated in: CultivationPanel, ArenaPanel, DungeonPanel, TribulationPanel, AlchemyPanel, GongfaEffectsPanel, SpiritPanel, ClanPanel, SectWarPanel, BeastPanel
   - Git commit: 30184c0
+
+# ========== v13 新增任务 (2026-03-25 01:31) ==========
+
+## P0 紧急 — 服务器运维
+
+- [ ] [P0-B-v13-1] 服务器进程重启（CRITICAL）
+  - 服务器PID 608782启动于17:38，代码修改于18:49+，运行旧版本
+  - 执行: cd /root/.openclaw/workspace/xundao-server/server/backend && pkill -f "node server.js" && sleep 2 && node server.js &
+  - 重启后验证: curl localhost:3001/api/tribulation/types → 应返回JSON
+  - 负责人: [B] - 截止: 立即
+
+- [ ] [P0-B-v13-2] 工作空间统一
+  - 当前提案写xundao-docs，实际运行在xundao-server
+  - 确认哪个是主代码仓库，统一代码目录
+  - 后续所有代码修改针对 /root/.openclaw/workspace/xundao-server/server/backend/
+  - 负责人: [B] - 截止: 2026-03-26
+
+- [ ] [P0-B-v13-3] 章节HP数值重制
+  - Chapter 30 HP从70000 → 5000000（修复倒退bug）
+  - Chapter 80-100 HP重制：从3.5e11和1e19降至合理范围（<5,000,000）
+  - 新增长曲线：前20章100→10K，中期10K→500K，后期500K→5M
+  - 参考: 每章5-30分钟可完成的合理节奏
+  - 负责人: [B] - 截止: 2026-03-26
+
+- [ ] [P0-B-v13-4] 抽奖系统奖池重写
+  - POST /api/lottery/draw 当前返回emoji: {"item":"📦"}
+  - 重建奖池: 装备碎片ID/灵石/灵兽蛋/称号/时装（非emoji）
+  - 抽奖结果写入 player_bag 表
+  - 添加 GET /api/lottery/history 端点
+  - 概率: 普通70%/精良25%/史诗4%/传说1%
+  - 单抽100灵石，十连900，保底90抽
+  - 负责人: [B] - 截止: 2026-03-27
+
+## P1 重要
+
+- [ ] [P1-B-v13-1] WorldBoss攻击计算修复
+  - POST /api/worldboss/attack 当前返回 remainingHp:null, bossRewards:null
+  - 修复: 正确计算伤害→更新BOSS剩余HP→发放奖励→返回真实数值
+  - 负责人: [B] - 截止: 2026-03-27
+
+- [ ] [P1-B-v13-2] VIP月卡系统从stub升级
+  - /api/vip 当前返回硬编码 {level:1,points:500}
+  - VIP信息从数据库读取
+  - 实现月卡购买+每日领取（check有效期+发放灵石/丹药奖励）
+  - VIP等级特权实际生效（idle_earn_bonus/enhance_bonus）
+  - 负责人: [B] - 截止: 2026-03-28
+
+- [ ] [P1-B-v13-3] 服务器重启后验证 API 列表
+  - 重启后测试: tribulation/deity-list/ladder/daily-dungeon/tower/payment/giftcode/achievement/beast/skill/meridian/pill/dailyQuest/master/marriage
+  - 确保所有已注册路由正常工作
+  - 负责人: [B] - 截止: 2026-03-26
+
+- [ ] [P1-B-v13-4] 每日目标系统设计文档
+  - 创建 daily_goals_api.js（目标配置+完成状态）
+  - 目标: 通关副本/世界BOSS/挂机/竞技场
+  - 全部完成奖励: 月卡优惠券/限定称号
+  - 负责人: [B] - 截止: 2026-03-28
