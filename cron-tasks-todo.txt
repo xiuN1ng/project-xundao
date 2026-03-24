@@ -9,7 +9,12 @@
 
 # === P1 重要功能 ===
 [F] 装备套装UI - 套装tab + 收集度进度条 + 激活特效 + 套装技能说明
-[F] 每日签到对接后端 - 数据持久化 + 补签功能 + 日历展示
+# ✅ [F] 每日签到对接后端 - 2026-03-24
+#   - SignIn.vue: Options API → <script setup> + BasePanel + BaseButton + useToast
+#   - welfareApi: 新增 (getConfig/getSignInStatus/claimSignIn/claimCumulative/makeupSign/getHistory)
+#   - 后端: welfare_storage.js 新增 makeupSign() + welfare_api.js 新增 POST /api/welfare/makeup-sign
+#   - 日历展示: 月份切换 + 签到历史标记(✓/补) + 可选日期补签
+#   - 代码量: 749行 → 578行
 [F] 宗门战UI - InterSectWarPanel.vue对接sect_war API + 宣战/对战流程
 [F] 成就达成反馈UI - AchievementEffectPanel.vue弹窗动画 + 特效 + 音效
 
