@@ -99,4 +99,7 @@ export { initPetSystem } from './pet';
 // 魔器装备系统 (v1.0: 魔器属性、特效、魔器商店)
 export * from './demon-artifact';
 
+// 封魔渊扫荡系统 (v1.0: 已通关层扫荡、重复奖励发放)
+export * from './demon-abyss';
+
 // ... 可以继续添加其他模块
