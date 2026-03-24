@@ -51,6 +51,7 @@
       <ArtSystemPanel v-if="activeTab === 'art'" />
       <AscensionPrePanel v-if="showAscensionPre" @close="showAscensionPre=false" />
       <ImmortalRealmPanel v-if="activeTab === 'immortal-realm'" @close="activeTab = 'cultivation'" />
+      <TowerPanel v-if="activeTab === 'tower'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -95,6 +96,7 @@ import FishingCompetitionPanel from '../components/FishingCompetitionPanel.vue'
 import ArtSystemPanel from '../components/ArtSystemPanel.vue'
 import AscensionPrePanel from '../components/AscensionPrePanel.vue'
 import ImmortalRealmPanel from '../components/ImmortalRealmPanel.vue'
+import TowerPanel from '../components/TowerPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -140,6 +142,7 @@ const tabs = [
   { id: 'equipment-enhance', name: '强化', icon: '⚔️' },
   { id: 'adventure', name: '奇遇', icon: '✨' },
   { id: 'abyss', name: '深渊', icon: '🌀' },
+  { id: 'tower', name: '无尽塔', icon: '🗼' },
   { id: 'sealed-realm', name: '封魔渊', icon: '⚫' },
   { id: 'spirit-artifact', name: '器灵', icon: '🔮' },
   { id: 'gongfa-effects', name: '功法', icon: '📚' },
