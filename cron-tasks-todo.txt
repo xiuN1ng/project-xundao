@@ -4,7 +4,7 @@
 
 # === P1 重要 ===
 [B] 成就触发系统 - 后端埋点检测（升级/通关/获得装备）+ 成就达成推送通知  # 2026-03-24 15:07 完成
-[B] 灵石初期数值调整 - 新账号初始赠送500灵石 + 战斗掉落提升50%
+[B] 灵石初期数值调整 - 新账号初始赠送500灵石 + 战斗掉落提升50%  # 2026-03-24 19:34 完成
 
 # === P2 体验优化 ===
 [B] 缺灵石引导系统 - 灵石<100时触发提示 + 推荐获取渠道（挂机/副本/任务/商店）
@@ -71,10 +71,10 @@
   - server.js 注册 /api/rank 路由  # 2026-03-24 完成
   - 截止: 2026-03-25
 
-[P1] [B] Arena 竞技场后端重建
-  - 创建 routes/arena.js
-  - GET /ranks, GET /rank/:userId, GET /opponents/:userId, GET /records/:userId, POST /challenge
-  - server.js 注册 app.use('/api/arena', require('./routes/arena'))
+[P1] [B] Arena 竞技场后端重建  # 2026-03-24 完成
+  - 创建 routes/arena.js（完整重写，整合 arena_system.js + better-sqlite3）  # 2026-03-24 完成
+  - GET / (概览), GET /ranks, GET /rank/:userId, GET /opponents/:userId, GET /records/:userId, POST /challenge  # 2026-03-24 完成
+  - server.js 注册 app.use('/api/arena', require('./backend/routes/arena'))  # 2026-03-24 完成
   - 截止: 2026-03-26
 
 [P1] [B] DailyQuest 路由根路径
