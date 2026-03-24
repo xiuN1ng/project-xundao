@@ -16,7 +16,10 @@
     <div v-if="activeTab === 'dungeons'" class="tab-content">
       <div class="panel-header">
         <h3>🌀 心魔幻境</h3>
-        <div class="spirit-stones-info">💎 灵石: <span class="spirit-count">{{ spiritStones }}</span></div>
+        <div class="header-right">
+          <div class="spirit-stones-info">💎 灵石: <span class="spirit-count">{{ spiritStones }}</span></div>
+          <BaseButton variant="ghost" size="sm" @click="showGuideModal = true">📖 攻略</BaseButton>
+        </div>
       </div>
 
       <!-- 星空裂缝状态 -->
@@ -293,6 +296,56 @@
       </div>
     </div>
 
+    <!-- 新手指引弹窗 -->
+    <div v-if="showGuideModal" class="modal-overlay" @click.self="showGuideModal = false">
+      <div class="modal guide-modal">
+        <div class="modal-header">
+          <h3>📖 深渊副本攻略</h3>
+          <button class="modal-close" @click="showGuideModal = false">×</button>
+        </div>
+        <div class="guide-content">
+          <div class="guide-section">
+            <div class="guide-section-title">🌀 副本类型</div>
+            <div class="guide-cards">
+              <div class="guide-card" v-for="d in dungeons" :key="d.id">
+                <div class="guide-card-header">
+                  <span class="guide-icon">{{ d.icon }}</span>
+                  <span class="guide-name">{{ d.name }}</span>
+                  <span class="guide-diff" :class="'diff-' + d.difficulty">{{ difficultyName[d.difficulty] }}</span>
+                </div>
+                <div class="guide-desc">{{ d.desc }}</div>
+                <div class="guide-req">
+                  <span class="req-badge">境界 {{ d.reqLevel }}</span>
+                  <span class="req-badge">🪜 {{ d.layers }}层</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="guide-section">
+            <div class="guide-section-title">💡 通关技巧</div>
+            <div class="guide-tips">
+              <div class="guide-tip">⚔️ 优先击杀后排怪物，减少被围攻</div>
+              <div class="guide-tip">🛡️ 每5层有BOSS，提前积攒血量</div>
+              <div class="guide-tip">🌌 星空裂缝可获得50%伤害加成</div>
+              <div class="guide-tip">💎 困难/噩梦难度奖励更丰厚</div>
+            </div>
+          </div>
+          <div class="guide-section">
+            <div class="guide-section-title">⚠️ 境界要求</div>
+            <div class="guide-realm-info">
+              <div class="realm-bar">
+                <div class="realm-bar-fill" :style="{ width: Math.min(100, (playerLevel.value / 30) * 100) + '%' }"></div>
+              </div>
+              <div class="realm-hint">当前境界等级: {{ playerLevel.value }} (30级解锁深渊)</div>
+            </div>
+          </div>
+        </div>
+        <div class="guide-footer">
+          <BaseButton variant="primary" block @click="showGuideModal = false">我知道了</BaseButton>
+        </div>
+      </div>
+    </div>
+
     <!-- 奖励弹窗 -->
     <div v-if="showRewardModal" class="modal-overlay" @click.self="closeRewardModal">
       <div class="modal reward-modal" :class="'quality-' + rewardModalData.quality">
@@ -345,6 +398,8 @@ const loadingText = ref('')
 const battleLoading = ref(false)
 const showStarRiftModal = ref(false)
 const showRewardModal = ref(false)
+const showGuideModal = ref(false)
+const guideDungeon = ref(null)
 const selectedRiftDungeon = ref('')
 const currentEncounterIndex = ref(-1)
 const collectedPieces = ref([])
@@ -1110,4 +1165,35 @@ defineExpose({ show, close })
 .loading-spinner { font-size: 36px; animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .loading-text { color: #aaa; margin-top: 10px; font-size: 14px; }
+
+/* 新手指引弹窗 */
+.guide-modal { max-width: 480px; background: rgba(15, 10, 35, 0.98); border: 2px solid rgba(102, 126, 234, 0.4); border-radius: 16px; padding: 0; color: #fff; }
+.guide-modal .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(102,126,234,0.2); }
+.guide-modal .modal-header h3 { margin: 0; color: #f093fb; font-size: 18px; }
+.modal-close { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #a0aec0; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.modal-close:hover { color: #ff4444; background: rgba(255,68,68,0.15); }
+.guide-content { padding: 16px 20px; max-height: 60vh; overflow-y: auto; }
+.guide-section { margin-bottom: 20px; }
+.guide-section:last-child { margin-bottom: 0; }
+.guide-section-title { font-size: 14px; color: #ffd700; font-weight: bold; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(184,134,11,0.2); }
+.guide-cards { display: flex; flex-direction: column; gap: 8px; }
+.guide-card { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 12px; border: 1px solid rgba(102,126,234,0.15); }
+.guide-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.guide-icon { font-size: 20px; }
+.guide-name { font-size: 14px; font-weight: bold; color: #fff; flex: 1; }
+.guide-diff { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+.guide-diff.diff-normal { background: rgba(76,175,80,0.2); color: #81c784; }
+.guide-diff.diff-hard { background: rgba(255,152,0,0.2); color: #ffb74d; }
+.guide-diff.diff-nightmare { background: rgba(244,67,54,0.2); color: #ef5350; }
+.guide-desc { font-size: 12px; color: #a0a0b8; margin-bottom: 6px; }
+.guide-req { display: flex; gap: 8px; }
+.req-badge { font-size: 11px; padding: 2px 8px; background: rgba(102,126,234,0.15); border-radius: 4px; color: #667eea; }
+.guide-tips { display: flex; flex-direction: column; gap: 8px; }
+.guide-tip { font-size: 13px; color: #a0a0b8; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(102,126,234,0.4); }
+.guide-footer { padding: 16px 20px; border-top: 1px solid rgba(102,126,234,0.2); }
+.guide-realm-info { margin-top: 8px; }
+.realm-bar { height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+.realm-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 4px; transition: width 0.3s; }
+.realm-hint { font-size: 12px; color: #667eea; }
+.header-right { display: flex; align-items: center; gap: 10px; }
 </style>
