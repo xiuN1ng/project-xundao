@@ -48,6 +48,7 @@
       <MasterDisciplePanel v-if="activeTab === 'master-disciple'" />
       <CaveDwellingPanel v-if="activeTab === 'cave-dwelling'" />
       <FishingCompetitionPanel v-if="showFishingCompetition" @close="showFishingCompetition=false" @go-fishing="switchToFishing" />
+      <ArtSystemPanel v-if="activeTab === 'art'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -89,6 +90,7 @@ import MarriagePanel from '../components/MarriagePanel.vue'
 import MasterDisciplePanel from '../components/MasterDisciplePanel.vue'
 import CaveDwellingPanel from '../components/CaveDwellingPanel.vue'
 import FishingCompetitionPanel from '../components/FishingCompetitionPanel.vue'
+import ArtSystemPanel from '../components/ArtSystemPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -132,6 +134,7 @@ const tabs = [
   { id: 'friend', name: '好友', icon: '👥' },
   { id: 'cave-dwelling', name: '洞府', icon: '🏠' },
   { id: 'fishing', name: '钓鱼', icon: '🎣' },
+  { id: 'art', name: '琴棋书画', icon: '🎨' },
   { id: 'marriage', name: '婚姻', icon: '💍' },
   { id: 'master-disciple', name: '师徒', icon: '👨‍🏫' },
   { id: 'rank', name: '排行', icon: '📊' },

@@ -842,6 +842,21 @@ function showLundaoPanel(playerData = {}) {
  * 显示炼丹面板
  * 带炼制、丹方学习和炼丹炉升级功能
  */
+
+
+/**
+ * 显示琴棋书画面板
+ * 包含古琴演奏、围棋对弈、书法创作、绘画四大功能
+ */
+function showArtSystemPanel(playerData = {}) {
+  if (typeof require !== 'undefined') {
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.send('show-art-panel', playerData);
+  } else {
+    UIComponents.showPanel('ArtSystemPanel', { player: playerData });
+  }
+}
+
 function showAlchemyPanel(playerData = {}) {
   if (typeof require !== 'undefined') {
     const { ipcRenderer } = require('electron');
