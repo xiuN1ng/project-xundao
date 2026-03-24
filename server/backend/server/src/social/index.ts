@@ -60,6 +60,17 @@ export type {
   MasterDiscipleReward 
 } from './master-disciple-system-ex'
 
+// 师徒贡献商店
+export { 
+  MasterContributionShop, 
+  CONTRIBUTION_SHOP_ITEMS 
+} from './master-contribution-shop'
+
+export type { 
+  ContributionShopItem,
+  PlayerShopRecord 
+} from './master-contribution-shop'
+
 // 仙侣系统
 export { 
   CoupleSystem, 

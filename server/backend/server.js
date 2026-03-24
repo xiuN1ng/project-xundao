@@ -85,6 +85,7 @@ app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));
 app.use('/api/marriage', require('./routes/marriage'));
+app.use('/api/master', require('./routes/master'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 

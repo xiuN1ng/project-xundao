@@ -7,6 +7,7 @@ import express, { Request, Response } from 'express';
 import { SkillSystem, SKILL_TEMPLATES, Skill } from './skill/skill-system';
 import { EquipmentSystem, EQUIPMENT_TEMPLATES, Equipment, EQUIPMENT_STRENGTHEN_CONFIG } from './equipment/equipment-system';
 import { MasterDiscipleSystem, MASTER_TASKS } from './social/master-disciple-system';
+import { MasterContributionShop, CONTRIBUTION_SHOP_ITEMS } from './social/master-contribution-shop';
 import { WingSystem, WING_TEMPLATES } from './wing/wing-system';
 
 const router = express.Router();
@@ -15,6 +16,7 @@ const router = express.Router();
 const skillSystem = new SkillSystem();
 const equipmentSystem = new EquipmentSystem();
 const masterDiscipleSystem = new MasterDiscipleSystem();
+const masterContributionShop = new MasterContributionShop(masterDiscipleSystem);
 const wingSystem = new WingSystem();
 
 // ==================== 技能系统 API ====================

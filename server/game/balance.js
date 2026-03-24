@@ -345,36 +345,37 @@ const MONSTER_DATA = {
     min_realm: 0,
     monsters: [
       // 前期怪物大幅削弱，让玩家更容易击败
-      { id: 'slime', name: '史莱姆', hp: 15, atk: 2, def: 0, exp: 5, stones: 5, loot: [] },
-      { id: 'rabbit', name: '灵兔', hp: 25, atk: 3, def: 0, exp: 8, stones: 8, loot: [] },
-      { id: 'wolf', name: '野狼', hp: 40, atk: 5, def: 1, exp: 15, stones: 12, loot: [] }
+      // stones 提升50%（战斗掉落+50%）
+      { id: 'slime', name: '史莱姆', hp: 15, atk: 2, def: 0, exp: 5, stones: 8, loot: [] },
+      { id: 'rabbit', name: '灵兔', hp: 25, atk: 3, def: 0, exp: 8, stones: 12, loot: [] },
+      { id: 'wolf', name: '野狼', hp: 40, atk: 5, def: 1, exp: 15, stones: 18, loot: [] }
     ]
   },
   'mountain': {
     name: '灵山',
     min_realm: 1,  // 降低要求：2 -> 1
     monsters: [
-      { id: 'snake', name: '毒蛇', hp: 60, atk: 8, def: 2, exp: 25, stones: 20, loot: [] },
-      { id: 'bear', name: '棕熊', hp: 100, atk: 15, def: 4, exp: 45, stones: 35, loot: [] },
-      { id: 'tiger', name: '猛虎', hp: 150, atk: 25, def: 6, exp: 70, stones: 50, loot: [] }
+      { id: 'snake', name: '毒蛇', hp: 60, atk: 8, def: 2, exp: 25, stones: 30, loot: [] },
+      { id: 'bear', name: '棕熊', hp: 100, atk: 15, def: 4, exp: 45, stones: 53, loot: [] },
+      { id: 'tiger', name: '猛虎', hp: 150, atk: 25, def: 6, exp: 70, stones: 75, loot: [] }
     ]
   },
   'cave': {
     name: '幽暗洞穴',
     min_realm: 3,  // 降低要求：4 -> 3
     monsters: [
-      { id: 'ghost', name: '游魂', hp: 250, atk: 40, def: 5, exp: 100, stones: 80, loot: [] },
-      { id: 'skeleton', name: '骷髅', hp: 350, atk: 60, def: 10, exp: 150, stones: 120, loot: [] },
-      { id: 'zombie', name: '僵尸', hp: 450, atk: 80, def: 15, exp: 200, stones: 160, loot: [] }
+      { id: 'ghost', name: '游魂', hp: 250, atk: 40, def: 5, exp: 100, stones: 120, loot: [] },
+      { id: 'skeleton', name: '骷髅', hp: 350, atk: 60, def: 10, exp: 150, stones: 180, loot: [] },
+      { id: 'zombie', name: '僵尸', hp: 450, atk: 80, def: 15, exp: 200, stones: 240, loot: [] }
     ]
   },
   'demon_mountain': {
     name: '魔山',
     min_realm: 5,  // 降低要求：6 -> 5
     monsters: [
-      { id: 'demon', name: '妖魔', hp: 800, atk: 150, def: 30, exp: 400, stones: 300, loot: [] },
-      { id: 'fiend', name: '魔兽', hp: 1200, atk: 250, def: 50, exp: 600, stones: 450, loot: [] },
-      { id: 'demon_lord', name: '魔王', hp: 2500, atk: 400, def: 80, exp: 1500, stones: 1200, loot: [] }
+      { id: 'demon', name: '妖魔', hp: 800, atk: 150, def: 30, exp: 400, stones: 450, loot: [] },
+      { id: 'fiend', name: '魔兽', hp: 1200, atk: 250, def: 50, exp: 600, stones: 675, loot: [] },
+      { id: 'demon_lord', name: '魔王', hp: 2500, atk: 400, def: 80, exp: 1500, stones: 1800, loot: [] }
     ]
   },
   'dragon_lake': {
