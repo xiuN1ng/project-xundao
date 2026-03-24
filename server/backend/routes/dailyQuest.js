@@ -67,6 +67,28 @@ function initDailyQuests(userId) {
   return userQuests[userId];
 }
 
+// 获取每日任务概览（根路径）
+router.get('/', (req, res) => {
+  const quests = questTemplates;
+
+  // 按难度分类统计
+  const daily = quests.filter(q => q.difficulty === 1);
+  const weekly = quests.filter(q => q.difficulty === 2);
+  const challenge = quests.filter(q => q.difficulty === 3);
+
+  res.json({
+    success: true,
+    data: {
+      totalQuests: quests.length,
+      categories: {
+        daily: { name: '每日任务', count: daily.length, rewards: daily.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) },
+        weekly: { name: '每周任务', count: weekly.length, rewards: weekly.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) },
+        challenge: { name: '挑战任务', count: challenge.length, rewards: challenge.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) }
+      }
+    }
+  });
+});
+
 // 获取每日任务列表
 router.get('/:userId', (req, res) => {
   const userId = parseInt(req.params.userId);

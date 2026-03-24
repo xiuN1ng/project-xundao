@@ -3357,6 +3357,24 @@ try {
   Logger.info('缓存管理API不可用:', e.message);
 }
 
+// ============ 福利系统 API（每日签到/月卡）============
+try {
+  const welfareApi = require('./services/welfare_api');
+  app.use('/api/welfare', welfareApi);
+  Logger.info('✅ 福利系统 API 已加载');
+} catch (e) {
+  Logger.info('福利API不可用:', e.message);
+}
+
+// ============ 每日任务 API ============
+try {
+  const dailyQuestApi = require('./backend/routes/dailyQuest');
+  app.use('/api/dailyQuest', dailyQuestApi);
+  Logger.info('✅ 每日任务 API 已加载');
+} catch (e) {
+  Logger.info('每日任务API不可用:', e.message);
+}
+
 // ============ 渡劫系统 API ============
 
 // 天劫类型数据
