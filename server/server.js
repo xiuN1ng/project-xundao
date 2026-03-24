@@ -3318,8 +3318,9 @@ try {
 
 // ============ 无尽塔系统 API ============
 try {
-  const towerApi = require('./src/core/tower_system');
+  const towerApi = require('./backend/routes/tower');
   app.use('/api/tower', towerApi);
+  app.use('/api/towerDungeon', towerApi);
   Logger.info('✅ 无尽塔系统 API 已加载');
 } catch (e) {
   Logger.info('无尽塔API不可用:', e.message);
