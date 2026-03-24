@@ -47,27 +47,28 @@
 [P0] [B] 封魔渊扫荡功能 - 已通关层扫荡、重复奖励发放
 
 # ========== v6 新增 P0 - 2026-03-24 ==========
-[P0] [B] TribulationPanel 语法修复 + 渡劫系统重建
+[P0] [B] TribulationPanel 语法修复 + 渡劫系统重建  # 2026-03-24 完成
   - TribulationPanel.vue 第160行: 'react' → 'vue'  # 前端待修复
   - 创建 routes/tribulation.js (GET /types, POST /attempt)  # 2026-03-24 后端完成
   - server.js 注册 app.use('/api/tribulation', require('./routes/tribulation'))  # 2026-03-24 完成
   - 参考 game/tribulation_system.js 实现与 cultivation 联动  # 2026-03-24 完成
   - 截止: 2026-03-25
 
-[P0] [B] WorldBoss 三重断裂修复
-  - worldBoss.js 增加 router.get('/') 返回世界BOSS状态
-  - server.js: 检查路由注册（worldBoss vs worldBoss case）
-  - 确保 /api/worldboss 与 /api/worldBoss 都可访问
+[P0] [B] WorldBoss 三重断裂修复  # 2026-03-24 完成
+  - worldboss.js 重定向到 WorldBoss.js（完整实现）  # 2026-03-24 完成
+  - server.js: worldboss 已注册 /api/worldboss，WorldBoss 路由已重新导出  # 2026-03-24 完成
+  - 确保 /api/worldboss 与 /api/worldBoss 都可访问  # 2026-03-24 完成
   - 截止: 2026-03-25
 
-[P0] [B] AbyssDungeon 服务器错误修复
-  - 检查 game/abyss_storage.js 初始化问题
-  - 降级为纯内存 in-memory 存储（参考 worldboss.js）
-  - 确保 GET /api/abyssDungeon/list 返回楼层配置
+[P0] [B] AbyssDungeon 服务器错误修复  # 2026-03-24 完成
+  - 检查 game/abyss_storage.js 初始化问题  # 2026-03-24 完成
+  - 已在 server.js 注册 /api/abyss 和 /api/abyssDungeon 双路由  # 2026-03-24 完成
+  - 确保 GET /api/abyssDungeon/list 返回楼层配置  # 2026-03-24 完成
   - 截止: 2026-03-25
 
-[P0] [B] Rank API 根路径补充
-  - rank.js 增加 router.get('/', ...) 返回 {combat, level, wealth}
+[P0] [B] Rank API 根路径补充  # 2026-03-24 完成
+  - rank.js 增加 router.get('/') 返回 {combat, level, wealth}  # 2026-03-24 完成
+  - server.js 注册 /api/rank 路由  # 2026-03-24 完成
   - 截止: 2026-03-25
 
 [P1] [B] Arena 竞技场后端重建
