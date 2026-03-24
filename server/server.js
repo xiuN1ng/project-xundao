@@ -3116,6 +3116,15 @@ try {
   Logger.info('宗门API不可用:', e.message);
 }
 
+// 竞技场/仙道大会系统 API（routes/arena.js）
+try {
+  const arenaApi = require('./backend/routes/arena');
+  app.use('/api/arena', arenaApi);
+  Logger.info('✅ 竞技场系统 API 已加载 (routes/arena.js)');
+} catch (e) {
+  Logger.info('竞技场API不可用:', e.message);
+}
+
 // 世界BOSS系统 API
 try {
   const worldbossApi = require('./backend/routes/worldboss');
