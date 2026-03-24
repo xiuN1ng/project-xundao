@@ -47,6 +47,7 @@
       <MarriagePanel v-if="activeTab === 'marriage'" />
       <MasterDisciplePanel v-if="activeTab === 'master-disciple'" />
       <CaveDwellingPanel v-if="activeTab === 'cave-dwelling'" />
+      <FishingCompetitionPanel v-if="showFishingCompetition" @close="showFishingCompetition=false" @go-fishing="switchToFishing" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -87,10 +88,25 @@ import FishingPanel from '../components/FishingPanel.vue'
 import MarriagePanel from '../components/MarriagePanel.vue'
 import MasterDisciplePanel from '../components/MasterDisciplePanel.vue'
 import CaveDwellingPanel from '../components/CaveDwellingPanel.vue'
+import FishingCompetitionPanel from '../components/FishingCompetitionPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
 const activeTab = ref('cultivation')
+const showFishingCompetition = ref(false)
+
+function switchToFishing() {
+  showFishingCompetition.value = false
+  activeTab.value = 'fishing'
+}
+
+// 暴露全局函数供其他组件调用
+window.showFishingCompetitionPanel = () => {
+  showFishingCompetition.value = true
+}
+window.closeFishingCompetitionPanel = () => {
+  showFishingCompetition.value = false
+}
 
 const tabs = [
   { id: 'cultivation', name: '修炼', icon: '🧘' },

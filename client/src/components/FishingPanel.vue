@@ -385,6 +385,12 @@ function startCooldown() {
 function buyItem(item) { if (!canAfford(item) || item.owned) return; fishingPoints.value -= item.price; item.owned = true }
 
 function joinContest() {
+  // 打开完整的钓鱼比赛面板
+  if (window.showFishingCompetitionPanel) {
+    window.showFishingCompetitionPanel()
+    return
+  }
+  // Fallback: 原有内嵌比赛逻辑
   if (!currentContest.value) {
     currentContest.value = { name:'春日钓鱼大赛', goal:20, fishCount:0, leaderboard:[
       { playerId:'p1', name:'逍遥子', fishCount:12, isMe:false },
