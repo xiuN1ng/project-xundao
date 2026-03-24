@@ -31,11 +31,11 @@ try {
   };
 }
 
-// 加载竞技场系统
+// 加载竞技场系统（单例实例，不重新实例化）
 let ArenaSystem;
 try {
-  const ArenaSystemClass = require('../../services/arena_system');
-  ArenaSystem = new ArenaSystemClass();
+  const { arenaSystem } = require('../../services/arena_system');
+  ArenaSystem = arenaSystem;
   Logger.info('竞技场系统加载成功');
 } catch (err) {
   Logger.error('竞技场系统加载失败:', err.message);
