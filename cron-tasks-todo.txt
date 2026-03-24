@@ -133,23 +133,22 @@
 5. 添加 /history 端点
 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/lottery.js
 
-## P1 #105: Welfare API 注册
-在 server.js 添加一行:
-app.use('/api/welfare', require('./game/welfare_api'));
+## P1 #105: Welfare API 注册  # 2026-03-25 完成
+在 server.js 添加:
+app.use('/api/welfare', require('../game/welfare_api'));
 文件: /root/.openclaw/workspace/xundao-server/server/backend/server.js
 
-## P1 #106: /chapter/list 路由
+## P1 #106: /chapter/list 路由  # 2026-03-25 完成
 在 routes/chapter.js 添加:
 router.get('/list', (req,res) => { /* 复用 GET / 的逻辑 */ });
 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/chapter.js
 
-## P1 #107: 挂载12个未注册路由
-在 server.js 逐一注册（优先顺序）:
-1. app.use('/api/tower', require('./routes/tower'));
-2. app.use('/api/abyss', require('./routes/abyss'));
-3. app.use('/api/marriage', require('./routes/marriage'));
-4. app.use('/api/master', require('./routes/master'));
-5. 其余: auction, cave, fishing, heart_demon, lingdao, secret, title
+## P1 #107: 挂载12个未注册路由  # 2026-03-25 完成
+在 server.js 逐一注册:
+app.use('/api/tower', require('./routes/tower'));
+app.use('/api/heartDemon', require('./routes/heart_demon'));
+app.use('/api/lingdao', require('./routes/lingdao'));
+(其余 auction/cave/fishing/secret/title/abyssDungeon/marriage/master 已在之前注册)
 文件: /root/.openclaw/workspace/xundao-server/server/backend/server.js
 
 ## P1 #108: 章节HP数值重制
