@@ -1,11 +1,16 @@
 <template>
-  <div class="abyss-panel" :style="bgStyle">
-    <!-- Tab 导航 -->
-    <div class="abyss-tabs">
-      <button v-for="tab in tabs" :key="tab.id" :class="{ active: activeTab === tab.id }" @click="switchTab(tab.id)">
-        {{ tab.icon }} {{ tab.name }}
-      </button>
-    </div>
+  <div v-if="visible">
+    <BasePanel
+      title="心魔幻境"
+      icon="🌀"
+      subtitle="挑战心魔·磨砺意志"
+      :tab-items="tabs"
+      :default-tab="activeTab"
+      :closable="true"
+      variant="boss"
+      @tab-change="activeTab = $event"
+      @close="$emit('close')"
+    >
 
     <!-- 副本列表 Tab -->
     <div v-if="activeTab === 'dungeons'" class="tab-content">
@@ -21,7 +26,7 @@
           <div class="rift-title">星空裂缝</div>
           <div class="rift-desc">免费入场！今日剩余 {{ starRiftInfo.remainingFree }} / {{ starRiftInfo.freePerDay }} 次</div>
         </div>
-        <button class="rift-enter-btn">进入</button>
+        <BaseButton variant="gold" size="sm" @click="openStarRiftModal">进入</BaseButton>
       </div>
 
       <!-- 副本卡片列表 -->
@@ -55,8 +60,8 @@
             </div>
           </div>
           <div class="dungeon-actions">
-            <button class="btn-enter" @click="enterDungeon(dungeon)" :disabled="loading">{{ dungeon.currentLayer > 0 ? '继续' : '入场' }}</button>
-            <button class="btn-detail" @click="showDungeonDetail(dungeon)">详情</button>
+            <BaseButton variant="primary" size="sm" :loading="loading" @click="enterDungeon(dungeon)">{{ dungeon.currentLayer > 0 ? '继续' : '入场' }}</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="showDungeonDetail(dungeon)">详情</BaseButton>
           </div>
           <div v-if="dungeon.error" class="dungeon-error">{{ dungeon.error }}</div>
         </div>
@@ -67,11 +72,11 @@
     <div v-if="activeTab === 'battle'" class="tab-content battle-area">
       <div class="panel-header">
         <h3>⚔️ 深渊战斗中</h3>
-        <button class="btn-back" @click="activeTab = 'dungeons'">返回</button>
+        <BaseButton variant="danger" size="sm" @click="activeTab = 'dungeons'">返回</BaseButton>
       </div>
       <div v-if="!currentSession" class="no-session">
         <p>暂无进行中的副本</p>
-        <button class="btn-primary" @click="activeTab = 'dungeons'">选择副本</button>
+        <BaseButton variant="primary" @click="activeTab = 'dungeons'">选择副本</BaseButton>
       </div>
       <div v-else class="battle-session">
 
@@ -201,23 +206,23 @@
 
         <!-- 攻击按钮 -->
         <div class="attack-area" v-if="!allEncountersDefeated">
-          <button class="btn-attack" @click="attackCurrent" :disabled="battleLoading || currentEncounterIndex < 0">
-            {{ battleLoading ? '⚔️ 战斗中...': '⚔️ 攻击当前心魔' }}
-          </button>
-          <button class="btn-auto-attack" @click="autoAttack" :disabled="battleLoading">
+          <BaseButton variant="danger" :loading="battleLoading" :disabled="currentEncounterIndex < 0" @click="attackCurrent">
+            {{ battleLoading ? '⚔️ 战斗中...' : '⚔️ 攻击当前心魔' }}
+          </BaseButton>
+          <BaseButton variant="ghost" :loading="battleLoading" @click="autoAttack">
             {{ autoAttackInterval ? '⏸ 停止自动' : '🔄 自动攻击' }}
-          </button>
+          </BaseButton>
         </div>
         <!-- 下一层 -->
         <div v-if="allEncountersDefeated && !isBossLayer" class="next-layer-area">
-          <button class="btn-next-layer" @click="nextLayer" :disabled="loading">{{ loading ? '进入中...': '➡️ 进入下一层' }}</button>
+          <BaseButton variant="primary" block :loading="loading" @click="nextLayer">{{ loading ? '进入中...' : '➡️ 进入下一层' }}</BaseButton>
         </div>
         <!-- 领取奖励 -->
         <div v-if="allEncountersDefeated && isBossLayer" class="claim-area">
-          <button class="btn-claim" @click="claimRewards" :disabled="loading">{{ loading ? '领取中...': '🎁 领取奖励' }}</button>
+          <BaseButton variant="gold" block :loading="loading" @click="claimRewards">{{ loading ? '领取中...' : '🎁 领取奖励' }}</BaseButton>
         </div>
         <div class="give-up-area">
-          <button class="btn-give-up" @click="giveUp" :disabled="loading">放弃挑战</button>
+          <BaseButton variant="ghost" size="sm" :loading="loading" @click="giveUp">放弃挑战</BaseButton>
         </div>
       </div>
     </div>
@@ -283,7 +288,7 @@
               <option v-for="d in dungeons" :key="d.id" :value="d.id">{{ d.icon }} {{ d.name }}</option>
             </select>
           </div>
-          <button class="btn-star-rift" @click="enterViaStarRift" :disabled="!selectedRiftDungeon || loading">{{ loading ? '开启中...': '🌌 免费进入' }}</button>
+          <BaseButton variant="primary" block :loading="loading" :disabled="!selectedRiftDungeon" @click="enterViaStarRift">{{ loading ? '开启中...' : '🌌 免费进入' }}</BaseButton>
         </div>
       </div>
     </div>
@@ -301,7 +306,7 @@
             <div v-if="rewardModalData.rewards.epicEquipment" class="reward-item epic">⚔️ {{ rewardModalData.rewards.epicEquipment.name }}</div>
             <div v-if="rewardModalData.rewards.rareEquipment" class="reward-item rare">🛡️ {{ rewardModalData.rewards.rareEquipment.name }}</div>
           </div>
-          <button class="btn-confirm" @click="closeRewardModal">确定</button>
+          <BaseButton variant="primary" block @click="closeRewardModal">确定</BaseButton>
         </div>
       </div>
     </div>
@@ -311,11 +316,19 @@
       <div class="loading-spinner">⚔️</div>
       <div class="loading-text">{{ loadingText }}</div>
     </div>
+    </BasePanel>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { abyssDungeonApi } from '../core/api.js'
+import { useToast } from './common/toastComposable.js'
+import BasePanel from './base/BasePanel.vue'
+import BaseButton from './base/BaseButton.vue'
+
+const toast = useToast()
+const visible = ref(false)
 
 const tabs = [
   { id: 'dungeons', name: '副本', icon: '🌀' },
@@ -361,12 +374,6 @@ const typeName = { weapon: '武器', armor: '护甲', ring: '戒指', accessory:
 const equipIconMap = { weapon: '⚔️', armor: '🛡️', ring: '💍', accessory: '🔮' }
 const qualityBigIcon = { base: '📦', rare: '💎', epic: '💜', legend: '👑' }
 
-const bgStyle = {
-  background: 'linear-gradient(135deg, rgba(26,10,46,0.95) 0%, rgba(15,15,35,0.9) 50%, rgba(26,10,46,0.95) 100%), url(/assets/bg-abyss-20260322.png) center/cover no-repeat fixed',
-  minHeight: '100vh',
-  padding: '15px'
-}
-
 const currentDungeon = computed(() => {
   if (!currentSession.value) return null
   return configData.value.dungeons?.find(d => d.id === currentSession.value.dungeonId)
@@ -381,40 +388,14 @@ const allEncountersDefeated = computed(() => {
   return currentSession.value.encounters.every(e => e.defeated)
 })
 
-const API_BASE = '/api/abyssDungeon'
-
-async function apiGet(path) {
-  try {
-    const res = await fetch(`${API_BASE}${path}`)
-    return res.json()
-  } catch { return { success: false } }
-}
-
-async function apiPost(path, body) {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-    return res.json()
-  } catch { return { success: false } }
-}
-
-function switchTab(id) {
-  activeTab.value = id
-  if (id === 'rankings') loadRankings()
-  if (id === 'rewards') loadStats()
-}
-
 async function loadConfig() {
   loading.value = true
   loadingText.value = '加载配置...'
   try {
     const [config, list, rift] = await Promise.all([
-      apiGet('/config'),
-      apiGet('/list'),
-      apiGet('/starRift')
+      abyssDungeonApi.getConfig(),
+      abyssDungeonApi.getList(),
+      abyssDungeonApi.getStarRift()
     ])
     if (config.success) configData.value = config
     if (list.success) dungeons.value = list.dungeons.map(d => ({ ...d, error: '' }))
@@ -423,19 +404,19 @@ async function loadConfig() {
 }
 
 async function loadStats() {
-  const data = await apiGet('/stats')
+  const data = await abyssDungeonApi.getStats()
   if (data.success) {
     collectedPieces.value = data.collectedPieces || []
   }
 }
 
 async function loadRankings() {
-  const data = await apiGet('/rankings')
+  const data = await abyssDungeonApi.getRankings()
   if (data.success) rankings.value = data.rankings
 }
 
 async function showDungeonDetail(dungeon) {
-  const data = await apiGet(`/info/${dungeon.id}`)
+  const data = await abyssDungeonApi.getDungeonInfo(dungeon.id)
   if (data.success) {
     const idx = dungeons.value.findIndex(d => d.id === dungeon.id)
     if (idx !== -1) dungeons.value[idx] = { ...dungeons.value[idx], ...data.dungeon }
@@ -446,9 +427,7 @@ async function enterDungeon(dungeon) {
   loading.value = true
   loadingText.value = '进入深渊...'
   try {
-    const data = await apiPost('/enter', {
-      dungeonId: dungeon.id, playerId: 'test_player', playerLevel: playerLevel.value, spiritStones: spiritStones.value
-    })
+    const data = await abyssDungeonApi.enter(dungeon.id)
     if (data.success) {
       currentSession.value = data.session
       currentEncounterIndex.value = -1
@@ -480,14 +459,7 @@ async function attackEncounter(idx) {
   attackedMonsterIdx.value = idx
   try {
     const encounter = currentSession.value.encounters[idx]
-    const data = await apiPost('/battle', {
-      sessionId: currentSession.value.sessionId,
-      encounterIndex: idx,
-      demonId: encounter.demonId,
-      playerDamage: 100 + playerLevel.value * 5,
-      playerDefense: 50 + playerLevel.value * 2,
-      playerHp: playerBattleHp.value
-    })
+    const data = await abyssDungeonApi.attack(idx)
     if (data.success && data.battleResult) {
       const result = data.battleResult
       const newHp = Math.max(0, (encounter.currentHp || encounter.hp) - result.damageDealt)
@@ -598,12 +570,7 @@ async function nextLayer() {
   loading.value = true
   loadingText.value = '进入下一层...'
   try {
-    const data = await apiPost('/nextLayer', {
-      sessionId: currentSession.value.sessionId,
-      dungeonId: currentSession.value.dungeonId,
-      currentLayer: currentSession.value.currentLayer,
-      playerId: 'test_player', playerLevel: playerLevel.value
-    })
+    const data = await abyssDungeonApi.nextLayer()
     if (data.success) {
       currentSession.value.currentLayer = data.layer
       currentSession.value.encounters = data.encounters.map(e => ({ ...e, defeated: false, currentHp: e.hp }))
@@ -617,11 +584,7 @@ async function claimRewards() {
   loading.value = true
   loadingText.value = '领取奖励...'
   try {
-    const data = await apiPost('/claim', {
-      sessionId: currentSession.value.sessionId,
-      dungeonId: currentSession.value.dungeonId,
-      playerId: 'test_player', playerLevel: playerLevel.value
-    })
+    const data = await abyssDungeonApi.claimReward()
     if (data.success) {
       rewardModalData.value = data
       showRewardModal.value = true
@@ -640,10 +603,7 @@ async function giveUp() {
   stopAutoAttack()
   loading.value = true
   try {
-    await apiPost('/defeat', {
-      dungeonId: currentSession.value.dungeonId,
-      playerId: 'test_player', defeatLayer: currentSession.value.currentLayer
-    })
+    await abyssDungeonApi.giveUp()
     currentSession.value = null
     activeTab.value = 'dungeons'
     await loadStats()
@@ -666,9 +626,7 @@ async function enterViaStarRift() {
   loading.value = true
   loadingText.value = '开启裂缝...'
   try {
-    const data = await apiPost('/starRift/enter', {
-      dungeonId: selectedRiftDungeon.value, playerId: 'test_player'
-    })
+    const data = await abyssDungeonApi.enterStarRift(selectedRiftDungeon.value)
     if (data.success) {
       currentSession.value = data.session
       playerBattleMaxHp.value = 1000 + playerLevel.value * 50
@@ -683,6 +641,11 @@ async function enterViaStarRift() {
 }
 
 onMounted(() => loadConfig())
+
+function show() { visible.value = true; loadConfig() }
+function close() { visible.value = false }
+
+defineExpose({ show, close })
 </script>
 
 <style scoped>

@@ -724,10 +724,28 @@ const sectWarAPI = {
   },
 };
 
+// ============ 深渊副本 API ============
+const abyssDungeonAPI = {
+  async getConfig() { return apiRequest('/api/abyssDungeon/config', 'GET'); },
+  async getList() { return apiRequest('/api/abyssDungeon/list', 'GET'); },
+  async getStarRift() { return apiRequest('/api/abyssDungeon/starRift', 'GET'); },
+  async getStats() { return apiRequest('/api/abyssDungeon/stats', 'GET'); },
+  async getRankings() { return apiRequest('/api/abyssDungeon/rankings', 'GET'); },
+  async getDungeonInfo(dungeonId) { return apiRequest(`/api/abyssDungeon/info/${dungeonId}`, 'GET'); },
+  async enter(dungeonId) { return apiRequest('/api/abyssDungeon/enter', 'POST', { dungeonId }); },
+  async attack(encounterIdx) { return apiRequest('/api/abyssDungeon/attack', 'POST', { encounterIdx }); },
+  async enterStarRift(dungeonId) { return apiRequest('/api/abyssDungeon/starRift', 'POST', { dungeonId }); },
+  async claimReward() { return apiRequest('/api/abyssDungeon/claimReward', 'POST'); },
+  async nextLayer() { return apiRequest('/api/abyssDungeon/nextLayer', 'POST'); },
+  async giveUp() { return apiRequest('/api/abyssDungeon/defeat', 'POST'); },
+  async claimPiece(pieceId) { return apiRequest('/api/abyssDungeon/claimPiece', 'POST', { pieceId }); },
+};
+
 // 导出所有API模块到全局
 window.worldbossAPI = worldbossAPI;
 window.arenaAPI = arenaAPI;
 window.sectWarAPI = sectWarAPI;
+window.abyssDungeonAPI = abyssDungeonAPI;
 window.shopAPI = shopAPI;
 window.marketAPI = marketAPI;
 window.sectAPI = sectAPI;
@@ -749,4 +767,4 @@ window.apiRequest = apiRequest;
 console.log('📡 API调用层已加载');
 
 // ES Module 导出（供 import { worldbossApi, arenaApi } from '../core/api.js' 使用）
-export { worldbossAPI as worldbossApi, arenaAPI as arenaApi, rankingAPI as rankingApi, sectWarAPI as sectWarApi, apiRequest };
+export { worldbossAPI as worldbossApi, arenaAPI as arenaApi, rankingAPI as rankingApi, sectWarAPI as sectWarApi, abyssDungeonAPI as abyssDungeonApi, apiRequest };
