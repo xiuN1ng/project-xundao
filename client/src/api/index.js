@@ -128,4 +128,15 @@ export const abyssApi = {
   getBoss: (bossId) => api.get(`/api/abyssDungeon/boss/${bossId}`)
 }
 
+export const paymentApi = {
+  // 获取可购买套餐列表
+  getPackages: () => api.get('/payment/packages'),
+  // 购买套餐
+  purchase: (packageId) => api.post('/payment/purchase', { package_id: packageId }),
+  // 领取每日奖励
+  claimDaily: () => api.post('/payment/claimDaily'),
+  // 获取已购套餐状态
+  getMyPackages: () => api.get('/payment/myPackages'),
+}
+
 export default api
