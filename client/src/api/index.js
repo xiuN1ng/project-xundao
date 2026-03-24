@@ -37,6 +37,14 @@ export const questApi = { get: () => api.get('/quest'), claim: (id) => api.post(
 export const mailApi = { getList: () => api.get('/mail/list'), read: (mailId) => api.post('/mail/read', { mailId }), claim: (attId) => api.post('/mail/claim', { attId }) }
 export const achievementApi = { get: () => api.get('/achievement'), claim: (id) => api.post('/achievement/claim', { id }) }
 export const activityApi = { get: () => api.get('/activity'), signin: () => api.post('/activity/signin'), claim: (id) => api.post('/activity/claim', { id }) }
+export const welfareApi = {
+  getConfig: () => api.get('/welfare/config'),
+  getSignInStatus: (playerId) => api.get('/welfare/sign-in', { params: { player_id: playerId } }),
+  claimSignIn: (playerId) => api.post('/welfare/claim-sign-in', { player_id: playerId }),
+  claimCumulative: (playerId, days) => api.post('/welfare/claim-sign-in', { player_id: playerId, type: 'cumulative', days }),
+  makeupSign: (playerId, date) => api.post('/welfare/makeup-sign', { player_id: playerId, date }),
+  getHistory: (playerId) => api.get('/welfare/history', { params: { player_id: playerId } }),
+}
 export const lotteryApi = { get: () => api.get('/lottery'), draw: () => api.post('/lottery/draw') }
 export const rankApi = { get: () => api.get('/rank') }
 export const dungeonApi = { get: () => api.get('/dungeon'), enter: (id) => api.post('/dungeon/enter', { id }) }

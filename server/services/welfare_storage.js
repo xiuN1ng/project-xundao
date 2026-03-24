@@ -222,6 +222,73 @@ const welfareStorage = {
     } catch {
       return [];
     }
+  },
+
+  // 补签（使用补签卡）
+  makeupSign(playerId, targetDate) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库不可用' };
+
+    const record = this.getOrCreateSignInRecord(playerId);
+    if (!record) return { success: false, error: '记录不存在' };
+
+    if (record.repair_cards <= 0) {
+      return { success: false, error: '没有补签卡' };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const target = targetDate || today;
+
+    // 检查日期是否有效（不能是未来日期或今天）
+    if (target >= today) {
+      return { success: false, error: '补签日期无效' };
+    }
+
+    // 检查该日期是否已签到
+    let history = [];
+    try {
+      history = record.sign_history ? JSON.parse(record.sign_history) : [];
+    } catch {
+      history = [];
+    }
+
+    const alreadySigned = history.some(h => h.date === target);
+    if (alreadySigned) {
+      return { success: false, error: '该日期已签到' };
+    }
+
+    // 扣除补签卡
+    database.prepare(
+      'UPDATE welfare_sign_in SET repair_cards = repair_cards - 1 WHERE player_id = ?'
+    ).run(playerId);
+
+    // 获取目标日期是星期几来计算周期内第几天
+    const targetDateObj = new Date(target);
+    const dayOfWeek = targetDateObj.getDay() || 7; // 0=周日转7
+    const cycleDay = dayOfWeek; // 按周一~周日对应1~7天
+
+    // 获取奖励（按周期天数）
+    const reward = SIGN_IN_REWARDS[(cycleDay - 1) % 7];
+
+    // 更新签到历史和总签到天数
+    database.prepare(`
+      UPDATE welfare_sign_in 
+      SET total_sign_days = total_sign_days + 1,
+          sign_history = JSON_INSERT(
+            COALESCE(sign_history, '[]'),
+            '$[' || JSON_LENGTH(COALESCE(sign_history, '[]')) || ']',
+            JSON_OBJECT('date', ?, 'day', ?, 'reward', ?, 'makeup', true)
+          )
+      WHERE player_id = ?
+    `).run(target, cycleDay, JSON.stringify(reward), playerId);
+
+    return {
+      success: true,
+      date: target,
+      cycleDay: cycleDay,
+      reward: reward,
+      message: `补签成功！使用1张补签卡，获得${reward.lingshi}灵石`
+    };
   }
 };
 

@@ -207,6 +207,52 @@ router.post('/claim-sign-in', async (req, res) => {
   }
 });
 
+// 补签
+router.post('/makeup-sign', async (req, res) => {
+  try {
+    loadDependencies();
+    
+    const playerId = req.body.player_id || req.body.playerId;
+    const targetDate = req.body.date; // YYYY-MM-DD
+    
+    if (!playerId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: '缺少玩家ID' 
+      });
+    }
+    
+    const result = welfareStorage.makeupSign(playerId, targetDate);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    
+    // 发放灵石奖励
+    if (result.reward.lingshi > 0 && playerStorage) {
+      playerStorage.updateSpiritStones(playerId, result.reward.lingshi);
+    }
+    
+    res.json({
+      success: true,
+      message: result.message,
+      data: {
+        date: result.date,
+        cycleDay: result.cycleDay,
+        reward: {
+          lingshi: result.reward.lingshi,
+          equipment: result.reward.equipment ? EQUIPMENT_TEMPLATES[result.reward.equipment] : null,
+          repairCard: 0
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('补签错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 获取签到历史
 router.get('/history', (req, res) => {
   try {
