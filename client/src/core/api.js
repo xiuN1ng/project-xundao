@@ -680,9 +680,54 @@ const arenaAPI = {
   },
 };
 
+// ============ 跨服战场 API ============
+const sectWarAPI = {
+  // 获取战场概览
+  async getInfo() {
+    return apiRequest('/api/sect-war/info', 'GET');
+  },
+  // 宣战
+  async declareWar(targetGuildId, reason) {
+    return apiRequest('/api/sect-war/declare', 'POST', { targetGuildId, reason });
+  },
+  // 获取战况地图
+  async getZones() {
+    return apiRequest('/api/sect-war/zones', 'GET');
+  },
+  // 获取战场排名
+  async getRanking() {
+    return apiRequest('/api/sect-war/ranking', 'GET');
+  },
+  // 获取宣战记录
+  async getDeclareHistory() {
+    return apiRequest('/api/sect-war/history', 'GET');
+  },
+  // 确认布阵
+  async confirmFormation(formationType, unitIds) {
+    return apiRequest('/api/sect-war/formation', 'POST', { formationType, unitIds });
+  },
+  // 获取战斗记录
+  async getBattleRecords() {
+    return apiRequest('/api/sect-war/battle-records', 'GET');
+  },
+  // 获取积分明细
+  async getScoreDetails() {
+    return apiRequest('/api/sect-war/scores', 'GET');
+  },
+  // 获取战场统计
+  async getWarStats() {
+    return apiRequest('/api/sect-war/stats', 'GET');
+  },
+  // 获取参战成员
+  async getMembers() {
+    return apiRequest('/api/sect-war/members', 'GET');
+  },
+};
+
 // 导出所有API模块到全局
 window.worldbossAPI = worldbossAPI;
 window.arenaAPI = arenaAPI;
+window.sectWarAPI = sectWarAPI;
 window.shopAPI = shopAPI;
 window.marketAPI = marketAPI;
 window.sectAPI = sectAPI;
@@ -704,4 +749,4 @@ window.apiRequest = apiRequest;
 console.log('📡 API调用层已加载');
 
 // ES Module 导出（供 import { worldbossApi, arenaApi } from '../core/api.js' 使用）
-export { worldbossAPI as worldbossApi, arenaAPI as arenaApi, rankingAPI as rankingApi, apiRequest };
+export { worldbossAPI as worldbossApi, arenaAPI as arenaApi, rankingAPI as rankingApi, sectWarAPI as sectWarApi, apiRequest };
