@@ -3154,6 +3154,17 @@ try {
   Logger.info('封魔渊 API 不可用:', e.message);
 }
 
+// 心魔幻境深渊副本 API
+try {
+  const heartDemonApi = require('./backend/routes/heart_demon');
+  app.use('/api/heartDemon', heartDemonApi);
+  // 兼容别名
+  app.use('/api/heart_demon', heartDemonApi);
+  Logger.info('✅ 心魔幻境系统 API 已加载');
+} catch (e) {
+  Logger.info('心魔幻境 API 不可用:', e.message);
+}
+
 // 排行榜 API
 try {
   const rankApi = require('./backend/routes/rank');
