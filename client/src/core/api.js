@@ -638,7 +638,51 @@ const equipmentAPI = {
   },
 };
 
+// ============ 世界BOSS API ============
+const worldbossAPI = {
+  // 获取BOSS信息
+  async get() {
+    return apiRequest('/worldboss', 'GET');
+  },
+  // 攻击BOSS
+  async attack(damage) {
+    return apiRequest('/worldboss/attack', 'POST', { damage });
+  },
+};
+
+// ============ 竞技场 API ============
+const arenaAPI = {
+  // 获取排行榜
+  async getRanks(limit = 20) {
+    return apiRequest(`/arena/ranks?limit=${limit}`, 'GET');
+  },
+  // 获取我的排名
+  async getMyRank(userId) {
+    return apiRequest(`/arena/rank/${userId}`, 'GET');
+  },
+  // 获取挑战对手
+  async getOpponents(userId) {
+    return apiRequest(`/arena/opponents/${userId}`, 'GET');
+  },
+  // 获取挑战记录
+  async getRecords(userId) {
+    return apiRequest(`/arena/records/${userId}`, 'GET');
+  },
+  // 发起挑战
+  async challenge(challengerId, targetId, challengerName, targetName, targetCombat) {
+    return apiRequest('/arena/challenge', 'POST', {
+      userId: challengerId,
+      targetId,
+      userName: challengerName,
+      targetName,
+      targetCombat
+    });
+  },
+};
+
 // 导出所有API模块到全局
+window.worldbossAPI = worldbossAPI;
+window.arenaAPI = arenaAPI;
 window.shopAPI = shopAPI;
 window.marketAPI = marketAPI;
 window.sectAPI = sectAPI;
@@ -658,3 +702,6 @@ window.equipmentAPI = equipmentAPI;
 window.apiRequest = apiRequest;
 
 console.log('📡 API调用层已加载');
+
+// ES Module 导出（供 import { worldbossApi, arenaApi } from '../core/api.js' 使用）
+export { worldbossAPI as worldbossApi, arenaAPI as arenaApi, rankingAPI as rankingApi, apiRequest };

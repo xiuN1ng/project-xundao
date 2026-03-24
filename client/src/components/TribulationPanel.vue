@@ -157,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'react';
+import { ref, computed, onMounted } from 'vue';
 
 const props = defineProps({
   player: {

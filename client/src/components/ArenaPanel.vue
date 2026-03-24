@@ -1,253 +1,340 @@
 <template>
-  <div class="panel arena">
-    <div class="panel-header">
-      <h2>竞技场</h2>
-      <button class="btn-close" @click="$emit('close')">×</button>
+  <BasePanel
+    title="竞技场"
+    icon="⚔️"
+    :tab-items="tabs"
+    :default-tab="activeTab"
+    variant="primary"
+    @tab-change="activeTab = $event"
+    @close="$emit('close')"
+  >
+    <!-- 我的排名 -->
+    <div class="my-rank-card">
+      <span class="rank-label">我的排名</span>
+      <span class="rank-value">#{{ myRank }}</span>
     </div>
-    
-    <div class="arena-rank">
-      <div class="rank-info">
-        <span class="rank-label">我的排名</span>
-        <span class="rank-value">#{{ myRank }}</span>
+
+    <!-- 排行榜 Tab -->
+    <div v-if="activeTab === 'rank'" class="tab-content">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner">⚔️</div>
+        <span>加载排名中...</span>
       </div>
-    </div>
-    
-    <div class="arena-tabs">
-      <button :class="['tab-btn', { active: currentTab === 'rank' }]" @click="currentTab = 'rank'">排行榜</button>
-      <button :class="['tab-btn', { active: currentTab === 'challenge' }]" @click="currentTab = 'challenge'">挑战</button>
-      <button :class="['tab-btn', { active: currentTab === 'record' }]" @click="currentTab = 'record'">战报</button>
-    </div>
-    
-    <div v-if="currentTab === 'rank'" class="rank-list">
-      <div v-for="r in ranks" :key="r.rank" :class="['rank-item', { top3: r.rank <= 3 }]">
-        <span class="rank-num">#{{ r.rank }}</span>
-        <span class="rank-name">{{ r.name }}</span>
-        <span class="rank-combat">{{ r.combat }}战力</span>
-      </div>
-    </div>
-    
-    <div v-if="currentTab === 'challenge'" class="challenge-list">
-      <div v-for="op in opponents" :key="op.userId" class="opponent-item">
-        <div class="opponent-info">
-          <div class="opponent-name">{{ op.name }}</div>
-          <div class="opponent-combat">{{ op.combat }}战力</div>
+      <div v-else class="rank-list">
+        <div
+          v-for="r in ranks"
+          :key="r.rank"
+          :class="['rank-item', { 'top3': r.rank <= 3 }]"
+        >
+          <span class="rank-num">
+            <span v-if="r.rank === 1">🥇</span>
+            <span v-else-if="r.rank === 2">🥈</span>
+            <span v-else-if="r.rank === 3">🥉</span>
+            <span v-else>#{{ r.rank }}</span>
+          </span>
+          <span class="rank-name">{{ r.name }}</span>
+          <span class="rank-combat">{{ formatNumber(r.combat) }}战力</span>
         </div>
-        <button class="btn-challenge" @click="challenge(op)">挑战</button>
+        <div v-if="ranks.length === 0" class="empty-state">
+          暂无排名数据
+        </div>
       </div>
     </div>
-    
-    <div v-if="currentTab === 'record'" class="record-list">
-      <div v-for="rec in records" :key="rec.id" :class="['record-item', rec.result]">
-        <span class="record-result">{{ rec.result === 'win' ? '胜' : '负' }}</span>
-        <span class="record-vs">{{ rec.challengerName }} vs {{ rec.targetName }}</span>
-        <span class="record-time">{{ formatTime(rec.time) }}</span>
+
+    <!-- 挑战 Tab -->
+    <div v-if="activeTab === 'challenge'" class="tab-content">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner">⚔️</div>
+        <span>加载对手中...</span>
+      </div>
+      <div v-else class="challenge-list">
+        <div
+          v-for="op in opponents"
+          :key="op.userId"
+          class="opponent-item"
+        >
+          <div class="opponent-info">
+            <div class="opponent-name">{{ op.name }}</div>
+            <div class="opponent-combat">{{ formatNumber(op.combat) }}战力</div>
+          </div>
+          <BaseButton
+            variant="danger"
+            size="sm"
+            :loading="challengingId === op.userId"
+            @click="challenge(op)"
+          >
+            挑战
+          </BaseButton>
+        </div>
+        <div v-if="opponents.length === 0" class="empty-state">
+          暂无可挑战对手
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- 战报 Tab -->
+    <div v-if="activeTab === 'record'" class="tab-content">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner">⚔️</div>
+        <span>加载战报...</span>
+      </div>
+      <div v-else class="record-list">
+        <div
+          v-for="rec in records"
+          :key="rec.id"
+          :class="['record-item', rec.result]"
+        >
+          <span :class="['record-badge', rec.result]">
+            {{ rec.result === 'win' ? '胜' : '负' }}
+          </span>
+          <span class="record-vs">
+            {{ rec.challengerName }} vs {{ rec.targetName }}
+          </span>
+          <span class="record-time">{{ formatTime(rec.time) }}</span>
+        </div>
+        <div v-if="records.length === 0" class="empty-state">
+          暂无战报记录
+        </div>
+      </div>
+    </div>
+  </BasePanel>
 </template>
 
-<script>
-export default {
-  name: 'ArenaPanel',
-  data() {
-    return {
-      currentTab: 'rank',
-      myRank: 0,
-      ranks: [],
-      opponents: [],
-      records: []
-    }
-  },
-  mounted() {
-    this.loadRank()
-    this.loadMyRank()
-    this.loadOpponents()
-    this.loadRecords()
-  },
-  methods: {
-    async loadRank() {
-      const res = await fetch('http://localhost:3001/api/arena/ranks?limit=20')
-      this.ranks = await res.json()
-    },
-    async loadMyRank() {
-      const res = await fetch('http://localhost:3001/api/arena/rank/1')
-      const data = await res.json()
-      this.myRank = data.rank
-    },
-    async loadOpponents() {
-      const res = await fetch('http://localhost:3001/api/arena/opponents/1')
-      this.opponents = await res.json()
-    },
-    async loadRecords() {
-      const res = await fetch('http://localhost:3001/api/arena/records/1')
-      this.records = await res.json()
-    },
-    async challenge(opponent) {
-      const res = await fetch('http://localhost:3001/api/arena/challenge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: 1,
-          targetId: opponent.userId,
-          userName: 'test',
-          targetName: opponent.name,
-          targetCombat: opponent.combat
-        })
-      })
-      const data = await res.json()
-      if (data.success) {
-        alert(data.win ? '挑战胜利！' : '挑战失败')
-        this.loadOpponents()
-        this.loadRecords()
-      }
-    },
-    formatTime(ts) {
-      return new Date(ts).toLocaleTimeString()
-    }
+<script setup>
+import { ref } from 'vue'
+import BasePanel from './base/BasePanel.vue'
+import BaseButton from './base/BaseButton.vue'
+import { useToast } from './common/toastComposable.js'
+import { arenaApi } from '../core/api.js'
+
+const emit = defineEmits(['close'])
+const toast = useToast()
+
+const activeTab = ref('rank')
+const tabs = [
+  { id: 'rank', name: '排行榜', icon: '🏆' },
+  { id: 'challenge', name: '挑战', icon: '⚔️' },
+  { id: 'record', name: '战报', icon: '📋' },
+]
+
+const myRank = ref(0)
+const ranks = ref([])
+const opponents = ref([])
+const records = ref([])
+const loading = ref(false)
+const challengingId = ref(null)
+
+function getPlayerId() {
+  try {
+    const playerStore = window.playerStore
+    if (playerStore?.player?.id) return playerStore.player.id
+    const p = JSON.parse(localStorage.getItem('player') || '{}')
+    return p.id
+  } catch { return null }
+}
+
+function getPlayerName() {
+  try {
+    const playerStore = window.playerStore
+    if (playerStore?.player?.username) return playerStore.player.username
+    const p = JSON.parse(localStorage.getItem('player') || '{}')
+    return p.username || '神秘修士'
+  } catch { return '神秘修士' }
+}
+
+function formatNumber(num) {
+  if (!num && num !== 0) return '0'
+  num = Number(num)
+  if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿'
+  if (num >= 10000) return (num / 10000).toFixed(1) + '万'
+  return num.toLocaleString()
+}
+
+function formatTime(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString()
+}
+
+async function loadRank() {
+  loading.value = true
+  try {
+    const res = await arenaApi.getRanks(20)
+    ranks.value = Array.isArray(res) ? res : []
+  } catch (err) {
+    toast.error('加载排行榜失败')
+    console.error(err)
+  } finally {
+    loading.value = false
   }
 }
+
+async function loadMyRank() {
+  const playerId = getPlayerId() || 1
+  try {
+    const res = await arenaApi.getMyRank(playerId)
+    myRank.value = res?.rank || 0
+  } catch (err) {
+    console.error('加载排名失败:', err)
+  }
+}
+
+async function loadOpponents() {
+  const playerId = getPlayerId() || 1
+  loading.value = true
+  try {
+    const res = await arenaApi.getOpponents(playerId)
+    opponents.value = Array.isArray(res) ? res : []
+  } catch (err) {
+    toast.error('加载对手失败')
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadRecords() {
+  const playerId = getPlayerId() || 1
+  loading.value = true
+  try {
+    const res = await arenaApi.getRecords(playerId)
+    records.value = Array.isArray(res) ? res : []
+  } catch (err) {
+    toast.error('加载战报失败')
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function challenge(opponent) {
+  const playerId = getPlayerId() || 1
+  const playerName = getPlayerName()
+  challengingId.value = opponent.userId
+  try {
+    const res = await arenaApi.challenge(
+      playerId,
+      opponent.userId,
+      playerName,
+      opponent.name,
+      opponent.combat
+    )
+    if (res.success) {
+      toast.success(res.win ? '🏆 挑战胜利！' : '💀 挑战失败')
+    } else {
+      toast.error(res.message || '挑战失败')
+    }
+    await Promise.all([loadOpponents(), loadRecords()])
+  } catch (err) {
+    toast.error('挑战请求失败')
+    console.error(err)
+  } finally {
+    challengingId.value = null
+  }
+}
+
+// Initial data load
+loadRank()
+loadMyRank()
+loadOpponents()
+loadRecords()
 </script>
 
 <style scoped>
-.panel {
-  background: #1a1a2e;
-  background-image: url('@/assets/images/bg-arena-battle-new.png');
-  background-size: cover;
-  background-position: center;
-  color: #fff;
-  padding: 20px;
-  height: 100%;
-  overflow-y: auto;
-  position: relative;
-}
-.panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(26, 26, 46, 0.75);
-  pointer-events: none;
-}
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.panel-header h2 {
-  font-size: 24px;
-  color: #ffd700;
-}
-.btn-close {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 30px;
-  cursor: pointer;
-}
-.arena-rank {
+.my-rank-card {
   text-align: center;
-  padding: 20px;
+  padding: 16px;
   background: linear-gradient(135deg, #16213e, #0f3460);
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-.rank-info {
+  border-radius: 10px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
-.rank-label {
-  font-size: 14px;
+.rank-label { font-size: 13px; color: #888; }
+.rank-value { font-size: 36px; color: #ffd700; font-weight: bold; }
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
   color: #888;
 }
-.rank-value {
-  font-size: 36px;
-  color: #ffd700;
-  font-weight: bold;
+.spinner { font-size: 32px; animation: shake 0.5s ease infinite; }
+@keyframes shake {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
 }
-.arena-tabs {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.tab-btn {
-  flex: 1;
-  padding: 12px;
-  background: #16213e;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-}
-.tab-btn.active {
-  background: #0f3460;
-  color: #ffd700;
-}
-.rank-list, .challenge-list, .record-list {
+
+.tab-content { min-height: 200px; }
+
+.rank-list,
+.challenge-list,
+.record-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
+
 .rank-item {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 12px;
-  background: #16213e;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
 }
 .rank-item.top3 {
-  border: 1px solid #ffd700;
+  border-color: rgba(255, 215, 0, 0.4);
+  background: rgba(255, 215, 0, 0.06);
 }
-.rank-num {
-  font-size: 18px;
-  font-weight: bold;
-  color: #ffd700;
-  width: 40px;
-}
-.rank-name {
-  flex: 1;
-}
-.rank-combat {
-  color: #00d4ff;
-  font-size: 12px;
-}
+.rank-num { width: 36px; text-align: center; font-size: 16px; }
+.rank-name { flex: 1; font-size: 14px; color: #fff; }
+.rank-combat { color: #00d4ff; font-size: 12px; }
+
 .opponent-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px;
-  background: #16213e;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
 }
-.opponent-name {
-  font-weight: bold;
-}
-.opponent-combat {
-  font-size: 12px;
-  color: #888;
-}
-.btn-challenge {
-  padding: 8px 20px;
-  background: linear-gradient(135deg, #ff6b6b, #ffd700);
-  border: none;
-  border-radius: 20px;
-  color: #000;
-  font-weight: bold;
-  cursor: pointer;
-}
+.opponent-info { display: flex; flex-direction: column; gap: 2px; }
+.opponent-name { font-weight: bold; font-size: 14px; color: #fff; }
+.opponent-combat { font-size: 12px; color: #888; }
+
 .record-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
-  background: #16213e;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
 }
-.record-result {
-  width: 30px;
+.record-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
   font-weight: bold;
 }
-.record-item.win .record-result { color: #00ff00; }
-.record-item.lose .record-result { color: #ff0000; }
-.record-vs { flex: 1; }
-.record-time { font-size: 12px; color: #888; }
+.record-badge.win { background: rgba(0, 255, 0, 0.2); color: #00ff00; }
+.record-badge.lose { background: rgba(255, 0, 0, 0.2); color: #ff4444; }
+.record-vs { flex: 1; font-size: 13px; color: #ddd; }
+.record-time { font-size: 11px; color: #666; }
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 14px;
+}
 </style>

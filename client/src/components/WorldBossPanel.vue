@@ -167,7 +167,7 @@ import BaseButton from './base/BaseButton.vue'
 import HPBar from './common/HPBar.vue'
 import DamageNumber from './common/DamageNumber.vue'
 import { useToast } from './common/toastComposable.js'
-import { api } from '../core/api.js'
+import { worldbossApi } from '../core/api.js'
 
 const emit = defineEmits(['close', 'boss-killed'])
 
@@ -244,7 +244,7 @@ const isEnraged = computed(() => hpPercent.value < 30)
 async function loadBossInfo() {
   loading.value = true
   try {
-    const res = await api.get('/api/worldboss')
+    const res = await worldbossApi.get()
 
     if (res) {
       bossData.value = {
@@ -287,7 +287,7 @@ async function attackBoss() {
   const damage = playerAttackPower.value
 
   try {
-    const res = await api.post('/api/worldboss/attack', { damage })
+    const res = await worldbossApi.attack(damage)
 
     if (res.success) {
       lastDamage.value = damage

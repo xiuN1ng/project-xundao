@@ -133,3 +133,25 @@
 #   - 月卡推荐（Day 7）
 #   - 时装展示引导
 #   - 负责人: [F] - 截止: 2026-03-27
+
+# ========== v6 新增 P0 - 2026-03-24 ==========
+[P0] [F] TribulationPanel 语法修复
+  - TribulationPanel.vue 第160行: import { ref, computed, onMounted } from 'react' → from 'vue'
+  - 检查其他 .vue 文件是否有 "from 'react'" 错误引用
+  - 截止: 2026-03-25
+
+[P0] [F] WorldBossPanel API 修复
+  - WorldBossPanel.vue: api.get('/api/worldboss') → worldbossApi.get()
+  - api.post('/api/worldboss/attack') → worldbossApi.attack()
+  - api/index.js: worldbossApi 路径改为 '/worldboss'
+  - 截止: 2026-03-25
+
+[P0] [F] ArenaPanel API 对接
+  - ArenaPanel.vue: fetch('http://localhost:3001/api/arena/...') → arenaApi 调用
+  - 创建 arenaApi: getRanks(), getRank(), getOpponents(), getRecords(), challenge()
+  - 截止: 2026-03-26
+
+[P1] [F] RankPanel.vue API 对接（解决 v5 遗留假数据问题）
+  - rankApi.get() 返回 404（需后端先修 rank.js）
+  - 修复后使用真实 API 数据，删除硬编码 {剑仙李白, 丹帝...}
+  - 截止: 2026-03-26
