@@ -78,7 +78,7 @@ let gameState = {
     spirit: 0, maxSpirit: 10, spiritRate: 1,
     realm: '凡人', realmLevel: 0,
     level: 1, experience: 0, requiredExp: 100,
-    spiritStones: 0, cultivationTime: 0,
+    spiritStones: 500, cultivationTime: 0,
     idleMode: true, idleStartTime: 0, totalIdleTime: 0,
     bonuses: {},
     techniques: { cultivation: 'breath', combat: 'strike', defense: 'guard', auxiliary: null },
@@ -195,7 +195,7 @@ class CultivationGame {
 
   getTechniqueBonus() {
     const p = gameState.player;
-    let b = { spiritMultiplier: 1, atkMultiplier: 1, defMultiplier: 1, stoneMultiplier: 1, expMultiplier: 1 };
+    let b = { spiritMultiplier: 1, atkMultiplier: 1, defMultiplier: 1, stoneMultiplier: 1.5, expMultiplier: 1 };
     for (const cat of Object.keys(p.techniques)) {
       const tech = TECHNIQUE_DATA[cat]?.effects[p.techniques[cat]];
       if (tech && p.realmLevel >= tech.realm_req) {
