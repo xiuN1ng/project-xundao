@@ -703,6 +703,130 @@ function initDatabase() {
     )
   `);
 
+  // 仙盟表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guilds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      leader_id INTEGER NOT NULL,
+      leader_name TEXT,
+      level INTEGER DEFAULT 1,
+      exp INTEGER DEFAULT 0,
+      notice TEXT DEFAULT '欢迎加入本仙盟！',
+      fund INTEGER DEFAULT 0,
+      max_members INTEGER DEFAULT 20,
+      realm_level_req INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 仙盟成员表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      player_name TEXT,
+      role TEXT DEFAULT 'member',
+      contribution INTEGER DEFAULT 0,
+      daily_contribution INTEGER DEFAULT 0,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(guild_id, player_id)
+    )
+  `);
+
+  // 仙盟建筑表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_buildings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      building_key TEXT NOT NULL,
+      level INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(guild_id, building_key)
+    )
+  `);
+
+  // 仙盟技能表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_skills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      skill_id INTEGER NOT NULL,
+      level INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(guild_id, skill_id)
+    )
+  `);
+
+  // 仙盟日志表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      player_id INTEGER,
+      player_name TEXT,
+      action TEXT NOT NULL,
+      detail TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 仙盟每日贡献记录表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_contribution_daily (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      contribution INTEGER DEFAULT 0,
+      UNIQUE(guild_id, player_id, date)
+    )
+  `);
+
+  // 仙盟申请表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      player_name TEXT,
+      message TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(guild_id, player_id)
+    )
+  `);
+
+  // 玩家仙术表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_immortal_arts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      art_id TEXT NOT NULL,
+      level INTEGER DEFAULT 1,
+      proficiency INTEGER DEFAULT 0,
+      equipped BOOLEAN DEFAULT 0,
+      learned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, art_id)
+    )
+  `);
+
+  // 仙术熟练度每日记录表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS art_proficiency_daily (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      art_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      proficiency_gain INTEGER DEFAULT 0,
+      use_count INTEGER DEFAULT 0,
+      UNIQUE(player_id, art_id, date)
+    )
+  `);
+
   Logger.info('数据库初始化完成');
 
   // ============ 爵位系统数据库迁移 ============
@@ -3123,6 +3247,25 @@ try {
   Logger.info('✅ 竞技场系统 API 已加载 (routes/arena.js)');
 } catch (e) {
   Logger.info('竞技场API不可用:', e.message);
+}
+
+// 仙盟系统 API
+try {
+  const guildApi = require('./services/guild_api');
+  app.use('/api/guild', guildApi);
+  Logger.info('✅ 仙盟系统 API 已加载');
+} catch (e) {
+  Logger.info('仙盟API不可用:', e.message);
+}
+
+// 仙术系统 API
+try {
+  const immortalArtApi = require('./services/immortal_art_api');
+  app.use('/api/immortalArt', immortalArtApi);
+  app.use('/api/immortal_art', immortalArtApi);
+  Logger.info('✅ 仙术系统 API 已加载');
+} catch (e) {
+  Logger.info('仙术API不可用:', e.message);
 }
 
 // 世界BOSS系统 API
