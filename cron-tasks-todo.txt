@@ -27,8 +27,17 @@
 # 由 main agent 手动分发
 
 # === 待执行 ===
-[B] 仙术系统 - 仙术学习/升级/战斗应用、仙术效果公式
-[B] 仙盟系统 - 仙盟创建/升级/建筑/技能树
+# (已全部分发)
+
+# === 已完成 ===
+[B] 仙术系统 - 仙术学习/升级/战斗应用、仙术效果公式  # 2026-03-25 完成
+  - services/immortal_art_storage.js: 25+仙术模板(8系)/伤害公式/熟练度系统  # 2026-03-25 完成
+  - services/immortal_art_api.js: REST API (学习/升级/装备/伤害计算/熟练度)  # 2026-03-25 完成
+  - server.js 注册 /api/immortalArt 双路由 + player_immortal_arts 表  # 2026-03-25 完成
+[B] 仙盟系统 - 仙盟创建/升级/建筑/技能树  # 2026-03-25 完成
+  - services/guild_storage.js: 仙盟CRUD/建筑/技能/申请审批  # 2026-03-25 完成
+  - services/guild_api.js: REST API (创建/加入/建筑升级/技能升级/贡献/排行榜)  # 2026-03-25 完成
+  - server.js 注册 /api/guild 路由 + guilds/guild_members/guild_buildings/guild_skills 等表  # 2026-03-25 完成
 
 # === 已完成 ===
 [B] 飞升挑战逻辑 - 成功率判定、天劫动画、飞升奖励发放  # 2026-03-25 完成
