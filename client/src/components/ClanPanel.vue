@@ -349,7 +349,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { sectApi } from '../api'
+import { guildApi } from '../api'
 
 const props = defineProps({ playerId: { type: Number, default: 1 } })
 const emit = defineEmits(['changeTab'])
@@ -360,12 +360,9 @@ const toastMsg = ref('')
 const toastType = ref('info')
 
 const tabs = [
-  { key: 'info',       label: '宗门',  icon: '🏯' },
+  { key: 'info',       label: '仙盟',  icon: '🏯' },
   { key: 'members',    label: '成员',  icon: '👥' },
-  { key: 'buildings',  label: '建筑',  icon: '🏛️' },
   { key: 'skills',     label: '技能',  icon: '📖' },
-  { key: 'dungeon',    label: '副本',  icon: '👹' },
-  { key: 'redpackets', label: '红包',  icon: '🧧' },
   { key: 'admin',      label: '管理',  icon: '⚙️' }
 ]
 
@@ -373,33 +370,21 @@ const sectData     = ref(null)
 const bonus        = ref(null)
 const members      = ref([])
 const skills       = ref([])
-const redPackets   = ref([])
 const adminData    = ref(null)
 const contribution = ref(0)
+
+// 以下功能后端 /api/guild 暂未实现，对应 tab 暂时隐藏
+const redPackets   = ref([])
 const dungeonData  = ref(null)
 const selectedDifficulty = ref('普通')
 const currentFloor      = ref(null)
 const challengeResult   = ref(null)
 
 const playerId = computed(() => props.playerId || 1)
-const isLeader = computed(() => sectData.value?.leader_id === playerId.value)
+const isLeader = computed(() => sectData.value?.leaderId === playerId.value)
 
-const buildings = computed(() => {
-  if (!sectData.value?.buildings) return []
-  const SECT_BUILDINGS = {
-    mountain_gate:   { icon: '⛩️', name: '山门',     effect: '弟子上限+2/级',      maxLevel: 10 },
-    main_hall:       { icon: '🏛️', name: '主殿',     effect: '宗门经验+5%/级',    maxLevel: 10 },
-    treasury:        { icon: '💰', name: '仓库',     effect: '基金上限+1000/级',  maxLevel: 10 },
-    training_hall:   { icon: '⚔️', name: '传功堂',   effect: '弟子修炼+10%/级',   maxLevel: 10 },
-    library:         { icon: '📚', name: '藏经阁',   effect: '技能经验+5%/级',    maxLevel: 10 },
-    alchemy_room:    { icon: '⚗️', name: '炼丹房',   effect: '丹药效果+8%/级',    maxLevel: 8 },
-    beast_den:       { icon: '🦁', name: '灵兽园',   effect: '灵兽经验+10%/级',   maxLevel: 8 },
-    hall_of_justice: { icon: '⚖️', name: '执法堂',   effect: '成员管理+1/级',     maxLevel: 5 }
-  }
-  return Object.entries(sectData.value.buildings)
-    .map(([key, level]) => ({ id: key, ...SECT_BUILDINGS[key], level, maxLevel: SECT_BUILDINGS[key]?.maxLevel || 10 }))
-    .filter(b => b.icon)
-})
+// 仙盟数据中无建筑字段；如后续后端扩展再启用建筑 tab
+const buildings = computed(() => [])
 
 const showDonate       = ref(false)
 const donateAmount     = ref(100)
@@ -422,8 +407,8 @@ const panelStyle = {
 function getSkillIcon(key) {
   return { attack_boost:'⚔️', defense_boost:'🛡️', exp_boost:'📖', gold_boost:'💎', drop_boost:'🎁', speed_boost:'⏰', rescue_boost:'🆘', war_boost:'⚔️' }[key] || '✨'
 }
-function canUpgrade(b) { return !!sectData.value?.building_costs?.[b.id] }
-function getUpgradeCost(b) { return sectData.value?.building_costs?.[b.id] || 0 }
+function canUpgrade(b) { return false } // 建筑功能后端暂未实现
+function getUpgradeCost(b) { return 0 }
 function getDifficultyMult(d) { return { '简单':0.8, '普通':1.0, '困难':1.5, '噩梦':2.0 }[d] || 1.0 }
 function getDungeonRewards(f) { return ['灵兽蛋','紫色装备','灵石×5000','称号·心魔克星'][(f-1)%4] }
 function formatTime(ts) { if (!ts) return ''; const d=new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}` }
@@ -431,134 +416,118 @@ function showToast(msg, type='info') { toastMsg.value = msg; toastType.value = t
 
 async function loadSectInfo() {
   try {
-    const res = await sectApi.getInfo(playerId.value)
-    if (res.data?.success !== false && res.data?.data) {
-      sectData.value = res.data.data
-      contribution.value = res.data.data.contribution || 0
+    // guildApi.getPlayerGuild → GET /api/guild/player/:userId
+    const res = await guildApi.getPlayerGuild(playerId.value)
+    if (res.data?.guild) {
+      const g = res.data.guild
+      sectData.value = {
+        ...g,
+        // 兼容旧字段名
+        leader_id: g.leaderId,
+        sect_level: g.level,
+        // 暂无宗门基金/排名字段，使用 exp 代替
+        fund: g.exp || 0,
+        rank: '--',
+        icon: '🏯',
+      }
+      // myRole 由后端直接返回
+      if (res.data.myRole) sectData.value.myRole = res.data.myRole
+    } else {
+      sectData.value = null
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('loadSectInfo failed:', e)
+  }
 }
+
 async function loadBonus() {
-  try {
-    const res = await sectApi.getBonus(playerId.value)
-    if (res.data?.success && res.data?.data) bonus.value = res.data.data
-  } catch (e) {}
+  // 仙盟加成由技能数据推导，无独立接口
+  bonus.value = null
 }
+
 async function loadMembers() {
-  try {
-    const res = await sectApi.getMembers(playerId.value)
-    if (res.data?.success) members.value = res.data.data || []
-  } catch (e) {}
+  // members 已在 loadSectInfo 的 guild 数据中
+  if (sectData.value?.members) {
+    members.value = sectData.value.members.map(m => ({
+      ...m,
+      player_id: m.id,
+      username: m.name,
+      contribution: 0, // guild 后端暂无贡献字段
+    }))
+  }
 }
+
 async function loadSkills() {
+  if (!sectData.value?.id) return
   try {
-    const res = await sectApi.getSkills(playerId.value)
-    if (res.data?.success) { skills.value = res.data.data || []; contribution.value = res.data.total_contribution || contribution.value }
-  } catch (e) {}
-}
-async function loadRedPackets() {
-  try {
-    const res = await sectApi.getRedPackets(playerId.value)
-    if (res.data?.success) redPackets.value = res.data.data || []
-  } catch (e) {}
-}
-async function loadDungeon() {
-  try {
-    const res = await sectApi.getDungeon(playerId.value)
-    if (res.data?.success) dungeonData.value = res.data.data
-  } catch (e) {}
-}
-async function loadAdmin() {
-  try {
-    const res = await sectApi.getAdmin(playerId.value)
-    if (res.data?.success) adminData.value = res.data.data
-  } catch (e) {}
+    const res = await guildApi.getSkills(sectData.value.id)
+    if (res.data?.skills) {
+      skills.value = res.data.skills
+    }
+  } catch (e) {
+    console.error('loadSkills failed:', e)
+  }
 }
 
-async function loadAll() { loading.value = true; await Promise.all([loadSectInfo(), loadBonus()]); loading.value = false }
+async function loadRedPackets() { /* 后端暂未实现 */ }
+async function loadDungeon()    { /* 后端暂未实现 */ }
+async function loadAdmin()      { /* 后端暂未实现 */ }
 
+async function loadAll() {
+  loading.value = true
+  await loadSectInfo()
+  // 首次加载后顺便拉成员
+  if (sectData.value) await loadMembers()
+  loading.value = false
+}
+
+// 捐赠：后端 /api/guild/donate 暂未实现
 async function handleDonate() {
-  try {
-    const res = await sectApi.donate(playerId.value, donateAmount.value)
-    if (res.data?.success) {
-      showToast(`捐赠成功！+${donateAmount.value}贡献`, 'success')
-      contribution.value += donateAmount.value
-      if (sectData.value) sectData.value.contribution = (sectData.value.contribution||0) + donateAmount.value
-    } else { showToast(res.data?.message || '捐赠失败', 'error') }
-  } catch (e) { showToast('捐赠失败', 'error') }
+  showToast('捐赠功能后端暂未实现', 'info')
   showDonate.value = false
 }
+
 async function handleUpgradeBuilding(buildingId) {
-  try {
-    const res = await sectApi.upgradeBuilding(buildingId)
-    if (res.data?.success) { showToast('建筑升级成功！', 'success'); await loadSectInfo() }
-    else { showToast(res.data?.message || '升级失败', 'error') }
-  } catch (e) { showToast('升级失败', 'error') }
+  showToast('建筑升级功能后端暂未实现', 'info')
 }
-function showPromote(member) { promoteTarget.value = member; selectedRole.value = '成员'; showPromoteModal.value = true }
+
+// 晋升：后端暂未实现
 async function handlePromote() {
-  try {
-    const res = await sectApi.promoteMember(playerId.value, promoteTarget.value.player_id, selectedRole.value)
-    if (res.data?.success) { showToast(res.data.message, 'success'); await loadMembers() }
-    else { showToast(res.data?.message || '晋升失败', 'error') }
-  } catch (e) { showToast('晋升失败', 'error') }
+  showToast('成员晋升功能后端暂未实现', 'info')
   showPromoteModal.value = false
 }
+
+// 踢人：后端暂未实现
 async function handleKick(member) {
-  if (!confirm(`确认踢出 ${member.username}？`)) return
-  try {
-    const res = await sectApi.kickMember(playerId.value, member.player_id)
-    if (res.data?.success) { showToast(`已踢出 ${member.username}`, 'success'); await loadMembers() }
-    else { showToast(res.data?.message || '操作失败', 'error') }
-  } catch (e) { showToast('操作失败', 'error') }
+  showToast('踢出成员功能后端暂未实现', 'info')
 }
+
+// 转让掌门：后端暂未实现
 async function handleTransfer(member) {
-  if (!confirm(`确认将掌门之位转让给 ${member.username}？此操作不可撤销！`)) return
-  try {
-    const res = await sectApi.transferLeader(playerId.value, member.player_id)
-    if (res.data?.success) { showToast('掌门已转让！', 'success'); await loadSectInfo() }
-    else { showToast(res.data?.message || '转让失败', 'error') }
-  } catch (e) { showToast('转让失败', 'error') }
+  showToast('转让掌门功能后端暂未实现', 'info')
 }
+
 async function handleLearnSkill(skill) {
+  if (!sectData.value?.id) return
   try {
-    const res = await sectApi.learnSkill(playerId.value, skill.key)
-    if (res.data?.success) { showToast(res.data.message, 'success'); await loadSkills(); await loadSectInfo() }
-    else { showToast(res.data?.message || '学习失败', 'error') }
-  } catch (e) { showToast('学习失败', 'error') }
+    const res = await guildApi.upgradeSkill(playerId.value, sectData.value.id, skill.id)
+    if (res.data?.success) {
+      showToast(res.data.message, 'success')
+      await loadSkills()
+    } else {
+      showToast(res.data?.message || '升级失败', 'error')
+    }
+  } catch (e) { showToast('升级失败', 'error') }
 }
+
 function selectFloor(f) { currentFloor.value = f; challengeResult.value = null }
-async function handleChallenge() {
-  if (!currentFloor.value) return
-  try {
-    const res = await sectApi.challengeDungeon(playerId.value, currentFloor.value, selectedDifficulty.value)
-    if (res.data?.success) { challengeResult.value = res.data; showToast(`通关第${currentFloor.value}层！`, 'success'); await loadDungeon() }
-    else { showToast(res.data?.message || '挑战失败', 'error') }
-  } catch (e) { showToast('挑战失败', 'error') }
-}
-async function handleSendRP() {
-  if (rpAmount.value < 100) { showToast('红包最小100灵石', 'error'); return }
-  try {
-    const res = await sectApi.sendRedPacket(playerId.value, rpAmount.value, rpType.value, rpMessage.value)
-    if (res.data?.success) { showToast('红包已发出！', 'success'); await loadRedPackets() }
-    else { showToast(res.data?.message || '发送失败', 'error') }
-  } catch (e) { showToast('发送失败', 'error') }
-  showSendRP.value = false
-}
-async function handleClaimRP(packetId) {
-  try {
-    const res = await sectApi.claimRedPacket(playerId.value, packetId)
-    if (res.data?.success) { showToast(`领取到 ${res.data.amount} 灵石！`, 'success'); await loadRedPackets() }
-    else { showToast(res.data?.message || '领取失败', 'error') }
-  } catch (e) { showToast('领取失败', 'error') }
-}
+async function handleChallenge() { showToast('宗门副本后端暂未实现', 'info') }
+async function handleSendRP()    { showToast('红包功能后端暂未实现', 'info'); showSendRP.value = false }
+async function handleClaimRP()   { showToast('红包功能后端暂未实现', 'info') }
 
 watch(activeTab, async (tab) => {
   if (tab === 'members') await loadMembers()
   else if (tab === 'skills') await loadSkills()
-  else if (tab === 'redpackets') await loadRedPackets()
-  else if (tab === 'dungeon') await loadDungeon()
-  else if (tab === 'admin') await loadAdmin()
 })
 
 onMounted(loadAll)

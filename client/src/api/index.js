@@ -83,6 +83,31 @@ export const vipApi = { get: () => api.get('/vip'), buy: () => api.post('/vip/bu
 export const friendApi = { get: () => api.get('/friend'), add: (name) => api.post('/friend/add', { name }), accept: (id) => api.post('/friend/accept', { id }) }
 export const auctionApi = { get: () => api.get('/auction'), bid: (id) => api.post('/auction/bid', { id }) }
 export const caveApi = { get: () => api.get('/cave'), mine: () => api.post('/cave/mine') }
+export const guildApi = {
+  // 获取仙盟列表
+  getList: (params) => api.get('/guild/list', { params }),
+  // 获取仙盟详情
+  getGuild: (guildId) => api.get(`/guild/${guildId}`),
+  // 获取玩家所属仙盟
+  getPlayerGuild: (playerId) => api.get(`/guild/player/${playerId}`),
+  // 创建仙盟
+  create: (userId, name, leaderName) => api.post('/guild/create', { userId, name, leaderName }),
+  // 加入仙盟
+  join: (userId, userName, guildId) => api.post('/guild/join', { userId, userName, guildId }),
+  // 退出仙盟
+  leave: (userId, guildId) => api.post('/guild/leave', { userId, guildId }),
+  // 修改公告
+  updateNotice: (userId, guildId, notice) => api.post('/guild/notice', { userId, guildId, notice }),
+  // 升级仙盟技能
+  upgradeSkill: (userId, guildId, skillId) => api.post('/guild/skill/upgrade', { userId, guildId, skillId }),
+  // 获取仙盟技能
+  getSkills: (guildId) => api.get(`/guild/skill/${guildId}`),
+  // --- 以下功能后端暂未实现，保留 stub 接口 ---
+  donate: (playerId, amount) => api.post('/guild/donate', { playerId, amount }),
+  promoteMember: (playerId, targetId, newRole) => api.post('/guild/member/promote', { playerId, targetId, newRole }),
+  kickMember: (playerId, targetId) => api.post('/guild/member/kick', { playerId, targetId }),
+  transferLeader: (playerId, targetId) => api.post('/guild/leader/transfer', { playerId, targetId }),
+}
 export const fishingApi = { get: () => api.get('/fishing'), cast: () => api.post('/fishing/cast'), catch: () => api.post('/fishing/catch') }
 export const secretApi = { get: () => api.get('/secret'), unlock: () => api.post('/secret/unlock'), enter: () => api.post('/secret/enter') }
 export const titleApi = { get: () => api.get('/title'), activate: (id) => api.post('/title/activate', { id }) }
