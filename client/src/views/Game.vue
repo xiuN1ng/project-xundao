@@ -50,6 +50,7 @@
       <FishingCompetitionPanel v-if="showFishingCompetition" @close="showFishingCompetition=false" @go-fishing="switchToFishing" />
       <ArtSystemPanel v-if="activeTab === 'art'" />
       <AscensionPrePanel v-if="showAscensionPre" @close="showAscensionPre=false" />
+      <ImmortalRealmPanel v-if="activeTab === 'immortal-realm'" @close="activeTab = 'cultivation'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -93,12 +94,14 @@ import CaveDwellingPanel from '../components/CaveDwellingPanel.vue'
 import FishingCompetitionPanel from '../components/FishingCompetitionPanel.vue'
 import ArtSystemPanel from '../components/ArtSystemPanel.vue'
 import AscensionPrePanel from '../components/AscensionPrePanel.vue'
+import ImmortalRealmPanel from '../components/ImmortalRealmPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
 const activeTab = ref('cultivation')
 const showFishingCompetition = ref(false)
 const showAscensionPre = ref(false)
+const showImmortalRealm = ref(false)
 
 function switchToFishing() {
   showFishingCompetition.value = false
@@ -118,6 +121,13 @@ window.showAscensionPrePanel = () => {
 }
 window.closeAscensionPrePanel = () => {
   showAscensionPre.value = false
+}
+
+window.showImmortalRealmPanel = () => {
+  showImmortalRealm.value = true
+}
+window.closeImmortalRealmPanel = () => {
+  showImmortalRealm.value = false
 }
 
 const tabs = [
@@ -148,7 +158,8 @@ const tabs = [
   { id: 'marriage', name: '婚姻', icon: '💍' },
   { id: 'master-disciple', name: '师徒', icon: '👨‍🏫' },
   { id: 'rank', name: '排行', icon: '📊' },
-  { id: 'shop', name: '商店', icon: '🛒' }
+  { id: 'shop', name: '商店', icon: '🛒' },
+  { id: 'immortal-realm', name: '仙界', icon: '☁️' }
 ]
 </script>
 
