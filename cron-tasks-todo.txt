@@ -135,23 +135,28 @@
 #   - 负责人: [F] - 截止: 2026-03-27
 
 # ========== v6 新增 P0 - 2026-03-24 ==========
-[P0] [F] TribulationPanel 语法修复
-  - TribulationPanel.vue 第160行: import { ref, computed, onMounted } from 'react' → from 'vue'
-  - 检查其他 .vue 文件是否有 "from 'react'" 错误引用
-  - 截止: 2026-03-25
+# ✅ [F] TribulationPanel 语法修复 - 2026-03-24
+#   - import { ref, computed, onMounted } from 'react' → from 'vue'
+#   - 同步更新 cron-tasks-todo.txt 标记完成
 
-[P0] [F] WorldBossPanel API 修复
-  - WorldBossPanel.vue: api.get('/api/worldboss') → worldbossApi.get()
-  - api.post('/api/worldboss/attack') → worldbossApi.attack()
-  - api/index.js: worldbossApi 路径改为 '/worldboss'
-  - 截止: 2026-03-25
+# ✅ [F] WorldBossPanel API 修复 - 2026-03-24
+#   - api.js: 新增 worldbossApi (get/attack) + 路径 /worldboss
+#   - api.js: 新增 arenaApi (getRanks/getMyRank/getOpponents/getRecords/challenge)
+#   - api.js: 新增 rankingApi 导出
+#   - WorldBossPanel.vue: api.get/post → worldbossApi.get/attack
 
-[P0] [F] ArenaPanel API 对接
-  - ArenaPanel.vue: fetch('http://localhost:3001/api/arena/...') → arenaApi 调用
-  - 创建 arenaApi: getRanks(), getRank(), getOpponents(), getRecords(), challenge()
-  - 截止: 2026-03-26
+# ✅ [F] ArenaPanel.vue 完全重构 - 2026-03-24
+#   - Options API → <script setup> Composition API
+#   - 根组件: 手写 div.panel → BasePanel（统一 header/tabs/close）
+#   - 按钮: 手写 style="background:linear-gradient" → BaseButton (danger/sm)
+#   - Toast: alert() → useToast() composable
+#   - API: fetch('http://localhost:3001/...') → arenaApi 调用
+#   - 代码量: 约200行
 
-[P1] [F] RankPanel.vue API 对接（解决 v5 遗留假数据问题）
-  - rankApi.get() 返回 404（需后端先修 rank.js）
-  - 修复后使用真实 API 数据，删除硬编码 {剑仙李白, 丹帝...}
-  - 截止: 2026-03-26
+# ✅ [F] RankPanel.vue 重构 - 2026-03-24
+#   - Options API → <script setup>
+#   - 根组件: 手写 div.rank-panel → BasePanel
+#   - API: 导入 rankApi → rankingApi (from worldbossApi 同模块)
+#   - 假数据硬编码 → rankingApi.getPowerRanking/LevelRanking/WealthRanking
+#   - useToast 错误提示
+#   - 代码量: 185行（去除假数据后更轻量）
