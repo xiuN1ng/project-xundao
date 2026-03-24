@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// 成就触发服务
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[forge] 成就触发服务未找到:', e.message);
+  achievementTrigger = null;
+}
+
 // Player materials (shared with cave system for iron_ingot, etc)
 let playerMaterials = {
   user1: { iron_ingot: 50, refined_iron: 20, jade: 30, fire_crystal: 10, thunder_crystal: 5, dragon_scale: 2, strengthen_stone: 25, spirit_stone: 5000 }
@@ -130,7 +139,32 @@ router.post('/forge', (req, res) => {
   
   playerEquipment.push(equipment);
   
-  res.json({ success: true, equipment });
+  // ========== 成就触发：获得装备 ==========
+  let achievementResults = [];
+  if (achievementTrigger) {
+    try {
+      const userNumId = parseInt(userId) || 1;
+      const totalEquipment = playerEquipment.filter(e => e.userId === userNumId || e.id).length;
+      achievementResults = achievementTrigger.onEquipmentObtain(userNumId, playerEquipment.length, recipe.quality);
+      const notifications = achievementTrigger.popNotifications(userNumId);
+      if (notifications.length > 0) {
+        console.log(`[成就通知] 用户${userId}达成成就:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.error('[forge] 成就触发失败:', e.message);
+    }
+  }
+  
+  res.json({ 
+    success: true, 
+    equipment,
+    achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
+      id: a.id,
+      name: a.name,
+      desc: a.desc,
+      reward: a.reward
+    })) : undefined
+  });
 });
 
 // GET /equipment - Get player forged equipment list

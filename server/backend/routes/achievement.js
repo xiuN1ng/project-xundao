@@ -6,6 +6,15 @@ let playerRef = null;
 router.setPlayerRef = (ref) => { playerRef = ref; };
 router.getPlayerRef = () => playerRef;
 
+// 成就触发服务（后端埋点检测）
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[achievement] 成就触发服务加载:', e.message);
+  achievementTrigger = null;
+}
+
 // 成就配置
 const achievementTemplates = [
   // 修炼成就
@@ -129,32 +138,106 @@ router.post('/update', (req, res) => {
   res.json({ success: true });
 });
 
-// 领取成就奖励
+// ==================== 后端成就触发 API ====================
+
+// 获取待推送的通知（成就达成通知，客户端轮询）
+router.get('/notifications/:userId', (req, res) => {
+  const userId = parseInt(req.params.userId) || 1;
+  
+  if (!achievementTrigger) {
+    return res.json({ success: false, message: '成就触发服务不可用', notifications: [] });
+  }
+  
+  const notifications = achievementTrigger.popNotifications(userId);
+  res.json({ success: true, notifications, count: notifications.length });
+});
+
+// 获取用户成就状态摘要（包含所有成就进度）
+router.get('/summary/:userId', (req, res) => {
+  const userId = parseInt(req.params.userId) || 1;
+  
+  if (!achievementTrigger) {
+    return res.json({ success: false, message: '成就触发服务不可用' });
+  }
+  
+  const summary = achievementTrigger.getUserAchievementSummary(userId);
+  
+  // 统计
+  const total = summary.length;
+  const completed = summary.filter(a => a.completed).length;
+  const claimed = summary.filter(a => a.claimed).length;
+  const pending = summary.filter(a => a.completed && !a.claimed).length;
+  
+  res.json({
+    success: true,
+    achievements: summary,
+    stats: { total, completed, claimed, pending }
+  });
+});
+
+// 手动触发成就检测（供其他后端服务调用）
+router.post('/trigger', (req, res) => {
+  const { userId, trigger, value, extra } = req.body;
+  
+  if (!achievementTrigger) {
+    return res.json({ success: false, message: '成就触发服务不可用' });
+  }
+  
+  if (!userId || !trigger) {
+    return res.json({ success: false, message: '缺少必要参数 userId 或 trigger' });
+  }
+  
+  const results = achievementTrigger.triggerAchievement(userId, trigger, value || 0, extra || {});
+  const notifications = achievementTrigger.popNotifications(userId);
+  
+  res.json({
+    success: true,
+    newlyCompleted: results.map(a => ({ id: a.id, name: a.name, desc: a.desc, reward: a.reward })),
+    notifications
+  });
+});
+
+// 领取奖励（新版，支持后端触发服务）
 router.post('/claim', (req, res) => {
   const { userId, achievementId } = req.body;
   
-  if (!userAchievements[userId]) {
-    userAchievements[userId] = {};
+  // 优先使用后端触发服务
+  if (achievementTrigger) {
+    const claimed = achievementTrigger.claimAchievement(userId, achievementId);
+    if (!claimed) {
+      return res.json({ success: false, message: '成就未完成或奖励已领取' });
+    }
+    
+    // 查找成就定义获取奖励
+    const def = achievementTrigger.ACHIEVEMENT_DEFINITIONS[achievementId];
+    if (def && playerRef) {
+      if (def.reward.spiritStones) playerRef.lingshi = (playerRef.lingshi || 0) + def.reward.spiritStones;
+      if (def.reward.diamonds) playerRef.diamonds = (playerRef.diamonds || 0) + def.reward.diamonds;
+    }
+    
+    return res.json({
+      success: true,
+      reward: def?.reward || {},
+      message: `领取成功！奖励：${def?.reward?.spiritStones || 0}灵石，${def?.reward?.diamonds || 0}钻石`
+    });
   }
   
+  // 回退到原有逻辑
   const achievement = achievementTemplates.find(a => a.id === achievementId);
-  const userAch = userAchievements[userId][achievementId];
+  const userAch = userAchievements[userId]?.[achievementId];
   
   if (!achievement || !userAch) {
     return res.json({ success: false, message: '成就不存在' });
   }
-  
   if (!userAch.completed) {
     return res.json({ success: false, message: '成就未完成' });
   }
-  
   if (userAch.claimed) {
     return res.json({ success: false, message: '奖励已领取' });
   }
   
   userAch.claimed = true;
   
-  // 实际添加奖励到玩家账户
   if (playerRef) {
     if (achievement.reward.diamonds) playerRef.diamonds += achievement.reward.diamonds;
     if (achievement.reward.lingshi) playerRef.lingshi += achievement.reward.lingshi;

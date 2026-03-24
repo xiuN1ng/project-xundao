@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// 成就触发服务
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[equipment] 成就触发服务未找到:', e.message);
+  achievementTrigger = null;
+}
+
 let userEquipments = [
   { userId: 1, id: 1, name: '铁剑', type: 'weapon', attack: 10, enhanceLevel: 0, sockets: [], gems: [] },
   { userId: 1, id: 2, name: '布衣', type: 'armor', defense: 5, enhanceLevel: 0, sockets: [], gems: [] },

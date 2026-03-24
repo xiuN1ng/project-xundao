@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// 成就触发服务
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[chapter] 成就触发服务未找到:', e.message);
+  achievementTrigger = null;
+}
+
 // 100个章节数据
 const chapters = [
   // 新手篇 (1-10)
@@ -180,13 +189,35 @@ router.post('/complete', (req, res) => {
   // 计算评价
   const evaluation = stars === 3 ? '完美通关' : stars === 2 ? '顺利通关' : '艰难通关';
   
+  // ========== 成就触发：通关章节 ==========
+  let achievementResults = [];
+  if (achievementTrigger) {
+    try {
+      achievementResults = achievementTrigger.onChapterClear(userId, chapterId);
+      // 获取待推送通知
+      const notifications = achievementTrigger.popNotifications(userId);
+      if (notifications.length > 0) {
+        // 通知将通过 /api/achievement/notifications 端点获取
+        console.log(`[成就通知] 用户${userId}达成成就:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.error('[chapter] 成就触发失败:', e.message);
+    }
+  }
+  
   res.json({ 
     success: true, 
     reward: chapter.reward, 
     exp: chapter.exp,
     stars,
     evaluation,
-    nextChapter: chapterId < 100 ? chapterId + 1 : null
+    nextChapter: chapterId < 100 ? chapterId + 1 : null,
+    achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
+      id: a.id,
+      name: a.name,
+      desc: a.desc,
+      reward: a.reward
+    })) : undefined
   });
 });
 
