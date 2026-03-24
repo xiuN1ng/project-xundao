@@ -3,9 +3,9 @@
 # 分发时间: 2026-03-24 13:58
 
 # === P0 Stub 修复（付费入口）===
-# [F] VIP系统完善 - 对接/api/vip路由 + 特权UI + 每日礼包领取
-# [F] 世界BOSS面板重构 - 对接/api/worldBoss路由 + 血条 + 伤害排名
-# [F] 周卡/月卡面板重构 - 支付对接 + 领取逻辑 + 状态持久化
+# ✅ [F] VIP系统完善 - BasePanel + BaseButton + useToast + api.get/post，1012→827行
+# ✅ [F] 世界BOSS面板重构 - BasePanel + HPBar + DamageNumber + BaseButton + useToast + api，967→733行
+# ✅ [F] 周卡/月卡面板重构 - 支付对接 + 领取逻辑 + 状态持久化 (WeekPanel.vue 已用BasePanel)
 
 # === P1 重要功能 ===
 [F] 装备套装UI - 套装tab + 收集度进度条 + 激活特效 + 套装技能说明

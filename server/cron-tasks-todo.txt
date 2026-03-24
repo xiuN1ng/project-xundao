@@ -36,3 +36,28 @@
   - resources.js updated with all image paths
   - Panel backgrounds updated in: CultivationPanel, ArenaPanel, DungeonPanel, TribulationPanel, AlchemyPanel, GongfaEffectsPanel, SpiritPanel, ClanPanel, SectWarPanel, BeastPanel
   - Git commit: 30184c0
+
+# ========== v3 新增 P0 — 2026-03-24 ==========
+# P0-13 [F] ClanPanel.vue API源切换: sectApi → guildApi
+#   - guild.js 已有完整后端(create/join/leave/notice/skill/upgrade等)
+#   - 只需修改前端API调用来源，sect.js 的20+方法无需重复实现
+#   - 负责人: [F] - 截止: 2026-03-25
+
+# P0-14 [B] 重建 routes/abyssDungeon.js — 文件失踪炸弹
+#   - abyssDungeon.js 文件从磁盘消失，但API运行中（内存残留）
+#   - 从 game/daily_dungeon.js 或 abyss_api.js 重建
+#   - 包含: config, list, enter, battle, nextLayer, starRift/enter, claim, defeat
+#   - 【紧急】服务器重启前必须完成，否则AbyssDungeonPanel.vue(1150行)全部白写
+#   - 负责人: [B] - 截止: 2026-03-24（今天！）
+
+# P0-15 [B] 创建 routes/tribulation.js — 飞升系统
+#   - TribulationPanel.vue 调用 /api/tribulation/types 但路由不存在
+#   - server/game/tribulation_system.js 有逻辑参考
+#   - 实现: GET /types(天劫类型), GET /preview(相性推荐), POST /attempt(执行渡劫)
+#   - 更新 server.js 注册: app.use('/api/tribulation', require('./routes/tribulation'))
+#   - 负责人: [B] - 截止: 2026-03-25
+
+# P1-6 [B+F] sect/guild 双系统去重
+#   - 确认 guild.js 为唯一宗门后端
+#   - sectApi 改为 guildApi 的 proxy 或废弃
+#   - 负责人: [B] - 截止: 2026-03-26

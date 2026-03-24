@@ -1,30 +1,22 @@
 <template>
-  <div class="clan-panel" :style="panelStyle">
-    <!-- 顶部标签导航 -->
-    <div class="clan-nav">
-      <button v-for="tab in tabs" :key="tab.key"
-        class="nav-btn" :class="{ active: activeTab === tab.key }"
-        @click="activeTab = tab.key">
-        <span class="nav-icon">{{ tab.icon }}</span>
-        <span class="nav-label">{{ tab.label }}</span>
-      </button>
-    </div>
-
-    <!-- 加载状态 -->
-    <div v-if="loading" class="clan-loading">
-      <div class="loading-spinner"></div>
-      <span>加载中...</span>
-    </div>
-
-    <!-- 宗门信息 -->
-    <div v-else-if="activeTab === 'info'" class="clan-info-tab">
-      <div class="clan-emblem-section">
-        <div class="clan-emblem">{{ sectData?.icon || '🏯' }}</div>
-        <div class="clan-name-row">
+  <BasePanel
+    title="仙盟"
+    icon="🏯"
+    :tab-items="tabs"
+    :default-tab="activeTab"
+    variant="primary"
+    @tab-change="activeTab = $event"
+    @close="$emit('close')"
+  >
+    <!-- ========== 仙盟信息 ========== -->
+    <div v-if="activeTab === 'info'" class="clan-info-tab">
+      <div class="info-emblem">
+        <div class="info-avatar">{{ sectData?.icon || '🏯' }}</div>
+        <div class="info-title-row">
           <h2>{{ sectData?.name || '未加入宗门' }}</h2>
-          <span class="clan-level-badge">Lv.{{ sectData?.sect_level || 0 }}</span>
+          <span class="level-badge">Lv.{{ sectData?.sect_level || 0 }}</span>
         </div>
-        <p class="clan-rank">宗门排名: #{{ sectData?.rank || '--' }}</p>
+        <p class="info-rank">宗门排名: #{{ sectData?.rank || '--' }}</p>
       </div>
 
       <div class="stats-grid">
@@ -51,198 +43,165 @@
       </div>
 
       <!-- 宗门加成 -->
-      <div v-if="bonus" class="bonus-section">
-        <h3 class="section-title">🌟 宗门加成</h3>
-        <div class="bonus-grid">
-          <div v-if="bonus.attack_boost" class="bonus-item">
-            <span>⚔️ 攻击</span><span class="bonus-val">+{{ (bonus.attack_boost * 100).toFixed(0) }}%</span>
-          </div>
-          <div v-if="bonus.defense_boost" class="bonus-item">
-            <span>🛡️ 防御</span><span class="bonus-val">+{{ (bonus.defense_boost * 100).toFixed(0) }}%</span>
-          </div>
-          <div v-if="bonus.exp_boost" class="bonus-item">
-            <span>📖 经验</span><span class="bonus-val">+{{ (bonus.exp_boost * 100).toFixed(0) }}%</span>
-          </div>
-          <div v-if="bonus.gold_boost" class="bonus-item">
-            <span>💎 灵石</span><span class="bonus-val">+{{ (bonus.gold_boost * 100).toFixed(0) }}%</span>
-          </div>
+      <div v-if="bonus" class="bonus-grid">
+        <div v-if="bonus.attack_boost" class="bonus-item">
+          <span>⚔️ 攻击</span><span class="bonus-green">+{{ (bonus.attack_boost * 100).toFixed(0) }}%</span>
+        </div>
+        <div v-if="bonus.defense_boost" class="bonus-item">
+          <span>🛡️ 防御</span><span class="bonus-green">+{{ (bonus.defense_boost * 100).toFixed(0) }}%</span>
+        </div>
+        <div v-if="bonus.exp_boost" class="bonus-item">
+          <span>📖 经验</span><span class="bonus-green">+{{ (bonus.exp_boost * 100).toFixed(0) }}%</span>
+        </div>
+        <div v-if="bonus.gold_boost" class="bonus-item">
+          <span>💎 灵石</span><span class="bonus-green">+{{ (bonus.gold_boost * 100).toFixed(0) }}%</span>
         </div>
       </div>
 
       <!-- 快速操作 -->
       <div class="quick-actions">
-        <h3 class="section-title">⚡ 快速操作</h3>
-        <div class="action-btns">
-          <button class="action-btn donate-btn" @click="showDonate = true">
-            💰 捐赠
-          </button>
-          <button class="action-btn recruit-btn" @click="$emit('changeTab', 'sect')">
-            📋 宗门任务
-          </button>
+        <div class="section-label">⚡ 快速操作</div>
+        <div class="action-row">
+          <BaseButton variant="primary" @click="showDonate = true">💰 捐赠</BaseButton>
+          <BaseButton variant="ghost" @click="$emit('changeTab', 'sect')">📋 宗门任务</BaseButton>
         </div>
       </div>
 
-      <!-- 捐赠弹窗 -->
-      <div v-if="showDonate" class="modal-overlay" @click.self="showDonate = false">
-        <div class="modal-box">
-          <h3>💰 宗门捐赠</h3>
-          <p>当前贡献度: <strong>{{ sectData?.contribution || 0 }}</strong></p>
-          <div class="donate-amounts">
-            <button v-for="a in [100, 500, 1000, 5000]" :key="a"
-              class="donate-opt" :class="{ selected: donateAmount === a }"
-              @click="donateAmount = a">
-              {{ a >= 1000 ? (a/1000)+'K' : a }}
-            </button>
-          </div>
-          <div class="modal-btns">
-            <button class="modal-cancel" @click="showDonate = false">取消</button>
-            <button class="modal-confirm" @click="handleDonate">捐赠</button>
-          </div>
-        </div>
+      <!-- 公告 -->
+      <div v-if="sectData?.notice" class="notice-box">
+        <span class="notice-label">📜 公告</span>
+        <span>{{ sectData.notice }}</span>
       </div>
     </div>
 
-    <!-- 成员管理 -->
+    <!-- ========== 成员 ========== -->
     <div v-else-if="activeTab === 'members'" class="clan-members-tab">
-      <div class="tab-header">
+      <div class="tab-header-row">
         <h3>👥 宗门成员</h3>
-        <span class="member-count">{{ members.length }} 人</span>
+        <span class="count-badge">{{ members.length }} 人</span>
       </div>
 
       <div class="member-list">
-        <div v-for="m in members" :key="m.id" class="member-card">
+        <div v-for="m in members" :key="m.id" class="member-row">
           <div class="member-avatar">{{ m.role === '掌门' ? '👑' : m.role === '副掌门' ? '🎖️' : m.role === '长老' ? '🛡️' : '🥉' }}</div>
           <div class="member-info">
             <div class="member-name">{{ m.username }}</div>
             <div class="member-meta">
-              <span class="member-role" :class="'role-' + m.role">{{ m.role }}</span>
+              <span class="role-badge" :class="'role-' + m.role">{{ m.role }}</span>
               <span>战力: {{ m.combat_power || 0 }}</span>
             </div>
           </div>
-          <div class="member-contribution">
-            <span class="contrib-value">{{ m.contribution || 0 }}</span>
-            <span class="contrib-label">贡献</span>
+          <div class="member-contrib">
+            <span class="contrib-num">{{ m.contribution || 0 }}</span>
+            <span class="contrib-lbl">贡献</span>
           </div>
-          <div v-if="isLeader && m.player_id !== playerId" class="member-actions">
-            <button class="mini-btn" @click="showPromote(m)">晋升</button>
-            <button class="mini-btn kick-btn" @click="handleKick(m)">踢出</button>
-          </div>
-          <div v-if="isLeader && m.player_id !== playerId" class="member-actions" style="margin-top:4px">
-            <button class="mini-btn transfer-btn" @click="handleTransfer(m)">转让</button>
+          <div v-if="isLeader && m.player_id !== playerId" class="member-ops">
+            <BaseButton variant="ghost" size="sm" @click="showPromote(m)">晋升</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="handleKick(m)">踢出</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="handleTransfer(m)">转让</BaseButton>
           </div>
         </div>
       </div>
 
-      <div v-if="members.length === 0" class="empty-state">
+      <div v-if="members.length === 0" class="empty-box">
         <p>暂无宗门成员</p>
       </div>
 
       <!-- 晋升弹窗 -->
       <div v-if="showPromoteModal" class="modal-overlay" @click.self="showPromoteModal = false">
-        <div class="modal-box">
+        <div class="mini-modal">
           <h3>晋升 {{ promoteTarget?.username }}</h3>
-          <div class="role-options">
-            <button v-for="r in ['成员', '精英', '长老', '副掌门']" :key="r"
-              class="role-opt" :class="{ selected: selectedRole === r }"
-              @click="selectedRole = r">{{ r }}</button>
+          <div class="role-row">
+            <BaseButton
+              v-for="r in ['成员', '精英', '长老', '副掌门']" :key="r"
+              variant="ghost" size="sm"
+              :class="{ 'role-selected': selectedRole === r }"
+              @click="selectedRole = r"
+            >{{ r }}</BaseButton>
           </div>
-          <div class="modal-btns">
-            <button class="modal-cancel" @click="showPromoteModal = false">取消</button>
-            <button class="modal-confirm" @click="handlePromote">确认晋升</button>
+          <div class="modal-btn-row">
+            <BaseButton variant="ghost" @click="showPromoteModal = false">取消</BaseButton>
+            <BaseButton variant="primary" @click="handlePromote">确认晋升</BaseButton>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 宗门建筑 -->
-    <div v-else-if="activeTab === 'buildings'" class="clan-buildings-tab">
-      <h3 class="section-title">🏛️ 宗门建筑</h3>
-      <div class="building-grid">
-        <div v-for="b in buildings" :key="b.id" class="building-card">
-          <div class="building-icon">{{ b.icon || '🏠' }}</div>
-          <div class="building-name">{{ b.name }}</div>
-          <div class="building-level">Lv.{{ b.level || 0 }}</div>
-          <div class="building-effect">{{ b.effect || '—' }}</div>
-          <button v-if="b.level < b.maxLevel" class="upgrade-btn"
-            :disabled="!canUpgrade(b)"
-            @click="handleUpgradeBuilding(b.id)">
-            升级 {{ getUpgradeCost(b) }}灵石
-          </button>
-          <div v-else class="max-badge">已满级</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 宗门技能 -->
+    <!-- ========== 技能 ========== -->
     <div v-else-if="activeTab === 'skills'" class="clan-skills-tab">
-      <div class="skills-header">
-        <h3 class="section-title">📖 宗门技能</h3>
-        <div class="contrib-balance">
-          <span>💰 贡献度: {{ contribution }}</span>
-        </div>
+      <div class="tab-header-row">
+        <h3>📖 宗门技能</h3>
+        <span class="contrib-inline">💰 贡献度: {{ contribution }}</span>
       </div>
 
       <div class="skills-grid">
         <div v-for="s in skills" :key="s.key" class="skill-card">
-          <div class="skill-icon">{{ getSkillIcon(s.key) }}</div>
-          <div class="skill-name">{{ s.name }}</div>
-          <div class="skill-desc">{{ s.desc }}</div>
-          <div class="skill-level-bar">
-            <div class="skill-level-fill" :style="{ width: (s.current_level / s.max * 100) + '%' }"></div>
+          <div class="skill-top">
+            <span class="skill-icon">{{ getSkillIcon(s.key) }}</span>
+            <div>
+              <div class="skill-name">{{ s.name }}</div>
+              <div class="skill-desc">{{ s.desc }}</div>
+            </div>
+          </div>
+          <div class="skill-bar">
+            <div class="skill-fill" :style="{ width: (s.current_level / s.max * 100) + '%' }"></div>
             <span class="skill-level-text">{{ s.current_level }}/{{ s.max }}</span>
           </div>
-          <button class="skill-learn-btn"
+          <BaseButton
+            variant="primary" size="sm"
             :disabled="s.current_level >= s.max || contribution < s.cost_next"
-            @click="handleLearnSkill(s)">
+            @click="handleLearnSkill(s)"
+          >
             {{ s.current_level >= s.max ? '已满级' : `学习 ${s.cost_next}贡献` }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
-      <div v-if="skills.length === 0 && !loading" class="empty-state">
+      <div v-if="skills.length === 0 && !loading" class="empty-box">
         <p>加入宗门后可学习技能</p>
       </div>
     </div>
 
-    <!-- 宗门副本 -->
+    <!-- ========== 副本 ========== -->
     <div v-else-if="activeTab === 'dungeon'" class="clan-dungeon-tab">
-      <div class="dungeon-header">
-        <h3 class="section-title">👹 心魔试炼</h3>
+      <div class="tab-header-row">
+        <h3>👹 心魔试炼</h3>
         <span v-if="dungeonData && !dungeonData.available" class="unlock-hint">
           宗门达到{{ dungeonData.unlock_level }}级开放
         </span>
       </div>
 
-      <div v-if="dungeonData?.available" class="dungeon-content">
-        <div class="difficulty-tabs">
-          <button v-for="d in ['简单', '普通', '困难', '噩梦']" :key="d"
-            class="diff-btn" :class="{ active: selectedDifficulty === d }"
-            @click="selectedDifficulty = d">{{ d }}</button>
+      <div v-if="dungeonData?.available">
+        <div class="diff-row">
+          <BaseButton
+            v-for="d in ['简单', '普通', '困难', '噩梦']" :key="d"
+            variant="ghost" size="sm"
+            :class="{ 'diff-active': selectedDifficulty === d }"
+            @click="selectedDifficulty = d"
+          >{{ d }}</BaseButton>
         </div>
 
         <div class="floor-grid">
-          <div v-for="f in 10" :key="f" class="floor-cell"
-            :class="{
-              cleared: dungeonData.progress && dungeonData.progress[f],
-              current: f === currentFloor
-            }"
-            @click="selectFloor(f)">
-            <span class="floor-num">{{ f }}</span>
-            <span v-if="dungeonData.progress && dungeonData.progress[f]" class="floor-check">✓</span>
+          <div
+            v-for="f in 10" :key="f" class="floor-cell"
+            :class="{ cleared: dungeonData.progress?.[f], current: f === currentFloor }"
+            @click="selectFloor(f)"
+          >
+            <span>{{ f }}</span>
+            <span v-if="dungeonData.progress?.[f]">✓</span>
           </div>
         </div>
 
-        <div v-if="currentFloor" class="dungeon-info-box">
+        <div v-if="currentFloor" class="floor-info">
           <p>第 {{ currentFloor }} 层</p>
-          <p class="reward-preview">奖励: {{ getDungeonRewards(currentFloor) }}</p>
-          <p class="mult-info">难度倍数: {{ getDifficultyMult(selectedDifficulty) }}x</p>
-          <button class="challenge-btn" @click="handleChallenge">挑战！</button>
+          <p>奖励: {{ getDungeonRewards(currentFloor) }}</p>
+          <p>难度倍数: {{ getDifficultyMult(selectedDifficulty) }}x</p>
+          <BaseButton variant="danger" @click="handleChallenge">挑战！</BaseButton>
         </div>
 
-        <!-- 挑战结果 -->
         <div v-if="challengeResult" class="result-box">
-          <p class="result-msg">{{ challengeResult.message }}</p>
-          <div v-if="challengeResult.rewards" class="rewards-row">
+          <p>{{ challengeResult.message }}</p>
+          <div v-if="challengeResult.rewards" class="reward-row">
             <span>💰 {{ challengeResult.rewards.gold }}</span>
             <span>📖 {{ challengeResult.rewards.exp }}</span>
             <span v-if="challengeResult.rewards.item">🎁 {{ challengeResult.rewards.item }}</span>
@@ -250,68 +209,73 @@
         </div>
       </div>
 
-      <div v-else-if="dungeonData && !dungeonData.available" class="empty-state locked">
-        <div class="lock-icon">🔒</div>
+      <div v-else-if="dungeonData && !dungeonData.available" class="empty-box locked">
+        <div>🔒</div>
         <p>宗门需达到 {{ dungeonData.unlock_level }} 级</p>
-        <p class="current-level">当前: Lv.{{ sectData?.sect_level || 0 }}</p>
+        <p>当前: Lv.{{ sectData?.sect_level || 0 }}</p>
       </div>
     </div>
 
-    <!-- 红包 -->
+    <!-- ========== 红包 ========== -->
     <div v-else-if="activeTab === 'redpackets'" class="clan-redpackets-tab">
-      <div class="rp-header">
-        <h3 class="section-title">🧧 宗门红包</h3>
-        <button class="send-rp-btn" @click="showSendRP = true">发红包</button>
+      <div class="tab-header-row">
+        <h3>🧧 宗门红包</h3>
+        <BaseButton variant="primary" size="sm" @click="showSendRP = true">发红包</BaseButton>
       </div>
 
-      <div class="redpacket-list">
+      <div class="rp-list">
         <div v-for="rp in redPackets" :key="rp.id" class="rp-card">
           <div class="rp-sender">{{ rp.sender_name }}</div>
           <div class="rp-msg">{{ rp.message }}</div>
           <div class="rp-amount">💰 {{ rp.amount }}</div>
           <div class="rp-status">已领 {{ rp.claimed }}/20</div>
-          <button v-if="!rp.claims?.find(c => c.player_id === playerId) && rp.claimed < 20"
-            class="claim-rp-btn" @click="handleClaimRP(rp.id)">
-            领取
-          </button>
+          <BaseButton
+            v-if="!rp.claims?.find(c => c.player_id === playerId) && rp.claimed < 20"
+            variant="gold" size="sm"
+            @click="handleClaimRP(rp.id)"
+          >领取</BaseButton>
           <span v-else class="rp-claimed">已领</span>
         </div>
       </div>
 
-      <div v-if="redPackets.length === 0" class="empty-state">
+      <div v-if="redPackets.length === 0" class="empty-box">
         <p>暂无红包记录</p>
       </div>
 
       <!-- 发红包弹窗 -->
       <div v-if="showSendRP" class="modal-overlay" @click.self="showSendRP = false">
-        <div class="modal-box">
+        <div class="mini-modal">
           <h3>🧧 发红包</h3>
-          <div class="rp-form">
+          <div class="form-group">
             <label>金额 (灵石)</label>
             <input v-model.number="rpAmount" type="number" min="100" placeholder="最低100" />
+          </div>
+          <div class="form-group">
             <label>祝福语</label>
             <input v-model="rpMessage" type="text" placeholder="恭喜发财！" />
+          </div>
+          <div class="form-group">
             <label>类型</label>
-            <div class="rp-type-btns">
-              <button :class="{ active: rpType === 'random' }" @click="rpType = 'random'">随机</button>
-              <button :class="{ active: rpType === 'fixed' }" @click="rpType = 'fixed'">定额</button>
+            <div class="type-row">
+              <BaseButton variant="ghost" size="sm" :class="{ 'diff-active': rpType === 'random' }" @click="rpType = 'random'">随机</BaseButton>
+              <BaseButton variant="ghost" size="sm" :class="{ 'diff-active': rpType === 'fixed' }" @click="rpType = 'fixed'">定额</BaseButton>
             </div>
           </div>
-          <div class="modal-btns">
-            <button class="modal-cancel" @click="showSendRP = false">取消</button>
-            <button class="modal-confirm" @click="handleSendRP">发送</button>
+          <div class="modal-btn-row">
+            <BaseButton variant="ghost" @click="showSendRP = false">取消</BaseButton>
+            <BaseButton variant="primary" @click="handleSendRP">发送</BaseButton>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 管理面板 -->
+    <!-- ========== 管理 ========== -->
     <div v-else-if="activeTab === 'admin'" class="clan-admin-tab">
-      <div v-if="!isLeader" class="empty-state">
+      <div v-if="!isLeader" class="empty-box">
         <p>🔒 仅掌门可访问管理面板</p>
       </div>
       <div v-else>
-        <h3 class="section-title">⚙️ 宗门管理</h3>
+        <div class="section-label">⚙️ 宗门管理</div>
 
         <div class="admin-stats">
           <div class="admin-stat">
@@ -328,42 +292,60 @@
           </div>
         </div>
 
-        <div class="admin-logs">
-          <h4 class="section-title" style="font-size:13px">📜 最近日志</h4>
-          <div class="log-list">
-            <div v-for="log in (adminData?.logs || []).slice(0, 20)" :key="log.id" class="log-item">
-              <span class="log-action">{{ log.action }}</span>
-              <span class="log-detail">{{ log.detail || '' }}</span>
-              <span class="log-time">{{ formatTime(log.created_at) }}</span>
-            </div>
-            <div v-if="!adminData?.logs?.length" class="empty-state"><p>暂无日志</p></div>
+        <div class="section-label" style="font-size:12px">📜 最近日志</div>
+        <div class="log-list">
+          <div v-for="log in (adminData?.logs || []).slice(0, 20)" :key="log.id" class="log-item">
+            <span>{{ log.action }}</span>
+            <span class="log-detail">{{ log.detail || '' }}</span>
+            <span class="log-time">{{ formatTime(log.created_at) }}</span>
           </div>
+          <div v-if="!adminData?.logs?.length" class="empty-box"><p>暂无日志</p></div>
         </div>
       </div>
     </div>
 
-    <!-- Toast提示 -->
-    <div v-if="toastMsg" class="clan-toast" :class="toastType">{{ toastMsg }}</div>
-  </div>
+    <!-- ========== 捐赠弹窗 ========== -->
+    <div v-if="showDonate" class="modal-overlay" @click.self="showDonate = false">
+      <div class="mini-modal">
+        <h3>💰 宗门捐赠</h3>
+        <p>当前贡献度: <strong>{{ sectData?.contribution || 0 }}</strong></p>
+        <div class="donate-row">
+          <BaseButton
+            v-for="a in [100, 500, 1000, 5000]" :key="a"
+            variant="ghost" size="sm"
+            :class="{ 'diff-active': donateAmount === a }"
+            @click="donateAmount = a"
+          >{{ a >= 1000 ? a/1000 + 'K' : a }}</BaseButton>
+        </div>
+        <div class="modal-btn-row">
+          <BaseButton variant="ghost" @click="showDonate = false">取消</BaseButton>
+          <BaseButton variant="primary" :loading="donating" @click="handleDonate">捐赠</BaseButton>
+        </div>
+      </div>
+    </div>
+  </BasePanel>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { guildApi } from '../api'
+import { useToast } from './common/toastComposable.js'
+import BasePanel from './base/BasePanel.vue'
+import BaseButton from './base/BaseButton.vue'
 
 const props = defineProps({ playerId: { type: Number, default: 1 } })
-const emit = defineEmits(['changeTab'])
+const emit = defineEmits(['changeTab', 'close'])
 
+const toast = useToast()
 const activeTab = ref('info')
 const loading = ref(false)
-const toastMsg = ref('')
-const toastType = ref('info')
+const donating = ref(false)
 
 const tabs = [
-  { key: 'info',       label: '仙盟',  icon: '🏯' },
-  { key: 'members',    label: '成员',  icon: '👥' },
-  { key: 'skills',     label: '技能',  icon: '📖' },
-  { key: 'admin',      label: '管理',  icon: '⚙️' }
+  { id: 'info',      name: '仙盟',  icon: '🏯' },
+  { id: 'members',  name: '成员',  icon: '👥' },
+  { id: 'skills',   name: '技能',  icon: '📖' },
+  { id: 'admin',    name: '管理',  icon: '⚙️' }
 ]
 
 const sectData     = ref(null)
@@ -373,18 +355,16 @@ const skills       = ref([])
 const adminData    = ref(null)
 const contribution = ref(0)
 
-// 以下功能后端 /api/guild 暂未实现，对应 tab 暂时隐藏
 const redPackets   = ref([])
 const dungeonData  = ref(null)
 const selectedDifficulty = ref('普通')
 const currentFloor      = ref(null)
-const challengeResult   = ref(null)
+const challengeResult  = ref(null)
 
 const playerId = computed(() => props.playerId || 1)
 const isLeader = computed(() => sectData.value?.leaderId === playerId.value)
 
-// 仙盟数据中无建筑字段；如后续后端扩展再启用建筑 tab
-const buildings = computed(() => [])
+const buildings = computed(() => []) // 建筑功能后端暂未实现
 
 const showDonate       = ref(false)
 const donateAmount     = ref(100)
@@ -396,63 +376,38 @@ const rpAmount         = ref(1000)
 const rpMessage        = ref('')
 const rpType           = ref('random')
 
-const panelStyle = {
-  background: 'linear-gradient(135deg, rgba(20,15,50,0.93) 0%, rgba(10,10,30,0.95) 100%)',
-  backgroundImage: "url('/assets/bg-abyss-20260321.png'), linear-gradient(135deg, rgba(20,15,50,0.93) 0%, rgba(10,10,30,0.95) 100%)",
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundBlendMode: 'overlay'
-}
-
-function getSkillIcon(key) {
-  return { attack_boost:'⚔️', defense_boost:'🛡️', exp_boost:'📖', gold_boost:'💎', drop_boost:'🎁', speed_boost:'⏰', rescue_boost:'🆘', war_boost:'⚔️' }[key] || '✨'
-}
-function canUpgrade(b) { return false } // 建筑功能后端暂未实现
-function getUpgradeCost(b) { return 0 }
-function getDifficultyMult(d) { return { '简单':0.8, '普通':1.0, '困难':1.5, '噩梦':2.0 }[d] || 1.0 }
-function getDungeonRewards(f) { return ['灵兽蛋','紫色装备','灵石×5000','称号·心魔克星'][(f-1)%4] }
-function formatTime(ts) { if (!ts) return ''; const d=new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}` }
-function showToast(msg, type='info') { toastMsg.value = msg; toastType.value = type; setTimeout(() => { toastMsg.value = '' }, 2500) }
+// ---- Data loaders ----
 
 async function loadSectInfo() {
   try {
-    // guildApi.getPlayerGuild → GET /api/guild/player/:userId
     const res = await guildApi.getPlayerGuild(playerId.value)
     if (res.data?.guild) {
       const g = res.data.guild
       sectData.value = {
         ...g,
-        // 兼容旧字段名
         leader_id: g.leaderId,
         sect_level: g.level,
-        // 暂无宗门基金/排名字段，使用 exp 代替
         fund: g.exp || 0,
         rank: '--',
-        icon: '🏯',
+        icon: '🏯'
       }
-      // myRole 由后端直接返回
       if (res.data.myRole) sectData.value.myRole = res.data.myRole
     } else {
       sectData.value = null
     }
   } catch (e) {
     console.error('loadSectInfo failed:', e)
+    toast.error('加载仙盟信息失败')
   }
 }
 
-async function loadBonus() {
-  // 仙盟加成由技能数据推导，无独立接口
-  bonus.value = null
-}
-
 async function loadMembers() {
-  // members 已在 loadSectInfo 的 guild 数据中
   if (sectData.value?.members) {
     members.value = sectData.value.members.map(m => ({
       ...m,
       player_id: m.id,
       username: m.name,
-      contribution: 0, // guild 后端暂无贡献字段
+      contribution: 0
     }))
   }
 }
@@ -461,50 +416,89 @@ async function loadSkills() {
   if (!sectData.value?.id) return
   try {
     const res = await guildApi.getSkills(sectData.value.id)
-    if (res.data?.skills) {
-      skills.value = res.data.skills
-    }
+    if (res.data?.skills) skills.value = res.data.skills
   } catch (e) {
     console.error('loadSkills failed:', e)
   }
 }
 
+async function loadAdmin() { /* 后端暂未实现 */ }
 async function loadRedPackets() { /* 后端暂未实现 */ }
-async function loadDungeon()    { /* 后端暂未实现 */ }
-async function loadAdmin()      { /* 后端暂未实现 */ }
+async function loadDungeon() { /* 后端暂未实现 */ }
 
-async function loadAll() {
-  loading.value = true
-  await loadSectInfo()
-  // 首次加载后顺便拉成员
-  if (sectData.value) await loadMembers()
-  loading.value = false
-}
+// ---- Actions ----
 
-// 捐赠：后端 /api/guild/donate 暂未实现
 async function handleDonate() {
-  showToast('捐赠功能后端暂未实现', 'info')
-  showDonate.value = false
+  if (!sectData.value?.id) return
+  donating.value = true
+  try {
+    const res = await guildApi.donate(playerId.value, donateAmount.value)
+    if (res.data?.success) {
+      toast.success('捐赠成功！')
+      await loadSectInfo()
+    } else {
+      toast.error(res.data?.message || '捐赠失败')
+    }
+  } catch (e) {
+    toast.error('捐赠功能暂未开放')
+  } finally {
+    donating.value = false
+    showDonate.value = false
+  }
 }
 
-async function handleUpgradeBuilding(buildingId) {
-  showToast('建筑升级功能后端暂未实现', 'info')
-}
-
-// 晋升：后端暂未实现
 async function handlePromote() {
-  showToast('成员晋升功能后端暂未实现', 'info')
+  if (!promoteTarget.value) return
+  try {
+    const res = await guildApi.promoteMember(
+      playerId.value,
+      promoteTarget.value.player_id,
+      selectedRole.value
+    )
+    if (res.data?.success) {
+      toast.success(`已晋升为${selectedRole.value}`)
+      await loadMembers()
+    } else {
+      toast.error(res.data?.message || '晋升失败')
+    }
+  } catch (e) {
+    toast.error('晋升功能暂未开放')
+  }
   showPromoteModal.value = false
 }
 
-// 踢人：后端暂未实现
 async function handleKick(member) {
-  showToast('踢出成员功能后端暂未实现', 'info')
+  try {
+    const res = await guildApi.kickMember(playerId.value, member.player_id)
+    if (res.data?.success) {
+      toast.success(`已踢出 ${member.username}`)
+      await loadMembers()
+    } else {
+      toast.error(res.data?.message || '踢出失败')
+    }
+  } catch (e) {
+    toast.error('踢出功能暂未开放')
+  }
 }
 
-// 转让掌门：后端暂未实现
 async function handleTransfer(member) {
-  showToast('转让掌门功能后端暂未实现', 'info')
+  try {
+    const res = await guildApi.transferLeader(playerId.value, member.player_id)
+    if (res.data?.success) {
+      toast.success(`已转让给 ${member.username}`)
+      await loadSectInfo()
+    } else {
+      toast.error(res.data?.message || '转让失败')
+    }
+  } catch (e) {
+    toast.error('转让功能暂未开放')
+  }
+}
+
+function showPromote(member) {
+  promoteTarget.value = member
+  selectedRole.value = '成员'
+  showPromoteModal.value = true
 }
 
 async function handleLearnSkill(skill) {
@@ -512,206 +506,181 @@ async function handleLearnSkill(skill) {
   try {
     const res = await guildApi.upgradeSkill(playerId.value, sectData.value.id, skill.id)
     if (res.data?.success) {
-      showToast(res.data.message, 'success')
+      toast.success(res.data.message)
       await loadSkills()
     } else {
-      showToast(res.data?.message || '升级失败', 'error')
+      toast.error(res.data?.message || '升级失败')
     }
-  } catch (e) { showToast('升级失败', 'error') }
+  } catch (e) {
+    toast.error('升级失败')
+  }
 }
 
-function selectFloor(f) { currentFloor.value = f; challengeResult.value = null }
-async function handleChallenge() { showToast('宗门副本后端暂未实现', 'info') }
-async function handleSendRP()    { showToast('红包功能后端暂未实现', 'info'); showSendRP.value = false }
-async function handleClaimRP()   { showToast('红包功能后端暂未实现', 'info') }
+function selectFloor(f) {
+  currentFloor.value = f
+  challengeResult.value = null
+}
 
-watch(activeTab, async (tab) => {
-  if (tab === 'members') await loadMembers()
-  else if (tab === 'skills') await loadSkills()
-})
+async function handleChallenge() {
+  toast.info('宗门副本后端暂未实现')
+}
+
+async function handleSendRP() {
+  toast.info('红包功能后端暂未实现')
+  showSendRP.value = false
+}
+
+async function handleClaimRP() {
+  toast.info('红包功能后端暂未实现')
+}
+
+function getSkillIcon(key) {
+  return {
+    attack_boost: '⚔️', defense_boost: '🛡️', exp_boost: '📖',
+    gold_boost: '💎', drop_boost: '🎁', speed_boost: '⏰',
+    rescue_boost: '🆘', war_boost: '⚔️'
+  }[key] || '✨'
+}
+
+function getDifficultyMult(d) {
+  return { '简单': 0.8, '普通': 1.0, '困难': 1.5, '噩梦': 2.0 }[d] || 1.0
+}
+
+function getDungeonRewards(f) {
+  return ['灵兽蛋', '紫色装备', '灵石×5000', '称号·心魔克星'][(f - 1) % 4]
+}
+
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+async function loadAll() {
+  loading.value = true
+  await loadSectInfo()
+  if (sectData.value) await loadMembers()
+  loading.value = false
+}
 
 onMounted(loadAll)
 </script>
 
 <style scoped>
-.clan-panel {
-  position: relative; min-height: 100vh;
-  color: #e8d5f0;
-  font-family: 'Microsoft YaHei', sans-serif;
-  padding-bottom: 80px;
+/* ── Layout helpers ─────────────────────────────────── */
+.info-emblem { text-align: center; padding: 8px 0 12px; }
+.info-avatar { font-size: 56px; margin-bottom: 6px; }
+.info-title-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.info-title-row h2 { margin: 0; color: #f0e6ff; font-size: 18px; }
+.level-badge {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;
 }
-.clan-nav {
-  display: flex; gap: 2px; padding: 8px 10px 0;
-  background: rgba(0,0,0,0.3); overflow-x: auto;
-  scrollbar-width: none; flex-wrap: wrap;
-}
-.clan-nav::-webkit-scrollbar { display: none; }
-.nav-btn {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 6px 10px; border: none;
-  background: rgba(255,255,255,0.05); color: #a89cc8;
-  border-radius: 8px 8px 0 0; cursor: pointer; transition: all 0.2s; min-width: 48px;
-}
-.nav-btn.active { background: rgba(147,51,234,0.4); color: #f0e6ff; }
-.nav-btn:hover:not(.active) { background: rgba(255,255,255,0.1); }
-.nav-icon { font-size: 16px; }
-.nav-label { font-size: 10px; margin-top: 2px; }
+.info-rank { color: #a89cc8; font-size: 12px; margin: 4px 0 0; }
 
-.clan-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 12px; color: #a89cc8; }
-.loading-spinner { width: 32px; height: 32px; border: 3px solid rgba(147,51,234,0.3); border-top-color: #9333ea; border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.section-title { font-size: 14px; color: #c9a0dc; margin: 16px 16px 8px; border-bottom: 1px solid rgba(147,51,234,0.3); padding-bottom: 6px; }
-
-.clan-emblem-section { text-align: center; padding: 24px 16px 16px; }
-.clan-emblem { font-size: 72px; margin-bottom: 8px; }
-.clan-name-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.clan-name-row h2 { margin: 0; color: #f0e6ff; font-size: 20px; }
-.clan-level-badge { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
-.clan-rank { color: #a89cc8; font-size: 12px; margin: 4px 0 0; }
-
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 12px; margin-top: 8px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
 .stat-card { background: rgba(147,51,234,0.15); border: 1px solid rgba(147,51,234,0.25); border-radius: 10px; padding: 10px 4px; text-align: center; }
-.stat-icon { font-size: 18px; margin-bottom: 4px; }
+.stat-icon { font-size: 18px; }
 .stat-val { font-size: 15px; font-weight: bold; color: #e9d5ff; }
 .stat-label { font-size: 10px; color: #a89cc8; }
 
-.bonus-section { margin-top: 8px; }
-.bonus-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 0 12px; }
+.bonus-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 12px; }
 .bonus-item { display: flex; justify-content: space-between; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); padding: 6px 10px; border-radius: 6px; font-size: 12px; }
-.bonus-val { color: #34d399; font-weight: bold; }
+.bonus-green { color: #34d399; font-weight: bold; }
 
-.quick-actions { margin-top: 8px; }
-.action-btns { display: flex; gap: 10px; padding: 0 12px; }
-.action-btn { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; }
-.donate-btn { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
-.recruit-btn { background: rgba(255,255,255,0.1); color: #e8d5f0; border: 1px solid rgba(255,255,255,0.1); }
+.quick-actions { margin-top: 16px; }
+.section-label { font-size: 13px; color: #c9a0dc; margin-bottom: 8px; border-bottom: 1px solid rgba(147,51,234,0.3); padding-bottom: 4px; }
+.action-row { display: flex; gap: 10px; }
 
-/* 弹窗 */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-box { background: linear-gradient(135deg, #1a1040, #2d1b69); border: 1px solid rgba(147,51,234,0.5); border-radius: 16px; padding: 24px; width: 300px; max-width: 90vw; color: #e8d5f0; }
-.modal-box h3 { margin: 0 0 16px; color: #f0e6ff; font-size: 16px; }
-.modal-btns { display: flex; gap: 10px; margin-top: 16px; }
-.modal-cancel, .modal-confirm { flex: 1; padding: 8px; border-radius: 8px; border: none; cursorpointer; font-size: 13px; }
-.modal-cancel { background: rgba(255,255,255,0.1); color: #a89cc8; }
-.modal-confirm { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
+.notice-box { margin-top: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.notice-label { color: #c9a0dc; margin-right: 8px; }
 
-.donate-amounts { display: flex; gap: 6px; margin: 10px 0; }
-.donate-opt { flex: 1; padding: 6px; border: 1px solid rgba(147,51,234,0.4); background: rgba(255,255,255,0.05); color: #e8d5f0; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.donate-opt.selected { background: rgba(147,51,234,0.4); border-color: #9333ea; }
+/* Members */
+.tab-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.tab-header-row h3 { margin: 0; font-size: 14px; color: #c9a0dc; }
+.count-badge { font-size: 12px; color: #a89cc8; background: rgba(147,51,234,0.2); padding: 2px 8px; border-radius: 10px; }
 
-/* 成员 */
-.tab-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0; }
-.tab-header h3 { margin: 0; font-size: 15px; color: #c9a0dc; }
-.member-count { font-size: 12px; color: #a89cc8; background: rgba(147,51,234,0.2); padding: 2px 8px; border-radius: 10px; }
-.member-list { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
-.member-card { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 10px; }
-.member-avatar { font-size: 28px; flex-shrink: 0; }
+.member-list { display: flex; flex-direction: column; gap: 8px; }
+.member-row { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 10px; }
+.member-avatar { font-size: 24px; flex-shrink: 0; }
 .member-info { flex: 1; min-width: 0; }
-.member-name { font-size: 13px; color: #e9d5ff; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-name { font-size: 13px; color: #e9d5ff; font-weight: bold; }
 .member-meta { display: flex; gap: 6px; font-size: 11px; color: #a89cc8; margin-top: 2px; }
-.member-role { padding: 1px 6px; border-radius: 4px; font-size: 10px; }
+.role-badge { padding: 1px 6px; border-radius: 4px; font-size: 10px; }
 .role-掌门 { background: rgba(234,179,8,0.3); color: #fbbf24; }
 .role-副掌门 { background: rgba(168,85,247,0.3); color: #c084fc; }
 .role-长老 { background: rgba(59,130,246,0.3); color: #60a5fa; }
 .role-精英 { background: rgba(16,185,129,0.3); color: #34d399; }
 .role-成员 { background: rgba(255,255,255,0.1); color: #a89cc8; }
-.member-contribution { text-align: center; flex-shrink: 0; }
-.contrib-value { display: block; font-size: 14px; color: #fbbf24; font-weight: bold; }
-.contrib-label { font-size: 10px; color: #a89cc8; }
-.member-actions { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
-.mini-btn { padding: 3px 6px; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; background: rgba(147,51,234,0.3); color: #e9d5ff; }
-.kick-btn { background: rgba(239,68,68,0.3); color: #fca5a5; }
-.transfer-btn { background: rgba(234,179,8,0.3); color: #fbbf24; font-size: 10px; padding: 3px 6px; border: none; border-radius: 4px; cursor: pointer; }
+.member-contrib { text-align: center; flex-shrink: 0; }
+.contrib-num { display: block; font-size: 14px; font-weight: bold; color: #e9d5ff; }
+.contrib-lbl { font-size: 10px; color: #a89cc8; }
+.member-ops { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 
-.role-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.role-opt { padding: 8px 14px; border: 1px solid rgba(147,51,234,0.4); background: rgba(255,255,255,0.05); color: #e8d5f0; border-radius: 8px; cursor: pointer; }
-.role-opt.selected { background: rgba(147,51,234,0.4); border-color: #9333ea; }
-
-/* 建筑 */
-.building-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 12px; }
-.building-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 12px; text-align: center; }
-.building-icon { font-size: 32px; margin-bottom: 4px; }
-.building-name { font-size: 13px; color: #e9d5ff; font-weight: bold; }
-.building-level { font-size: 11px; color: #9333ea; margin: 2px 0; }
-.building-effect { font-size: 10px; color: #a89cc8; margin-bottom: 6px; }
-.upgrade-btn { width: 100%; padding: 6px; border: none; border-radius: 6px; background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; cursor: pointer; font-size: 11px; }
-.upgrade-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.max-badge { font-size: 11px; color: #34d399; background: rgba(52,211,153,0.1); padding: 4px; border-radius: 4px; }
-
-/* 技能 */
-.skills-header { display: flex; align-items: center; justify-content: space-between; padding-right: 16px; }
-.contrib-balance { font-size: 12px; color: #fbbf24; }
-.skills-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 12px; }
-.skill-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 12px; }
-.skill-icon { font-size: 24px; margin-bottom: 4px; }
+/* Skills */
+.contrib-inline { font-size: 12px; color: #a89cc8; }
+.skills-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+.skill-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.skill-top { display: flex; gap: 8px; align-items: flex-start; }
+.skill-icon { font-size: 22px; }
 .skill-name { font-size: 13px; color: #e9d5ff; font-weight: bold; }
-.skill-desc { font-size: 10px; color: #a89cc8; margin: 2px 0 6px; }
-.skill-level-bar { position: relative; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 6px; overflow: hidden; }
-.skill-level-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); border-radius: 4px; transition: width 0.3s; }
-.skill-level-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: white; font-weight: bold; }
-.skill-learn-btn { width: 100%; padding: 5px; border: none; border-radius: 6px; background: linear-gradient(135deg, #059669, #10b981); color: white; cursor: pointer; font-size: 11px; }
-.skill-learn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.skill-desc { font-size: 11px; color: #a89cc8; margin-top: 2px; }
+.skill-bar { position: relative; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.skill-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 4px; transition: width 0.3s; }
+.skill-level-text { position: absolute; right: 4px; top: -1px; font-size: 10px; color: #a89cc8; }
 
-/* 副本 */
-.dungeon-header { display: flex; align-items: center; gap: 10px; }
-.unlock-hint { font-size: 11px; color: #f97316; }
-.difficulty-tabs { display: flex; gap: 6px; padding: 8px 12px; }
-.diff-btn { flex: 1; padding: 6px; border: 1px solid rgba(147,51,234,0.3); background: rgba(255,255,255,0.05); color: #a89cc8; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.diff-btn.active { background: rgba(147,51,234,0.4); color: #f0e6ff; border-color: #9333ea; }
-.floor-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 12px; }
-.floor-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid rgba(147,51,234,0.2); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
-.floor-cell.current { border-color: #9333ea; background: rgba(147,51,234,0.3); }
-.floor-cell.cleared { background: rgba(52,211,153,0.2); border-color: rgba(52,211,153,0.4); }
-.floor-num { font-size: 14px; color: #e9d5ff; font-weight: bold; }
-.floor-check { font-size: 10px; color: #34d399; }
-.dungeon-info-box { margin: 12px; padding: 12px; background: rgba(147,51,234,0.15); border: 1px solid rgba(147,51,234,0.3); border-radius: 10px; text-align: center; }
-.dungeon-info-box p { margin: 4px 0; font-size: 13px; color: #e9d5ff; }
-.reward-preview { color: #fbbf24 !important; font-size: 12px !important; }
-.mult-info { font-size: 11px !important; color: #a89cc8 !important; }
-.challenge-btn { margin-top: 8px; padding: 8px 24px; border: none; border-radius: 8px; background: linear-gradient(135deg, #dc2626, #ef4444); color: white; cursor: pointer; font-size: 14px; }
-.result-box { margin: 12px; padding: 12px; background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.3); border-radius: 10px; text-align: center; }
-.result-msg { color: #34d399; font-size: 14px; font-weight: bold; margin-bottom: 8px; }
-.rewards-row { display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #e9d5ff; }
-.locked { text-align: center; padding: 40px; }
-.lock-icon { font-size: 48px; margin-bottom: 12px; }
-.current-level { font-size: 12px; color: #a89cc8; }
+/* Dungeon */
+.diff-row { display: flex; gap: 6px; margin-bottom: 12px; }
+.diff-active { background: rgba(102,126,234,0.35) !important; border-color: #667eea !important; color: #fff !important; }
+.floor-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+.floor-cell { background: rgba(255,255,255,0.05); border: 1px solid rgba(147,51,234,0.2); border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 13px; transition: all 0.2s; }
+.floor-cell:hover { background: rgba(102,126,234,0.2); }
+.floor-cell.cleared { background: rgba(16,185,129,0.2); border-color: rgba(16,185,129,0.4); }
+.floor-cell.current { background: rgba(147,51,234,0.4); border-color: #9333ea; }
+.unlock-hint { font-size: 12px; color: #a89cc8; }
+.floor-info { background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 13px; }
+.result-box { margin-top: 10px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 10px; padding: 12px; text-align: center; }
+.reward-row { display: flex; gap: 12px; justify-content: center; margin-top: 6px; font-size: 13px; }
+.empty-box { text-align: center; padding: 32px; color: #a89cc8; }
+.empty-box.locked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.locked > div:first-child { font-size: 48px; }
 
-/* 红包 */
-.rp-header { display: flex; align-items: center; justify-content: space-between; padding-right: 12px; }
-.send-rp-btn { padding: 5px 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #dc2626, #ef4444); color: white; cursor: pointer; font-size: 12px; }
-.redpacket-list { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
-.rp-card { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 10px; }
-.rp-sender { font-size: 12px; color: #e9d5ff; font-weight: bold; min-width: 60px; }
-.rp-msg { flex: 1; font-size: 11px; color: #a89cc8; }
-.rp-amount { font-size: 13px; color: #fbbf24; font-weight: bold; }
-.rp-status { font-size: 10px; color: #a89cc8; }
-.claim-rp-btn { padding: 4px 10px; border: none; border-radius: 6px; background: linear-gradient(135deg, #dc2626, #ef4444); color: white; cursor: pointer; font-size: 11px; }
-.rp-claimed { font-size: 11px; color: #a89cc8; }
-.rp-form { display: flex; flex-direction: column; gap: 8px; }
-.rp-form label { font-size: 12px; color: #a89cc8; }
-.rp-form input { padding: 8px; border: 1px solid rgba(147,51,234,0.3); background: rgba(255,255,255,0.05); border-radius: 6px; color: #e8d5f0; font-size: 13px; }
-.rp-type-btns { display: flex; gap: 8px; }
-.rp-type-btns button { flex: 1; padding: 6px; border: 1px solid rgba(147,51,234,0.3); background: rgba(255,255,255,0.05); color: #a89cc8; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.rp-type-btns button.active { background: rgba(147,51,234,0.4); border-color: #9333ea; color: #f0e6ff; }
+/* Red Packets */
+.rp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.rp-card { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(147,51,234,0.2); border-radius: 10px; padding: 10px; }
+.rp-sender { font-weight: bold; font-size: 13px; color: #e9d5ff; flex-shrink: 0; }
+.rp-msg { flex: 1; font-size: 12px; color: #a89cc8; }
+.rp-amount { font-size: 13px; font-weight: bold; color: #ffd700; flex-shrink: 0; }
+.rp-status { font-size: 11px; color: #a89cc8; flex-shrink: 0; }
+.rp-claimed { font-size: 12px; color: #a89cc8; }
+.form-group { margin-bottom: 10px; }
+.form-group label { display: block; font-size: 12px; color: #a89cc8; margin-bottom: 4px; }
+.form-group input { width: 100%; padding: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(147,51,234,0.3); border-radius: 6px; color: #e8d5f0; font-size: 13px; box-sizing: border-box; }
+.form-group input:focus { outline: none; border-color: #9333ea; }
+.type-row { display: flex; gap: 6px; }
 
-/* 管理 */
-.admin-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 12px; }
-.admin-stat { background: rgba(147,51,234,0.15); border: 1px solid rgba(147,51,234,0.25); border-radius: 10px; padding: 12px 4px; text-align: center; }
-.admin-stat-val { display: block; font-size: 16px; font-weight: bold; color: #e9d5ff; }
-.admin-stat-label { font-size: 10px; color: #a89cc8; }
-.admin-logs { margin-top: 8px; }
-.log-list { padding: 0 12px; max-height: 300px; overflow-y: auto; }
-.log-item { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(147,51,234,0.1); font-size: 11px; }
-.log-action { color: #c084fc; min-width: 60px; }
-.log-detail { flex: 1; color: #a89cc8; }
-.log-time { color: #6b7280; font-size: 10px; flex-shrink: 0; }
+/* Admin */
+.admin-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.admin-stat { background: rgba(147,51,234,0.15); border: 1px solid rgba(147,51,234,0.25); border-radius: 10px; padding: 12px; text-align: center; }
+.admin-stat-val { display: block; font-size: 18px; font-weight: bold; color: #e9d5ff; }
+.admin-stat-label { font-size: 11px; color: #a89cc8; }
+.log-list { display: flex; flex-direction: column; gap: 4px; }
+.log-item { display: flex; gap: 8px; font-size: 12px; color: #a89cc8; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.log-detail { flex: 1; color: #667eea; }
+.log-time { flex-shrink: 0; font-size: 11px; }
 
-/* 空状态 */
-.empty-state { text-align: center; padding: 40px; color: #a89cc8; font-size: 13px; }
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.mini-modal { background: linear-gradient(135deg, #1a1040, #2d1b69); border: 1px solid rgba(147,51,234,0.5); border-radius: 16px; padding: 24px; width: 300px; max-width: 90vw; color: #e8d5f0; }
+.mini-modal h3 { margin: 0 0 16px; color: #f0e6ff; font-size: 16px; }
+.role-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.role-selected { background: rgba(147,51,234,0.4) !important; border-color: #9333ea !important; color: #fff !important; }
+.modal-btn-row { display: flex; gap: 10px; margin-top: 16px; }
+.modal-btn-row > * { flex: 1; }
+.donate-row { display: flex; gap: 6px; margin: 10px 0 16px; }
 
-/* Toast */
-.clan-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); padding: 10px 20px; border-radius: 10px; font-size: 13px; z-index: 2000; white-space: nowrap; }
-.clan-toast.info { background: rgba(147,51,234,0.9); color: white; }
-.clan-toast.success { background: rgba(16,185,129,0.9); color: white; }
-.clan-toast.error { background: rgba(220,38,38,0.9); color: white; }
+/* Loading */
+.loading-row { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; gap: 12px; color: #a89cc8; }
+.loading-spin { width: 28px; height: 28px; border: 3px solid rgba(147,51,234,0.3); border-top-color: #9333ea; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
