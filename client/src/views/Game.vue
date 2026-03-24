@@ -52,6 +52,8 @@
       <AscensionPrePanel v-if="showAscensionPre" @close="showAscensionPre=false" />
       <ImmortalRealmPanel v-if="activeTab === 'immortal-realm'" @close="activeTab = 'cultivation'" />
       <TowerPanel v-if="activeTab === 'tower'" />
+      <VipPanel v-if="activeTab === 'vip'" @close="activeTab = 'cultivation'" @vip-updated="onVipUpdated" />
+      <WorldBossPanel v-if="activeTab === 'world-boss'" @close="activeTab = 'cultivation'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -97,6 +99,8 @@ import ArtSystemPanel from '../components/ArtSystemPanel.vue'
 import AscensionPrePanel from '../components/AscensionPrePanel.vue'
 import ImmortalRealmPanel from '../components/ImmortalRealmPanel.vue'
 import TowerPanel from '../components/TowerPanel.vue'
+import VipPanel from '../components/VipPanel.vue'
+import WorldBossPanel from '../components/WorldBossPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -104,6 +108,13 @@ const activeTab = ref('cultivation')
 const showFishingCompetition = ref(false)
 const showAscensionPre = ref(false)
 const showImmortalRealm = ref(false)
+
+function onVipUpdated(vipData) {
+  // VIP升级后刷新玩家数据
+  if (playerStore.fetchPlayer) {
+    playerStore.fetchPlayer()
+  }
+}
 
 function switchToFishing() {
   showFishingCompetition.value = false
@@ -154,6 +165,8 @@ const tabs = [
   { id: 'story', name: '剧情', icon: '📖' },
   { id: 'mail', name: '邮件', icon: '📧' },
   { id: 'activity', name: '活动', icon: '🎁' },
+  { id: 'vip', name: 'VIP', icon: '👑' },
+  { id: 'world-boss', name: '世界BOSS', icon: '💀' },
   { id: 'friend', name: '好友', icon: '👥' },
   { id: 'cave-dwelling', name: '洞府', icon: '🏠' },
   { id: 'fishing', name: '钓鱼', icon: '🎣' },
