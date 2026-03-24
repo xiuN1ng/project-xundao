@@ -288,6 +288,7 @@ function initDatabase() {
       username TEXT UNIQUE NOT NULL,
       spirit_stones INTEGER DEFAULT 1000,
       qianghua_stones INTEGER DEFAULT 0,
+      magic_crystals INTEGER DEFAULT 0,
       level INTEGER DEFAULT 1,
       realm_level INTEGER DEFAULT 0,
       online_status INTEGER DEFAULT 0,
@@ -813,6 +814,68 @@ function initDatabase() {
     Logger.info('竞技场系统数据库初始化失败:', e.message);
   }
 
+  // ============ 魔晶系统数据库初始化 ============
+  try {
+    // 魔晶每日免费领取记录
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_magic_crystal_daily (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL UNIQUE,
+        last_claim_date TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 魔晶商店购买记录
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_mc_purchase_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        goods_id TEXT NOT NULL,
+        limit_type TEXT NOT NULL,
+        purchase_count INTEGER DEFAULT 1,
+        purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(player_id, goods_id, limit_type)
+      )
+    `);
+
+    // 魔晶交易/产出记录
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_mc_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        balance_after INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_mc_tx_player ON player_mc_transaction(player_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_mc_purchase_player ON player_mc_purchase_records(player_id)`);
+
+    Logger.info('✅ 魔晶经济系统数据库初始化完成');
+  } catch (e) {
+    Logger.info('魔晶系统数据库初始化失败:', e.message);
+  }
+
+  // ============ 月卡/季卡数据库初始化 ============
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_monthly_pass (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL UNIQUE,
+        pass_type TEXT NOT NULL,
+        expire_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    Logger.info('✅ 月卡/季卡系统数据库初始化完成');
+  } catch (e) {
+    Logger.info('月卡/季卡系统数据库初始化失败:', e.message);
+  }
+
   // ============ 经脉系统数据库初始化 ============
   try {
     // 玩家经脉数据表
@@ -862,6 +925,10 @@ function initDatabase() {
     if (!columnNames.includes('qianghua_stones')) {
       db.exec(`ALTER TABLE player ADD COLUMN qianghua_stones INTEGER DEFAULT 0`);
       Logger.info('✅ 添加 qianghua_stones 列');
+    }
+    if (!columnNames.includes('magic_crystals')) {
+      db.exec(`ALTER TABLE player ADD COLUMN magic_crystals INTEGER DEFAULT 0`);
+      Logger.info('✅ 添加 magic_crystals 列');
     }
     if (!columnNames.includes('spirit_root')) {
       db.exec(`ALTER TABLE player ADD COLUMN spirit_root TEXT DEFAULT '五行杂灵根'`);
@@ -943,6 +1010,461 @@ function createIndexes() {
   });
   Logger.info('✅ 数据库索引优化完成');
 }
+
+// ============ 魔晶经济系统 v21 ============
+// 魔晶 (Magic Crystal) - 顶级稀缺货币
+// 用途：兑换稀有道具、魔器装备、限定外观、珍贵材料
+
+const MAGIC_CRYSTAL_CONFIG = {
+  // 货币标识
+  CURRENCY_KEY: 'magic_crystals',
+
+  // 每日免费领取基础量
+  DAILY_FREE: {
+    base: 5,        // 基础每日免费5魔晶
+    realmBonus: 2,  // 每境界额外+2魔晶
+  },
+
+  // 魔晶产出公式配置
+  GENERATION: {
+    // 世界BOSS: 每100点伤害产出魔晶数 = bossTierMultiplier * (1 + realmLevel * 0.1)
+    WORLD_BOSS: {
+      baseDamagePerCrystal: 100,
+      tierMultiplier: {
+        rare: 1,
+        epic: 1.5,
+        legendary: 2,
+        mythical: 5,
+      },
+    },
+    // 封魔渊通关: base * realm_level * completion_bonus
+    REALM_SUPPRESSION: {
+      basePerLevel: 5,
+      firstClearBonus: 3,     // 首次通关3倍
+      dailyFirstBonus: 2,     // 每日首通2倍
+    },
+    // 竞技场: 赛季结束时按排名发放
+    ARENA_SEASON: {
+      rewards: {
+        top1: 500,
+        top10: 200,
+        top50: 100,
+        top100: 50,
+        participant: 10,
+      },
+    },
+  },
+
+  // 商店刷新配置
+  SHOP_REFRESH: {
+    daily: 'daily',        // 每日商品重置
+    weekly: 'weekly',      // 每周商品重置
+    monthly: 'monthly',    // 每月商品重置
+  },
+
+  // VIP月卡额外加成
+  VIP_DAILY_BONUS: {
+    1: 10,   // 月卡: 每日额外10魔晶
+    2: 25,   // 季卡: 每日额外25魔晶
+    3: 50,   // 年卡: 每日额外50魔晶
+  },
+};
+
+// ============ 魔晶商店商品配置 ============
+const MAGIC_CRYSTAL_SHOP = {
+  // 每日限购商品（每日重置）
+  DAILY: [
+    { id: 'mc_spirit_pack_100', name: '灵石袋x10000', icon: '💎', price: 10, item_type: 'currency', item_id: 'spirit_stones', quantity: 10000, rarity: 2, limit: { type: 'daily', count: 3 }, description: '装有10000灵石的储物袋' },
+    { id: 'mc_exp_book_50', name: '经验心得x50', icon: '📖', price: 15, item_type: 'exp_book', item_id: 'exp_book', quantity: 50, rarity: 2, limit: { type: 'daily', count: 5 }, description: '修炼经验心得，+50点经验' },
+    { id: 'mc_gongfa_random', name: '随机功法宝箱', icon: '🎁', price: 50, item_type: 'gongfa_box', item_id: 'green_gongfa_box', quantity: 1, rarity: 3, limit: { type: 'daily', count: 1 }, realm_level_req: 3, description: '随机获得一本绿色品质功法' },
+    { id: 'mc_realm_stone', name: '境界突破石', icon: '🏆', price: 80, item_type: 'consumable', item_id: 'realm_boost', quantity: 1, rarity: 3, limit: { type: 'daily', count: 2 }, realm_level_req: 5, description: '可直接突破当前境界一层' },
+    { id: 'mc_tribulation_pass', name: '渡劫令', icon: '⚡', price: 100, item_type: 'consumable', item_id: 'tribulation_pass', quantity: 1, rarity: 4, limit: { type: 'daily', count: 1 }, realm_level_req: 7, description: '下一次渡劫必定成功' },
+  ],
+
+  // 每周限购商品（每周一重置）
+  WEEKLY: [
+    { id: 'mc_purple_gongfa', name: '紫色功法宝箱', icon: '💠', price: 200, item_type: 'gongfa_box', item_id: 'purple_gongfa_box', quantity: 1, rarity: 4, limit: { type: 'weekly', count: 2 }, realm_level_req: 5, description: '必定获得一本紫色功法' },
+    { id: 'mc_skill_reset', name: '技能重置石', icon: '🔄', price: 150, item_type: 'consumable', item_id: 'skill_reset', quantity: 1, rarity: 3, limit: { type: 'weekly', count: 3 }, realm_level_req: 3, description: '重置任意一个技能的等级' },
+    { id: 'mc_fashion_token', name: '限定时装兑换券', icon: '👘', price: 300, item_type: 'token', item_id: 'fashion_token', quantity: 1, rarity: 4, limit: { type: 'weekly', count: 1 }, realm_level_req: 5, description: '可兑换一件限定时装' },
+    { id: 'mc_epic_beast', name: '史诗宠物蛋', icon: '🥚', price: 400, item_type: 'beast_egg', item_id: 'epic_beast_egg', quantity: 1, rarity: 4, limit: { type: 'weekly', count: 1 }, realm_level_req: 8, description: '孵化获得史诗级宠物' },
+  ],
+
+  // 永久限购商品（每人终身限购）
+  PERMANENT: [
+    { id: 'mc_red_gongfa', name: '红色功法宝箱', icon: '🔴', price: 1000, item_type: 'gongfa_box', item_id: 'red_gongfa_box', quantity: 1, rarity: 5, limit: { type: 'permanent', count: 3 }, realm_level_req: 10, description: '必定获得一本红色功法' },
+    { id: 'mc_legendary_title', name: '传说称号【魔晶至尊】', icon: '👑', price: 500, item_type: 'title', item_id: 'magic_crystal_king', quantity: 1, rarity: 5, limit: { type: 'permanent', count: 1 }, realm_level_req: 1, description: '佩戴获得全属性+5%加成，称号【魔晶至尊】' },
+    { id: 'mc_mythical_equip', name: '神话级魔器【虚空白虎】', icon: '🐯', price: 2000, item_type: 'equipment', item_id: 'mythical_white_tiger', quantity: 1, rarity: 5, limit: { type: 'permanent', count: 1 }, realm_level_req: 12, description: '远古四大神兽之一，装备后全属性大幅提升' },
+  ],
+
+  // 特殊限时商品（每月重置）
+  MONTHLY: [
+    { id: 'mc_monthly_pack', name: '魔晶月卡', icon: '🌙', price: 0, item_type: 'monthly_pass', item_id: 'magic_crystal_monthly', quantity: 1, rarity: 3, limit: { type: 'monthly', count: 1 }, description: '每日领取10魔晶+5000灵石，持续30天' },
+    { id: 'mc_season_pack', name: '魔晶季卡', icon: '🍃', price: 0, item_type: 'season_pass', item_id: 'magic_crystal_season', quantity: 1, rarity: 4, limit: { type: 'monthly', count: 1 }, description: '每日领取25魔晶+10000灵石，持续90天' },
+  ],
+};
+
+// ============ 魔晶系统类（数据库持久化版）============
+class MagicCrystalSystem {
+  constructor() {
+    // 内存缓存（用于减少DB查询）
+    this._purchaseCache = new Map(); // playerId -> Map(goodsId -> { daily, weekly, permanent, monthly })
+    this._dailyClaimCache = new Map(); // playerId -> lastClaimDate
+  }
+
+  /**
+   * 获取玩家魔晶数量
+   */
+  getPlayerCrystals(playerId) {
+    const player = db.prepare('SELECT magic_crystals FROM player WHERE id = ?').get(playerId);
+    return player ? (player.magic_crystals || 0) : 0;
+  }
+
+  /**
+   * 增减玩家魔晶（数据库持久化）
+   */
+  modifyCrystals(playerId, amount, reason = 'system') {
+    const player = db.prepare('SELECT id, magic_crystals FROM player WHERE id = ?').get(playerId);
+    if (!player) return false;
+
+    const newAmount = Math.max(0, (player.magic_crystals || 0) + amount);
+    db.prepare('UPDATE player SET magic_crystals = ? WHERE id = ?').run(newAmount, playerId);
+
+    // 记录交易
+    db.prepare(`
+      INSERT INTO player_mc_transaction (player_id, amount, reason, balance_after)
+      VALUES (?, ?, ?, ?)
+    `).run(playerId, amount, reason, newAmount);
+
+    Logger.info(`[魔晶] 玩家${playerId} ${amount > 0 ? '+' : ''}${amount}魔晶 (${reason})，余额: ${newAmount}`);
+    return true;
+  }
+
+  /**
+   * 每日免费领取魔晶
+   */
+  claimDailyFree(playerId, vipLevel = 0, realmLevel = 0) {
+    const today = getDateString();
+
+    // 从DB检查今日是否已领取
+    const record = db.prepare('SELECT last_claim_date FROM player_magic_crystal_daily WHERE player_id = ?').get(playerId);
+    if (record && record.last_claim_date === today) {
+      return { success: false, error: '今日已领取，请明日再来', claimed: false };
+    }
+
+    const base = MAGIC_CRYSTAL_CONFIG.DAILY_FREE.base;
+    const realmBonus = realmLevel * MAGIC_CRYSTAL_CONFIG.DAILY_FREE.realmBonus;
+    const vipBonus = MAGIC_CRYSTAL_CONFIG.VIP_DAILY_BONUS[vipLevel] || 0;
+    const total = base + realmBonus + vipBonus;
+
+    this.modifyCrystals(playerId, total, 'daily_free');
+
+    // 更新领取记录
+    db.prepare(`
+      INSERT INTO player_magic_crystal_daily (player_id, last_claim_date)
+      VALUES (?, ?)
+      ON CONFLICT(player_id) DO UPDATE SET last_claim_date = excluded.last_claim_date, updated_at = CURRENT_TIMESTAMP
+    `).run(playerId, today);
+
+    // 更新缓存
+    this._dailyClaimCache.set(String(playerId), today);
+
+    return {
+      success: true,
+      amount: total,
+      breakdown: { base, realmBonus, vipBonus },
+      remaining: this.getPlayerCrystals(playerId)
+    };
+  }
+
+  /**
+   * 计算封魔渊通关魔晶奖励
+   */
+  calcRealmSuppressionReward(realmLevel, isFirstClear, isDailyFirst) {
+    const cfg = MAGIC_CRYSTAL_CONFIG.GENERATION.REALM_SUPPRESSION;
+    let reward = cfg.basePerLevel * realmLevel;
+
+    if (isFirstClear) {
+      reward *= cfg.firstClearBonus;
+    } else if (isDailyFirst) {
+      reward *= cfg.dailyFirstBonus;
+    }
+
+    return Math.floor(reward);
+  }
+
+  /**
+   * 计算世界BOSS伤害魔晶奖励
+   */
+  calcWorldBossReward(damage, bossQuality, playerRealmLevel) {
+    const cfg = MAGIC_CRYSTAL_CONFIG.GENERATION.WORLD_BOSS;
+    const tierMultiplier = cfg.tierMultiplier[bossQuality] || 1;
+    const realmMultiplier = 1 + playerRealmLevel * 0.1;
+    const crystals = Math.floor((damage / cfg.baseDamagePerCrystal) * tierMultiplier * realmMultiplier);
+    return Math.max(1, crystals);
+  }
+
+  /**
+   * 从数据库加载玩家购买记录
+   */
+  _loadPurchaseRecords(playerId) {
+    const pid = String(playerId);
+    if (this._purchaseCache.has(pid)) {
+      return this._purchaseCache.get(pid);
+    }
+
+    const records = new Map();
+    const rows = db.prepare('SELECT goods_id, limit_type, purchase_count FROM player_mc_purchase_records WHERE player_id = ?').all(playerId);
+    for (const row of rows) {
+      records.set(row.goods_id, {
+        daily: 0, weekly: 0, permanent: 0, monthly: 0,
+        [row.limit_type]: row.purchase_count
+      });
+    }
+    this._purchaseCache.set(pid, records);
+    return records;
+  }
+
+  /**
+   * 获取玩家限购记录
+   */
+  getPurchaseRecord(playerId) {
+    return this._loadPurchaseRecords(playerId);
+  }
+
+  /**
+   * 检查限购
+   */
+  checkLimit(playerId, goodsId, limitType, limitCount) {
+    const records = this.getPurchaseRecord(playerId);
+    if (!records.has(goodsId)) {
+      records.set(goodsId, { daily: 0, weekly: 0, permanent: 0, monthly: 0 });
+    }
+    const goodRecords = records.get(goodsId);
+    return goodRecords[limitType] < limitCount;
+  }
+
+  /**
+   * 记录购买（数据库持久化）
+   */
+  recordPurchase(playerId, goodsId, limitType) {
+    const records = this.getPurchaseRecord(playerId);
+    if (!records.has(goodsId)) {
+      records.set(goodsId, { daily: 0, weekly: 0, permanent: 0, monthly: 0 });
+    }
+    records.get(goodsId)[limitType]++;
+
+    // 持久化到数据库
+    const existing = db.prepare('SELECT purchase_count FROM player_mc_purchase_records WHERE player_id = ? AND goods_id = ? AND limit_type = ?').get(playerId, goodsId, limitType);
+    if (existing) {
+      db.prepare('UPDATE player_mc_purchase_records SET purchase_count = purchase_count + 1 WHERE player_id = ? AND goods_id = ? AND limit_type = ?').run(playerId, goodsId, limitType);
+    } else {
+      db.prepare('INSERT INTO player_mc_purchase_records (player_id, goods_id, limit_type, purchase_count) VALUES (?, ?, ?, 1)').run(playerId, goodsId, limitType);
+    }
+  }
+
+  /**
+   * 每日重置限购（每日凌晨自动调用）
+   */
+  dailyReset(playerId) {
+    // 重置DB中对应玩家的每日限购（直接清空所有每日计数）
+    db.prepare('DELETE FROM player_mc_purchase_records WHERE player_id = ? AND limit_type = ?').run(playerId, 'daily');
+    // 清除缓存
+    const pid = String(playerId);
+    if (this._purchaseCache.has(pid)) {
+      const records = this._purchaseCache.get(pid);
+      for (const [goodsId, rec] of records.entries()) {
+        rec.daily = 0;
+      }
+    }
+    this._dailyClaimCache.delete(pid);
+    Logger.info(`[魔晶] 玩家${playerId} 每日重置完成`);
+  }
+
+  /**
+   * 每周重置限购（每周一凌晨调用）
+   */
+  weeklyReset(playerId) {
+    db.prepare('DELETE FROM player_mc_purchase_records WHERE player_id = ? AND limit_type IN (?, ?)').run(playerId, 'weekly', 'monthly');
+    const pid = String(playerId);
+    if (this._purchaseCache.has(pid)) {
+      const records = this._purchaseCache.get(pid);
+      for (const [goodsId, rec] of records.entries()) {
+        rec.weekly = 0;
+        rec.monthly = 0;
+      }
+    }
+    Logger.info(`[魔晶] 玩家${playerId} 每周重置完成`);
+  }
+
+  /**
+   * 获取玩家可购买的商品列表（按类别）
+   */
+  getShopGoods(playerId, realmLevel = 0, vipLevel = 0) {
+    const records = this.getPurchaseRecord(playerId);
+    const result = { daily: [], weekly: [], permanent: [], monthly: [] };
+
+    for (const [category, goodsList] of Object.entries(MAGIC_CRYSTAL_SHOP)) {
+      for (const goods of goodsList) {
+        // 检查境界需求
+        if (goods.realm_level_req && realmLevel < goods.realm_level_req) continue;
+
+        // 获取已购买数量
+        const goodRecords = records.get(goods.id);
+        const purchased = goodRecords ? goodRecords[goods.limit.type] : 0;
+        const remaining = Math.max(0, goods.limit.count - purchased);
+
+        result[category].push({
+          ...goods,
+          purchased,
+          remaining,
+          canBuy: remaining > 0,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 购买商品
+   */
+  purchase(playerId, goodsId, realmLevel = 0) {
+    // 查找商品
+    let goods = null;
+    let category = null;
+    for (const [cat, goodsList] of Object.entries(MAGIC_CRYSTAL_SHOP)) {
+      const found = goodsList.find(g => g.id === goodsId);
+      if (found) {
+        goods = found;
+        category = cat;
+        break;
+      }
+    }
+
+    if (!goods) {
+      return { success: false, error: '商品不存在' };
+    }
+
+    // 检查境界需求
+    if (goods.realm_level_req && realmLevel < goods.realm_level_req) {
+      return { success: false, error: `需要境界达到${goods.realm_level_req}阶才能购买` };
+    }
+
+    // 检查限购
+    if (!this.checkLimit(playerId, goodsId, goods.limit.type, goods.limit.count)) {
+      const limitNames = { daily: '每日', weekly: '每周', permanent: '终身', monthly: '每月' };
+      return { success: false, error: `${limitNames[goods.limit.type]}购买次数已用完` };
+    }
+
+    // 检查魔晶余额
+    const balance = this.getPlayerCrystals(playerId);
+    if (balance < goods.price) {
+      return { success: false, error: '魔晶不足' };
+    }
+
+    // 扣除魔晶
+    if (!this.modifyCrystals(playerId, -goods.price, `shop_purchase:${goods.id}`)) {
+      return { success: false, error: '交易失败' };
+    }
+
+    // 记录购买（数据库持久化）
+    this.recordPurchase(playerId, goodsId, goods.limit.type);
+
+    // 发放物品
+    this.grantGoods(playerId, goods);
+
+    return {
+      success: true,
+      spent: goods.price,
+      remaining: this.getPlayerCrystals(playerId),
+      goods: { id: goods.id, name: goods.name, icon: goods.icon, quantity: goods.quantity },
+    };
+  }
+
+  /**
+   * 发放物品
+   */
+  grantGoods(playerId, goods) {
+    switch (goods.item_type) {
+      case 'currency':
+        if (goods.item_id === 'spirit_stones') {
+          db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(goods.quantity, playerId);
+          Logger.info(`[魔晶商店] 玩家${playerId} 购买获得${goods.quantity}灵石`);
+        }
+        break;
+      case 'exp_book':
+        db.prepare('UPDATE player SET exp = COALESCE(exp, 0) + ? WHERE id = ?').run(goods.quantity, playerId);
+        Logger.info(`[魔晶商店] 玩家${playerId} 购买获得${goods.quantity}经验`);
+        break;
+      case 'title':
+        this.grantTitle(playerId, goods.item_id);
+        break;
+      case 'monthly_pass':
+      case 'season_pass':
+        this.grantPass(playerId, goods.item_id, goods.quantity);
+        break;
+      default:
+        Logger.info(`[魔晶商店] 玩家${playerId} 购买获得 ${goods.name} x${goods.quantity}`);
+    }
+  }
+
+  /**
+   * 发放称号
+   */
+  grantTitle(playerId, titleId) {
+    const titleMap = {
+      'magic_crystal_king': '【魔晶至尊】',
+    };
+    const titleName = titleMap[titleId] || titleId;
+    db.prepare('UPDATE player SET title = ? WHERE id = ?').run(titleName, playerId);
+    Logger.info(`[魔晶商店] 玩家${playerId} 获得称号: ${titleName}`);
+  }
+
+  /**
+   * 发放通行证（月卡/季卡）
+   */
+  grantPass(playerId, passId, quantity) {
+    const expireAt = new Date();
+    if (passId === 'magic_crystal_monthly') {
+      expireAt.setDate(expireAt.getDate() + 30);
+      try {
+        db.prepare('INSERT OR REPLACE INTO player_monthly_pass (player_id, pass_type, expire_at) VALUES (?, ?, ?)').run(playerId, 'monthly', expireAt.toISOString());
+      } catch (e) {
+        Logger.info(`[魔晶商店] 月卡表写入失败（可能不存在）: ${e.message}`);
+      }
+    } else if (passId === 'magic_crystal_season') {
+      expireAt.setDate(expireAt.getDate() + 90);
+      try {
+        db.prepare('INSERT OR REPLACE INTO player_monthly_pass (player_id, pass_type, expire_at) VALUES (?, ?, ?)').run(playerId, 'season', expireAt.toISOString());
+      } catch (e) {
+        Logger.info(`[魔晶商店] 季卡表写入失败（可能不存在）: ${e.message}`);
+      }
+    }
+    Logger.info(`[魔晶商店] 玩家${playerId} 开通 ${passId}，有效期至 ${expireAt.toISOString()}`);
+  }
+
+  /**
+   * 获取魔晶货币信息（余额+商店数据）
+   */
+  getInfo(playerId, realmLevel = 0, vipLevel = 0) {
+    const balance = this.getPlayerCrystals(playerId);
+    const goods = this.getShopGoods(playerId, realmLevel, vipLevel);
+
+    // 从DB检查今日领取状态
+    const record = db.prepare('SELECT last_claim_date FROM player_magic_crystal_daily WHERE player_id = ?').get(playerId);
+    const todayClaimed = record && record.last_claim_date === getDateString();
+
+    return {
+      balance,
+      todayClaimed,
+      dailyFree: MAGIC_CRYSTAL_CONFIG.DAILY_FREE.base + realmLevel * MAGIC_CRYSTAL_CONFIG.DAILY_FREE.realmBonus + (MAGIC_CRYSTAL_CONFIG.VIP_DAILY_BONUS[vipLevel] || 0),
+      shop: goods,
+    };
+  }
+}
+
+// 单例
+const magicCrystalSystem = new MagicCrystalSystem();
 
 // 获取日期字符串（每日重置用）
 function getDateString(date = new Date()) {
@@ -1311,6 +1833,43 @@ setInterval(() => {
 setTimeout(() => {
   spawnWorldBoss();
 }, 5000);
+
+// ============ 魔晶系统每日重置任务 ============
+// 每日凌晨重置限购次数和免费领取
+const lastResetDate = { date: getDateString(), weekday: new Date().getDay() };
+
+setInterval(() => {
+  const now = new Date();
+  const today = getDateString(now);
+  const weekday = now.getDay();
+
+  // 每日重置（0点）
+  if (today !== lastResetDate.date) {
+    Logger.info('[魔晶] 执行每日重置...');
+    // 重置所有玩家的每日限购
+    try {
+      db.prepare('DELETE FROM player_mc_purchase_records WHERE limit_type = ?').run('daily');
+      db.prepare('DELETE FROM player_magic_crystal_daily').run();
+      Logger.info('[魔晶] 每日重置完成');
+    } catch (e) {
+      Logger.error('[魔晶] 每日重置失败:', e.message);
+    }
+
+    // 每周重置（周一，weekday=1）
+    if (weekday === 1 && lastResetDate.weekday !== 1) {
+      Logger.info('[魔晶] 执行每周重置...');
+      try {
+        db.prepare('DELETE FROM player_mc_purchase_records WHERE limit_type IN (?, ?)').run('weekly', 'monthly');
+        Logger.info('[魔晶] 每周重置完成');
+      } catch (e) {
+        Logger.error('[魔晶] 每周重置失败:', e.message);
+      }
+    }
+
+    lastResetDate.date = today;
+    lastResetDate.weekday = weekday;
+  }
+}, 60000);
 
 // ============ 认证中间件 ============
 
@@ -6860,6 +7419,35 @@ app.get('/api/realm-suppression/realms', (req, res) => {
   }
 });
 
+// POST /api/realm-suppression/claim-reward - 领取封魔渊通关魔晶奖励
+// body: { player_id, realm_order, is_first_clear }
+app.post('/api/realm-suppression/claim-reward', (req, res) => {
+  try {
+    const { player_id, realm_order, is_first_clear } = req.body;
+    if (!player_id || realm_order === undefined) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+
+    const player = db.prepare('SELECT id, realm_level FROM player WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const reward = magicCrystalSystem.calcRealmSuppressionReward(realm_order, is_first_clear === true, is_first_clear === false);
+    magicCrystalSystem.modifyCrystals(player_id, reward, `realm_suppression_clear:order_${realm_order}`);
+
+    res.json({
+      success: true,
+      reward,
+      reason: is_first_clear ? '首次通关' : '每日首通',
+      remaining: magicCrystalSystem.getPlayerCrystals(player_id),
+    });
+  } catch (error) {
+    Logger.error('封魔渊奖励领取错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 玩家挑战另一个玩家 (PVP)
 app.post('/api/challenge/player', (req, res) => {
   try {
@@ -7612,6 +8200,116 @@ app.post('/api/arena/claim-reward', (req, res) => {
     }
   } catch (error) {
     Logger.error('领取奖励错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ 魔晶经济系统 API ============
+
+// GET /api/magic-crystal/info - 获取魔晶信息（余额+商店）
+app.get('/api/magic-crystal/info', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
+    }
+
+    const player = db.prepare('SELECT id, magic_crystals, realm_level, vip_level FROM player WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const info = magicCrystalSystem.getInfo(player_id, player.realm_level || 0, player.vip_level || 0);
+    res.json({ success: true, data: info });
+  } catch (error) {
+    Logger.error('获取魔晶信息错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/magic-crystal/claim-daily - 领取每日免费魔晶
+app.post('/api/magic-crystal/claim-daily', (req, res) => {
+  try {
+    const { player_id } = req.body;
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
+    }
+
+    const player = db.prepare('SELECT id, realm_level, vip_level FROM player WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const result = magicCrystalSystem.claimDailyFree(player_id, player.vip_level || 0, player.realm_level || 0);
+    res.json(result);
+  } catch (error) {
+    Logger.error('领取每日魔晶错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/magic-crystal/purchase - 购买魔晶商店商品
+app.post('/api/magic-crystal/purchase', (req, res) => {
+  try {
+    const { player_id, goods_id } = req.body;
+    if (!player_id || !goods_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+
+    const player = db.prepare('SELECT id, realm_level FROM player WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const result = magicCrystalSystem.purchase(player_id, goods_id, player.realm_level || 0);
+    res.json(result);
+  } catch (error) {
+    Logger.error('魔晶商店购买错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/magic-crystal/reward - 发放魔晶奖励（内部接口，供其他系统调用）
+// body: { player_id, amount, reason }
+app.post('/api/magic-crystal/reward', (req, res) => {
+  try {
+    const { player_id, amount, reason } = req.body;
+    if (!player_id || amount === undefined) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+
+    const success = magicCrystalSystem.modifyCrystals(player_id, amount, reason || 'system_reward');
+    if (success) {
+      res.json({ success: true, remaining: magicCrystalSystem.getPlayerCrystals(player_id) });
+    } else {
+      res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+  } catch (error) {
+    Logger.error('魔晶奖励发放错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/magic-crystal/calc-reward - 计算魔晶奖励（不发放，用于预览）
+// query: { type: 'world_boss'|'realm_suppression', damage?, realm_level?, boss_quality?, is_first_clear? }
+app.get('/api/magic-crystal/calc-reward', (req, res) => {
+  try {
+    const { type, damage, realm_level, boss_quality, is_first_clear } = req.query;
+    const rl = parseInt(realm_level) || 1;
+
+    let preview = 0;
+    if (type === 'world_boss') {
+      const d = parseInt(damage) || 0;
+      const quality = boss_quality || 'rare';
+      preview = magicCrystalSystem.calcWorldBossReward(d, quality, rl);
+    } else if (type === 'realm_suppression') {
+      const firstClear = is_first_clear === 'true';
+      preview = magicCrystalSystem.calcRealmSuppressionReward(rl, firstClear, !firstClear);
+    }
+
+    res.json({ success: true, preview });
+  } catch (error) {
+    Logger.error('魔晶奖励预览错误:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

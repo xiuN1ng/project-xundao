@@ -19,17 +19,17 @@ let arenaData = {
   players: {}
 };
 
-// 竞技场奖励
+// 竞技场奖励（赛季结束时发放）
 const arenaRewards = {
-  1: { diamonds: 500, title: '王者' },
-  2: { diamonds: 300, title: '钻石' },
-  3: { diamonds: 200, title: '铂金' },
-  4: { diamonds: 100, title: '黄金' },
-  5: { diamonds: 50, title: '白银' },
-  10: { diamonds: 30 },
-  20: { diamonds: 20 },
-  50: { diamonds: 10 },
-  100: { diamonds: 5 }
+  1: { diamonds: 500, title: '王者', magicCrystals: 100 },
+  2: { diamonds: 300, title: '钻石', magicCrystals: 50 },
+  3: { diamonds: 200, title: '铂金', magicCrystals: 30 },
+  4: { diamonds: 100, title: '黄金', magicCrystals: 20 },
+  5: { diamonds: 50, title: '白银', magicCrystals: 10 },
+  10: { diamonds: 30, magicCrystals: 5 },
+  20: { diamonds: 20, magicCrystals: 3 },
+  50: { diamonds: 10, magicCrystals: 2 },
+  100: { diamonds: 5, magicCrystals: 1 },
 };
 
 // 获取排行榜
