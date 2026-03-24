@@ -93,11 +93,12 @@
 #   - FishingPanel/MarriagePanel/MasterDisciplePanel/CaveDwellingPanel 已注册到Game.vue
 
 # ========== v3 新增 — 2026-03-24 ==========
-# P0-13 [F] ClanPanel.vue API源切换: sectApi → guildApi
-#   - guild.js 已有完整后端(create/join/leave/notice/skill/upgrade等)
-#   - 只需修改前端API调用来源，sect.js 的20+方法无需重复实现
-#   - 需测试: 创建宗门、加入、捐献、升级建筑、宗门技能
-#   - 负责人: [F] - 截止: 2026-03-25
+# ✅ P0-13 [F] ClanPanel.vue API源切换: sectApi → guildApi - 2026-03-24
+#   - 根组件: 手写 div.clan-panel → BasePanel（统一 header/tabs/close）
+#   - 按钮: 手写 style="background:linear-gradient" → BaseButton（primary/ghost/danger/gold）
+#   - Toast: 手写 showToast() → useToast() composable
+#   - API: handleDonate/Promote/Kick/Transfer → guildApi.donate/promoteMember/kickMember/transferLeader
+#   - 代码量: 717 行 → 684 行
 
 # v13.0 [F] WeekPanel.vue 重构为真实周卡入口 - 2026-03-24
 #   - 23行stub → 430行完整面板 (BasePanel + BaseButton + useToast)
