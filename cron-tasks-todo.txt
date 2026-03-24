@@ -109,3 +109,56 @@
   - server.js 注册 /api/welfare 路由  # 2026-03-24 完成
   - 修复月卡签到 404 问题  # 2026-03-24 完成
   - 截止: 2026-03-25
+
+=== 2026-03-25 v5 策划提案 - 后端任务 ===
+## P0 #102: 竞技场 ArenaSystem 初始化崩溃  # 2026-03-25 完成
+修复 routes/arena.js line 37-38:
+- 错误: ArenaSystem = new ArenaSystemClass()
+- 正确: const { arenaSystem } = require('../../services/arena_system'); ArenaSystem = arenaSystem;
+验证: curl http://localhost:3001/api/arena 应返回章节/排名数据
+
+## P0 #103: 修炼-玩家数据同步
+修改 routes/cultivation.js:
+1. POST /start: 消耗灵石 + 增加玩家exp + 同步cultivation值
+2. POST /breakthrough: 成功时更新 player.realm 和 player.level
+3. GET /: 返回实时 progress (value/cost*100)
+文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/cultivation.js
+
+## P0 #104: 抽奖系统重构
+重写 routes/lottery.js:
+1. 奖池改为真实物品ID（灵石/丹药/装备碎片）
+2. 单抽100灵石，十连900灵石，保底90抽
+3. 概率: 普通70%/精良25%/史诗4%/传说1%
+4. 抽奖结果写入 player_bag 表
+5. 添加 /history 端点
+文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/lottery.js
+
+## P1 #105: Welfare API 注册
+在 server.js 添加一行:
+app.use('/api/welfare', require('./game/welfare_api'));
+文件: /root/.openclaw/workspace/xundao-server/server/backend/server.js
+
+## P1 #106: /chapter/list 路由
+在 routes/chapter.js 添加:
+router.get('/list', (req,res) => { /* 复用 GET / 的逻辑 */ });
+文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/chapter.js
+
+## P1 #107: 挂载12个未注册路由
+在 server.js 逐一注册（优先顺序）:
+1. app.use('/api/tower', require('./routes/tower'));
+2. app.use('/api/abyss', require('./routes/abyss'));
+3. app.use('/api/marriage', require('./routes/marriage'));
+4. app.use('/api/master', require('./routes/master'));
+5. 其余: auction, cave, fishing, heart_demon, lingdao, secret, title
+文件: /root/.openclaw/workspace/xundao-server/server/backend/server.js
+
+## P1 #108: 章节HP数值重制
+重写 routes/chapter.js 的 chapters 数组:
+- 章节1-20: HP = 100 * 2^(n-1) (上限10000)
+- 章节21-50: HP = 10000 * 1.5^(n-20) (上限500000)
+- 章节51-80: HP = 500000 * 1.5^(n-50) (上限5000000)
+- 章节81-100: HP = 5000000 * 1.5^(n-80) (上限50000000)
+文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/chapter.js
+
+## 服务器重启
+kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/xundao-server/server/backend && node server.js &
