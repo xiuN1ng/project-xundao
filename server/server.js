@@ -3367,6 +3367,15 @@ try {
   Logger.info('福利API不可用:', e.message);
 }
 
+// ============ 灵石引导系统 API ============
+try {
+  const lingdaoApi = require('./backend/routes/lingdao');
+  app.use('/api/lingdao', lingdaoApi);
+  Logger.info('✅ 灵石引导系统 API 已加载');
+} catch (e) {
+  Logger.info('灵石引导API不可用:', e.message);
+}
+
 // ============ 每日任务 API ============
 try {
   const dailyQuestApi = require('./backend/routes/dailyQuest');
