@@ -74,6 +74,104 @@
         <button class="btn-primary" @click="activeTab = 'dungeons'">选择副本</button>
       </div>
       <div v-else class="battle-session">
+
+        <!-- 战斗Arena可视化区域 -->
+        <div class="battle-arena" :class="{ 'boss-arena': isBossLayer, 'star-rift-arena': currentSession.isStarRift }">
+          <!-- 背景层 -->
+          <div class="arena-bg">
+            <div class="arena-floor"></div>
+            <div class="arena-particles">
+              <div v-for="n in 12" :key="n" class="particle" :style="particleStyle(n)"></div>
+            </div>
+          </div>
+
+          <!-- 玩家区域 -->
+          <div class="arena-side player-side" :class="{ attacking: playerAttacking, hit: playerHit }">
+            <div class="combatant player">
+              <div class="combatant-avatar">🧘</div>
+              <div class="combatant-name">修仙者</div>
+              <div class="combatant-hp-bar">
+                <div class="chp-fill" :style="{ width: (playerBattleHp / playerBattleMaxHp * 100) + '%' }"></div>
+                <div class="chp-glow"></div>
+              </div>
+              <div class="combatant-hp-text">{{ Math.floor(playerBattleHp) }} / {{ playerBattleMaxHp }}</div>
+            </div>
+          </div>
+
+          <!-- VS 区域 -->
+          <div class="arena-center">
+            <div class="vs-text" v-if="!allEncountersDefeated">VS</div>
+            <div class="layer-badge" v-if="!isBossLayer">第{{ currentSession.currentLayer }}层</div>
+            <div class="layer-badge boss-badge" v-else>👹 BOSS</div>
+          </div>
+
+          <!-- 怪物区域 -->
+          <div class="arena-side monster-side">
+            <div v-for="(enc, idx) in currentSession.encounters" :key="enc.demonId"
+              class="combatant monster"
+              :class="{
+                'is-boss': enc.isBoss,
+                'defeated': enc.defeated,
+                'active-target': currentEncounterIndex === idx && !enc.defeated,
+                'attacked': attackedMonsterIdx === idx,
+                'hit-shake': attackedMonsterIdx === idx && !enc.defeated
+              }">
+              <div class="combatant-avatar" :class="{ 'avatar-boss': enc.isBoss }">
+                {{ enc.isBoss ? '👹' : '💀' }}
+              </div>
+              <div class="combatant-name" :style="{ color: enc.demonType.color }">{{ enc.demonType.name }}</div>
+              <div class="combatant-hp-bar" :class="{ 'boss-hp': enc.isBoss }">
+                <div class="mhp-fill" :class="{ 'boss-hp-fill': enc.isBoss }"
+                  :style="{ width: ((enc.currentHp || enc.hp) / enc.hp * 100) + '%' }"></div>
+                <div class="chp-glow" v-if="enc.isBoss"></div>
+              </div>
+              <div class="combatant-hp-text">{{ Math.floor(enc.currentHp || enc.hp) }} / {{ enc.hp }}</div>
+            </div>
+          </div>
+
+          <!-- 战斗飘字效果 -->
+          <TransitionGroup name="float-text" tag="div" class="float-text-container">
+            <div v-for="ft in floatTexts" :key="ft.id"
+              class="float-text"
+              :class="[ft.type, { 'crit-text': ft.isCrit }]"
+              :style="{ left: ft.x + 'px', top: ft.y + 'px' }">
+              {{ ft.isCrit ? '💥 ' : '' }}{{ ft.isHeal ? '+' : '-' }}{{ ft.value }}
+            </div>
+          </TransitionGroup>
+
+          <!-- 攻击动画效果 -->
+          <div v-if="playerAttacking" class="attack-effect attack-to-monster">
+            <div class="slash-line"></div>
+            <div class="slash-sparkles">
+              <span v-for="n in 5" :key="n" class="sparkle">✦</span>
+            </div>
+          </div>
+
+          <!-- 怪物反击效果 -->
+          <div v-if="monsterRetaliating" class="attack-effect attack-to-player">
+            <div class="retaliate-ball"></div>
+          </div>
+
+          <!-- 层数切换动画 -->
+          <Transition name="layer-transition">
+            <div v-if="showLayerTransition" class="layer-transition-overlay">
+              <div class="layer-transition-text">{{ transitionText }}</div>
+            </div>
+          </Transition>
+
+          <!-- 胜利动画 -->
+          <Transition name="victory-fade">
+            <div v-if="showVictory" class="victory-overlay">
+              <div class="victory-content">
+                <div class="victory-icon">🏆</div>
+                <div class="victory-text">通关成功！</div>
+                <div class="victory-sub">即将获得奖励...</div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <!-- 层数指示器 -->
         <div class="layer-indicator">
           <div class="layer-info">
             <span class="current-layer">第 {{ currentSession.currentLayer }} / {{ currentSession.maxLayers }} 层</span>
@@ -82,9 +180,12 @@
           <div class="layer-progress"><div class="layer-fill" :style="{ width: (currentSession.currentLayer / currentSession.maxLayers * 100) + '%' }"></div></div>
           <div class="boss-warning" v-if="isBossLayer">👹 BOSS层：{{ currentDungeon?.boss?.name }}</div>
         </div>
+
+        <!-- 怪物详细列表（折叠） -->
         <div class="encounters-list">
           <div v-for="(encounter, idx) in currentSession.encounters" :key="encounter.demonId"
-            class="encounter-card" :class="{ 'is-boss': encounter.isBoss, 'defeated': encounter.defeated, 'active': currentEncounterIndex === idx }">
+            class="encounter-card" :class="{ 'is-boss': encounter.isBoss, 'defeated': encounter.defeated, 'active': currentEncounterIndex === idx }"
+            @click="selectEncounter(idx)">
             <div class="encounter-header">
               <span class="demon-name" :style="{ color: encounter.demonType.color }">{{ encounter.isBoss ? '👹' : '💀' }} {{ encounter.demonType.name }}</span>
               <span class="layer-tag">第{{ encounter.layer }}层</span>
@@ -95,15 +196,17 @@
             </div>
             <div class="encounter-skill">🎯 {{ encounter.demonType.effect }}</div>
             <div v-if="encounter.defeated" class="defeated-overlay">✓ 已击败</div>
-            <div v-if="currentEncounterIndex === idx && battleLoading" class="battle-loading">⚔️ 战斗...</div>
           </div>
         </div>
+
         <!-- 攻击按钮 -->
         <div class="attack-area" v-if="!allEncountersDefeated">
           <button class="btn-attack" @click="attackCurrent" :disabled="battleLoading || currentEncounterIndex < 0">
             {{ battleLoading ? '⚔️ 战斗中...': '⚔️ 攻击当前心魔' }}
           </button>
-          <button class="btn-auto-attack" @click="autoAttack" :disabled="battleLoading">🔄 自动攻击</button>
+          <button class="btn-auto-attack" @click="autoAttack" :disabled="battleLoading">
+            {{ autoAttackInterval ? '⏸ 停止自动' : '🔄 自动攻击' }}
+          </button>
         </div>
         <!-- 下一层 -->
         <div v-if="allEncountersDefeated && !isBossLayer" class="next-layer-area">
@@ -240,6 +343,17 @@ const starRiftInfo = ref(null)
 const rankings = ref([])
 const currentSession = ref(null)
 const rewardModalData = ref({})
+const playerBattleHp = ref(1000)
+const playerBattleMaxHp = ref(1000)
+const playerAttacking = ref(false)
+const playerHit = ref(false)
+const monsterRetaliating = ref(false)
+const attackedMonsterIdx = ref(-1)
+const floatTexts = ref([])
+const showLayerTransition = ref(false)
+const transitionText = ref('')
+const showVictory = ref(false)
+let floatTextId = 0
 
 const difficultyName = { normal: '普通', hard: '困难', nightmare: '噩梦' }
 const rarityName = { base: '普通', rare: '稀有', epic: '史诗', legend: '传说' }
@@ -338,6 +452,11 @@ async function enterDungeon(dungeon) {
     if (data.success) {
       currentSession.value = data.session
       currentEncounterIndex.value = -1
+      // 初始化玩家战斗HP
+      playerBattleMaxHp.value = 1000 + playerLevel.value * 50
+      playerBattleHp.value = playerBattleMaxHp.value
+      // 层数切换动画
+      await triggerLayerTransition(data.session.currentLayer)
       activeTab.value = 'battle'
     } else {
       const idx = dungeons.value.findIndex(d => d.id === dungeon.id)
@@ -358,6 +477,7 @@ async function attackEncounter(idx) {
   stopAutoAttack()
   battleLoading.value = true
   currentEncounterIndex.value = idx
+  attackedMonsterIdx.value = idx
   try {
     const encounter = currentSession.value.encounters[idx]
     const data = await apiPost('/battle', {
@@ -366,7 +486,7 @@ async function attackEncounter(idx) {
       demonId: encounter.demonId,
       playerDamage: 100 + playerLevel.value * 5,
       playerDefense: 50 + playerLevel.value * 2,
-      playerHp: 1000 + playerLevel.value * 50
+      playerHp: playerBattleHp.value
     })
     if (data.success && data.battleResult) {
       const result = data.battleResult
@@ -375,15 +495,83 @@ async function attackEncounter(idx) {
       if (newHp <= 0 || result.victory) {
         currentSession.value.encounters[idx].defeated = true
       }
-      // 显示飘字效果（简化版）
-      showBattleFloatText(result, idx)
+      // 玩家攻击动画
+      await triggerAttackAnimation()
+      // 伤害飘字
+      spawnFloatText(result.damageDealt, false, result.crit, idx)
+      // 怪物反击
+      if (result.damageTaken > 0 && playerBattleHp.value > 0) {
+        await delay(600)
+        await triggerMonsterRetaliate(result.damageTaken)
+        playerBattleHp.value = Math.max(0, playerBattleHp.value - result.damageTaken)
+        spawnFloatText(result.damageTaken, false, false, -1, true)
+        if (playerBattleHp.value <= 0) {
+          await triggerDefeat()
+        }
+      }
     }
-  } finally { battleLoading.value = false }
+  } finally {
+    battleLoading.value = false
+    attackedMonsterIdx.value = -1
+  }
 }
 
-function showBattleFloatText(result, idx) {
-  // 简单的battle feedback
-  console.log(`Battle[${idx}]: dealt=${result.damageDealt}, taken=${result.damageTaken}, crit=${result.crit}, victory=${result.victory}`)
+function spawnFloatText(value, isHeal, isCrit, monsterIdx, isToPlayer) {
+  const id = ++floatTextId
+  let x = isToPlayer ? 80 : 240
+  let y = 30 + (monsterIdx % 3) * 55
+  floatTexts.value.push({ id, value: Math.floor(value), isHeal, isCrit, x, y, type: isCrit ? 'crit' : (isToPlayer ? 'damage-to-player' : 'damage-to-monster') })
+  setTimeout(() => {
+    floatTexts.value = floatTexts.value.filter(ft => ft.id !== id)
+  }, 1200)
+}
+
+async function triggerAttackAnimation() {
+  playerAttacking.value = true
+  await delay(300)
+  playerAttacking.value = false
+}
+
+async function triggerMonsterRetaliate(damage) {
+  monsterRetaliating.value = true
+  playerHit.value = true
+  await delay(400)
+  monsterRetaliating.value = false
+  playerHit.value = false
+}
+
+async function triggerLayerTransition(layer) {
+  transitionText.value = `第 ${layer} 层`
+  showLayerTransition.value = true
+  await delay(1500)
+  showLayerTransition.value = false
+}
+
+async function triggerDefeat() {
+  await delay(500)
+  activeTab.value = 'dungeons'
+  currentSession.value = null
+}
+
+function selectEncounter(idx) {
+  const enc = currentSession.value.encounters[idx]
+  if (!enc.defeated) currentEncounterIndex.value = idx
+}
+
+function particleStyle(n) {
+  const colors = ['#6c3ce9', '#764ba2', '#f093fb', '#667eea', '#ff6b35']
+  return {
+    left: Math.random() * 100 + '%',
+    animationDelay: (n * 0.4) + 's',
+    background: colors[n % colors.length],
+    width: (3 + (n % 4)) + 'px',
+    height: (3 + (n % 4)) + 'px',
+    opacity: 0.3 + (n % 3) * 0.2
+  }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 async function autoAttack() {
@@ -420,6 +608,7 @@ async function nextLayer() {
       currentSession.value.currentLayer = data.layer
       currentSession.value.encounters = data.encounters.map(e => ({ ...e, defeated: false, currentHp: e.hp }))
       currentEncounterIndex.value = -1
+      await triggerLayerTransition(data.layer)
     }
   } finally { loading.value = false }
 }
@@ -436,6 +625,9 @@ async function claimRewards() {
     if (data.success) {
       rewardModalData.value = data
       showRewardModal.value = true
+      showVictory.value = true
+      await delay(2000)
+      showVictory.value = false
       currentSession.value = null
       await loadStats()
       await loadConfig()
@@ -479,9 +671,12 @@ async function enterViaStarRift() {
     })
     if (data.success) {
       currentSession.value = data.session
+      playerBattleMaxHp.value = 1000 + playerLevel.value * 50
+      playerBattleHp.value = playerBattleMaxHp.value
       showStarRiftModal.value = false
       activeTab.value = 'battle'
       currentEncounterIndex.value = -1
+      await triggerLayerTransition(data.session.currentLayer)
       await loadConfig()
     }
   } finally { loading.value = false }
@@ -501,6 +696,295 @@ onMounted(() => loadConfig())
 .spirit-count { color: #ffd700; font-weight: bold; }
 .tab-content { animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ========== 战斗Arena动画区域 ========== */
+.battle-arena {
+  position: relative;
+  height: 180px;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  background: linear-gradient(180deg, rgba(15,10,40,0.9) 0%, rgba(30,15,60,0.85) 100%);
+  border: 1px solid rgba(102,126,234,0.3);
+  display: flex;
+  align-items: center;
+}
+.battle-arena.boss-arena {
+  border-color: rgba(255,107,53,0.6);
+  background: linear-gradient(180deg, rgba(40,10,10,0.9) 0%, rgba(60,20,20,0.85) 100%);
+  height: 200px;
+}
+.battle-arena.star-rift-arena {
+  border-color: rgba(107,95,255,0.6);
+  background: linear-gradient(180deg, rgba(20,10,60,0.9) 0%, rgba(40,20,80,0.85) 100%);
+}
+
+/* Arena 背景 */
+.arena-bg { position: absolute; inset: 0; pointer-events: none; }
+.arena-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(180deg, transparent 0%, rgba(102,126,234,0.08) 100%);
+  border-top: 1px solid rgba(102,126,234,0.15);
+}
+.arena-particles { position: absolute; inset: 0; }
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: float-particle 4s ease-in-out infinite;
+}
+@keyframes float-particle {
+  0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0.3; }
+  50% { transform: translateY(-20px) translateX(10px); opacity: 0.6; }
+}
+
+/* 玩家侧 */
+.arena-side { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; }
+.player-side { animation: none; }
+.player-side.attacking { animation: player-attack-pulse 0.3s ease-out; }
+.player-side.hit { animation: player-hit-shake 0.4s ease-out; }
+@keyframes player-attack-pulse {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(30px) scale(1.05); }
+  60% { transform: translateX(20px); }
+  100% { transform: translateX(0); }
+}
+@keyframes player-hit-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+/* Combatant (玩家/怪物) */
+.combatant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(102,126,234,0.2);
+  transition: transform 0.2s, border-color 0.2s;
+  min-width: 80px;
+}
+.combatant.active-target {
+  border-color: #667eea;
+  background: rgba(102,126,234,0.12);
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(102,126,234,0.3);
+}
+.combatant.is-boss {
+  border-color: rgba(255,107,53,0.5);
+  background: rgba(255,107,53,0.06);
+  min-width: 100px;
+}
+.combatant.defeated { opacity: 0.35; filter: grayscale(0.8); transform: scale(0.9); }
+.combatant.attacked { animation: monster-hit-shake 0.35s ease-out; }
+.combatant.hit-shake { animation: monster-hit-shake 0.35s ease-out; }
+@keyframes monster-hit-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(6px) rotate(1deg); }
+  40% { transform: translateX(-6px) rotate(-1deg); }
+  60% { transform: translateX(4px); }
+  80% { transform: translateX(-4px); }
+}
+.combatant-avatar { font-size: 32px; line-height: 1; }
+.avatar-boss { font-size: 40px; animation: boss-breathe 2s ease-in-out infinite; }
+@keyframes boss-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.combatant-name { font-size: 11px; font-weight: bold; color: #fff; text-align: center; }
+.combatant-hp-bar {
+  width: 70px;
+  height: 6px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.combatant-hp-bar.boss-hp { height: 8px; width: 90px; }
+.chp-fill, .mhp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4d4f, #ff7875);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  position: relative;
+}
+.boss-hp-fill { background: linear-gradient(90deg, #ff6b35, #ffa940); }
+.chp-glow { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 60%, rgba(255,255,255,0.15)); }
+.combatant-hp-text { font-size: 9px; color: #aaa; }
+
+/* 中央 VS 区域 */
+.arena-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  position: relative;
+  z-index: 2;
+}
+.vs-text { font-size: 18px; font-weight: bold; color: rgba(240,147,251,0.7); text-shadow: 0 0 10px rgba(240,147,251,0.4); }
+.layer-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(102,126,234,0.2);
+  border: 1px solid rgba(102,126,234,0.3);
+  border-radius: 10px;
+  color: #9fb3ff;
+}
+.layer-badge.boss-badge {
+  background: rgba(255,107,53,0.2);
+  border-color: rgba(255,107,53,0.4);
+  color: #ff9a76;
+  font-size: 11px;
+  animation: boss-pulse-badge 1.5s ease-in-out infinite;
+}
+@keyframes boss-pulse-badge {
+  0%, 100% { box-shadow: 0 0 0 rgba(255,107,53,0); }
+  50% { box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+}
+
+/* 飘字效果 */
+.float-text-container { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+.float-text {
+  position: absolute;
+  font-weight: bold;
+  font-size: 16px;
+  color: #ff4d4f;
+  text-shadow: 0 0 6px rgba(255,77,79,0.8), 0 1px 2px rgba(0,0,0,0.8);
+  animation: float-up 1.2s ease-out forwards;
+  white-space: nowrap;
+}
+.float-text.crit-text {
+  font-size: 22px;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255,215,0,0.8), 0 1px 2px rgba(0,0,0,0.8);
+}
+.float-text.damage-to-player {
+  color: #ff7875;
+  text-shadow: 0 0 6px rgba(255,120,120,0.8), 0 1px 2px rgba(0,0,0,0.8);
+}
+@keyframes float-up {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  20% { transform: translateY(-10px) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+}
+.float-text-enter-active { animation: float-up 1.2s ease-out forwards; }
+.float-text-leave-active { display: none; }
+
+/* 攻击动画效果 */
+.attack-effect {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 8;
+  pointer-events: none;
+}
+.attack-to-monster { left: 25%; }
+.attack-to-player { right: 25%; }
+.slash-line {
+  width: 60px;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #fff, #667eea, transparent);
+  border-radius: 2px;
+  animation: slash-anim 0.3s ease-out forwards;
+  box-shadow: 0 0 10px rgba(102,126,234,0.8);
+}
+@keyframes slash-anim {
+  0% { width: 0; opacity: 1; transform: scaleX(0); }
+  50% { width: 60px; opacity: 1; transform: scaleX(1); }
+  100% { width: 60px; opacity: 0; transform: scaleX(1); }
+}
+.slash-sparkles { display: flex; gap: 4px; margin-top: 4px; }
+.sparkle {
+  font-size: 12px;
+  color: #667eea;
+  animation: sparkle-pop 0.3s ease-out forwards;
+}
+@keyframes sparkle-pop {
+  0% { opacity: 1; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(0.8) translateY(-8px); }
+}
+.retaliate-ball {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff6b35, #ff4d4f);
+  box-shadow: 0 0 15px rgba(255,77,79,0.8);
+  animation: ball-fly 0.4s ease-out forwards;
+}
+@keyframes ball-fly {
+  0% { opacity: 1; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+/* 层数切换动画 */
+.layer-transition-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,5,30,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  border-radius: 16px;
+}
+.layer-transition-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: #f093fb;
+  text-shadow: 0 0 20px rgba(240,147,251,0.6);
+  animation: layer-text-pulse 1.5s ease-in-out;
+}
+@keyframes layer-text-pulse {
+  0% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1.1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+.layer-transition-enter-active { animation: layer-fade-in 0.3s ease; }
+.layer-transition-leave-active { animation: layer-fade-out 0.5s ease; }
+@keyframes layer-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes layer-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* 胜利动画 */
+.victory-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,5,30,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  border-radius: 16px;
+}
+.victory-content { text-align: center; }
+.victory-icon { font-size: 48px; animation: victory-bounce 0.8s ease-out; }
+@keyframes victory-bounce {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  50% { transform: scale(1.3) rotate(10deg); opacity: 1; }
+  70% { transform: scale(0.9) rotate(-5deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.victory-text { font-size: 24px; font-weight: bold; color: #ffd700; margin-top: 8px; text-shadow: 0 0 15px rgba(255,215,0,0.6); }
+.victory-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+.victory-fade-enter-active { animation: victory-appear 0.5s ease; }
+.victory-fade-leave-active { animation: victory-disappear 0.5s ease; }
+@keyframes victory-appear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes victory-disappear { from { opacity: 1; } to { opacity: 0; } }
+
+/* ========== 原有Battle区域 ========== */
 
 /* Star Rift Banner */
 .star-rift-banner { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #1a0a3e, #2d1b69); border: 1px solid #6b5fff; border-radius: 12px; padding: 12px; margin-bottom: 15px; cursor: pointer; transition: transform 0.2s; }

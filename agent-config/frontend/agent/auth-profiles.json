@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "profiles": {
+    "minimax-portal:default": {
+      "type": "oauth",
+      "provider": "minimax-portal",
+      "access": "sk-cp-WRWn6NeqOIIq-I3ijVwNxLdyyIoVW1pFscK00I2LIlf_3k4Rx8EtxCTBNTJ5h3wGUaKcoPSGF_pGl13QsxuAl7idKE2zhRWQDirvOrcwA8bT3-xcXriJmTo",
+      "refresh": "xWZEBpAsDCoqLWpslK9SlEdWqDFEOW63vMqyZHilAGQ=",
+      "expires": 1805361458548
+    },
+    "minimax-cn:default": {
+      "type": "api_key",
+      "provider": "minimax-cn",
+      "key": "sk-cp-WRWn6NeqOIIq-I3ijVwNxLdyyIoVW1pFscK00I2LIlf_3k4Rx8EtxCTBNTJ5h3wGUaKcoPSGF_pGl13QsxuAl7idKE2zhRWQDirvOrcwA8bT3-xcXriJmTo"
+    }
+  },
+  "lastGood": {
+    "minimax-portal": "minimax-portal:default"
+  },
+  "usageStats": {
+    "minimax-portal:default": {
+      "lastUsed": 1774318590299,
+      "errorCount": 0,
+      "lastFailureAt": 1773827646267
+    },
+    "minimax-cn:default": {
+      "errorCount": 0,
+      "lastUsed": 1772853754147
+    }
+  }
+}
