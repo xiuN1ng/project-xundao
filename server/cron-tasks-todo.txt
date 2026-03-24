@@ -36,3 +36,31 @@
   - resources.js updated with all image paths
   - Panel backgrounds updated in: CultivationPanel, ArenaPanel, DungeonPanel, TribulationPanel, AlchemyPanel, GongfaEffectsPanel, SpiritPanel, ClanPanel, SectWarPanel, BeastPanel
   - Git commit: 30184c0
+
+## P0 阻断级 - 2026-03-24
+
+- [ ] [P0-1] 创建 routes/abyssDungeon.js - 实现深渊副本API
+  - GET /api/abyssDungeon/config - 副本配置
+  - GET /api/abyssDungeon/list - 副本列表
+  - POST /api/abyssDungeon/enter - 入场
+  - POST /api/abyssDungeon/battle - 战斗
+  - POST /api/abyssDungeon/nextLayer - 下一层
+  - POST /api/abyssDungeon/starRift/enter - 星空裂缝
+  - 参考 realm_dungeon_system.js 和 resource_dungeon_system.js 数据结构
+  - 负责人: [B] - 截止: 2026-03-25
+
+- [ ] [P1-1] 成就触发系统完善 - 后端埋点
+  - 在升级/通关/获得装备等关键行为后端触发成就检测
+  - 参考 achievement_system.js (805行) 和 achievement_system_v2.js
+  - 负责人: [B] - 截止: 2026-03-26
+
+- [ ] [P1-4] 灵石初期数值调整
+  - 新账号初始灵石+500，灵气+200
+  - 战斗掉落提升50%: base_min: 5→8, base_max: 20→30
+  - 第一个副本通关额外+200灵石
+  - 负责人: [B] - 截止: 2026-03-25
+
+- [ ] [P2-3] 缺灵石引导系统
+  - 实现 resourceGuideSystem.js
+  - 灵石<100时触发引导
+  - 负责人: [B] - 截止: 2026-03-27
