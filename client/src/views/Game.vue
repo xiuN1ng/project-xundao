@@ -49,6 +49,7 @@
       <CaveDwellingPanel v-if="activeTab === 'cave-dwelling'" />
       <FishingCompetitionPanel v-if="showFishingCompetition" @close="showFishingCompetition=false" @go-fishing="switchToFishing" />
       <ArtSystemPanel v-if="activeTab === 'art'" />
+      <AscensionPrePanel v-if="showAscensionPre" @close="showAscensionPre=false" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -91,11 +92,13 @@ import MasterDisciplePanel from '../components/MasterDisciplePanel.vue'
 import CaveDwellingPanel from '../components/CaveDwellingPanel.vue'
 import FishingCompetitionPanel from '../components/FishingCompetitionPanel.vue'
 import ArtSystemPanel from '../components/ArtSystemPanel.vue'
+import AscensionPrePanel from '../components/AscensionPrePanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
 const activeTab = ref('cultivation')
 const showFishingCompetition = ref(false)
+const showAscensionPre = ref(false)
 
 function switchToFishing() {
   showFishingCompetition.value = false
@@ -108,6 +111,13 @@ window.showFishingCompetitionPanel = () => {
 }
 window.closeFishingCompetitionPanel = () => {
   showFishingCompetition.value = false
+}
+
+window.showAscensionPrePanel = () => {
+  showAscensionPre.value = true
+}
+window.closeAscensionPrePanel = () => {
+  showAscensionPre.value = false
 }
 
 const tabs = [

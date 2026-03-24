@@ -7,7 +7,8 @@
 const panelStates = {
   adventurePanel: false,
   equipmentEnhancePanel: false,
-  sealedRealmPanel: false
+  sealedRealmPanel: false,
+  ascensionPrePanel: false
 }
 
 // 面板显示事件总线（供外部监听）
@@ -62,6 +63,22 @@ function hideSealedRealmPanel() {
 }
 
 /**
+ * 显示飞升前置面板
+ */
+function showAscensionPrePanel() {
+  panelStates.ascensionPrePanel = true
+  emit('panel:ascension-pre', { action: 'show' })
+}
+
+/**
+ * 隐藏飞升前置面板
+ */
+function hideAscensionPrePanel() {
+  panelStates.ascensionPrePanel = false
+  emit('panel:ascension-pre', { action: 'hide' })
+}
+
+/**
  * 获取面板状态
  * @param {string} panelName - 面板名称
  */
@@ -97,6 +114,8 @@ export {
   hideEquipmentEnhancePanel,
   showSealedRealmPanel,
   hideSealedRealmPanel,
+  showAscensionPrePanel,
+  hideAscensionPrePanel,
   getPanelState,
   on,
   panelStates
