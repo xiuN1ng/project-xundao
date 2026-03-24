@@ -45,3 +45,42 @@
 [P0] [B] 魔晶经济系统 - 魔晶产出公式、商店兑换、每日重置
 [P0] [B] 封魔渊后端逻辑 - 副本生成、怪物数据加载、奖励发放
 [P0] [B] 封魔渊扫荡功能 - 已通关层扫荡、重复奖励发放
+
+# ========== v6 新增 P0 - 2026-03-24 ==========
+[P0] [B] TribulationPanel 语法修复 + 渡劫系统重建
+  - TribulationPanel.vue 第160行: 'react' → 'vue'  # 前端待修复
+  - 创建 routes/tribulation.js (GET /types, POST /attempt)  # 2026-03-24 后端完成
+  - server.js 注册 app.use('/api/tribulation', require('./routes/tribulation'))  # 2026-03-24 完成
+  - 参考 game/tribulation_system.js 实现与 cultivation 联动  # 2026-03-24 完成
+  - 截止: 2026-03-25
+
+[P0] [B] WorldBoss 三重断裂修复
+  - worldBoss.js 增加 router.get('/') 返回世界BOSS状态
+  - server.js: 检查路由注册（worldBoss vs worldBoss case）
+  - 确保 /api/worldboss 与 /api/worldBoss 都可访问
+  - 截止: 2026-03-25
+
+[P0] [B] AbyssDungeon 服务器错误修复
+  - 检查 game/abyss_storage.js 初始化问题
+  - 降级为纯内存 in-memory 存储（参考 worldboss.js）
+  - 确保 GET /api/abyssDungeon/list 返回楼层配置
+  - 截止: 2026-03-25
+
+[P0] [B] Rank API 根路径补充
+  - rank.js 增加 router.get('/', ...) 返回 {combat, level, wealth}
+  - 截止: 2026-03-25
+
+[P1] [B] Arena 竞技场后端重建
+  - 创建 routes/arena.js
+  - GET /ranks, GET /rank/:userId, GET /opponents/:userId, GET /records/:userId, POST /challenge
+  - server.js 注册 app.use('/api/arena', require('./routes/arena'))
+  - 截止: 2026-03-26
+
+[P1] [B] DailyQuest 路由根路径
+  - dailyQuest.js 增加 router.get('/')
+  - 截止: 2026-03-25
+
+[P1] [B] Welfare 路由检查
+  - 检查 server.js 中 welfare 相关路由状态
+  - 修复月卡签到 404 问题
+  - 截止: 2026-03-25
