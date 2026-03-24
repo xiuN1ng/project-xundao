@@ -35,6 +35,7 @@ app.use('/api/payment', require('./routes/payment'));
 // 游戏
 app.use('/api/player', require('./routes/player'));
 app.use('/api/cultivation', require('./routes/cultivation'));
+app.use('/api/tribulation', require('./routes/tribulation'));
 app.use('/api/sect', require('./routes/sect'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
@@ -93,5 +94,9 @@ app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}
 const achievementRouter = require('./routes/achievement');
 const playerModule = require('./routes/player');
 achievementRouter.setPlayerRef(playerModule._player);
+
+// 注入玩家数据引用到渡劫系统
+const tribulationRouter = require('./routes/tribulation');
+tribulationRouter.setPlayerRef(playerModule._player);
 
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
