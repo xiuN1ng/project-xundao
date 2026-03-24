@@ -3134,6 +3134,26 @@ try {
   Logger.info('世界BOSS API不可用:', e.message);
 }
 
+// 封魔渊/深渊副本 API（abyss.js 已实现完整逻辑）
+try {
+  const abyssApi = require('./backend/routes/abyss');
+  app.use('/api/abyss', abyssApi);
+  // 兼容 /api/abyssDungeon 别名
+  app.use('/api/abyssDungeon', abyssApi);
+  Logger.info('✅ 封魔渊系统 API 已加载');
+} catch (e) {
+  Logger.info('封魔渊 API 不可用:', e.message);
+}
+
+// 排行榜 API
+try {
+  const rankApi = require('./backend/routes/rank');
+  app.use('/api/rank', rankApi);
+  Logger.info('✅ 排行榜系统 API 已加载');
+} catch (e) {
+  Logger.info('排行榜 API 不可用:', e.message);
+}
+
 // 宗门战系统 API
 try {
   const sectWarApi = require('./src/sect_war');

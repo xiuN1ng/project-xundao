@@ -27,6 +27,16 @@ let rankData = {
   ]
 };
 
+// 获取所有排行榜概览（根路径）
+router.get('/', (req, res) => {
+  res.json({
+    combat: { type: 'combat', label: '战力榜', count: rankData.combat.length },
+    level: { type: 'level', label: '等级榜', count: rankData.level.length },
+    wealth: { type: 'wealth', label: '财富榜', count: rankData.wealth.length },
+    chapter: { type: 'chapter', label: '章节榜', count: rankData.chapter.length }
+  });
+});
+
 // 获取各类排行榜
 router.get('/:type', (req, res) => {
   const { type } = req.params;
