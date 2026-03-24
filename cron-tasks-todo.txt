@@ -49,6 +49,15 @@
 # === 待执行 ===
 # (v8.2/v8.3 已完成：封魔渊战斗动画 + 钓鱼系统)
 # 无尽塔已合并到下方已完成列表
+# ✅ [F] 装备套装UI - BasePanel + BaseButton + useToast + ProgressBar + 套装激活特效 + 收集度进度条 - 2026-03-24
+#   - EquipmentPanel.vue: BasePanel根组件 + BaseButton(强化/卸下/穿戴/筛选) + useToast(穿戴/卸下/强化/套装激活提示)
+#   - 套装收集度进度条: ProgressBar组件(每个套装的2件/4件进度 + 总套数进度头部)
+#   - 套装激活特效: watch activeSets检测激活阈值 + toast.reward提示 + CSS脉冲光环动画(set-activation-ring)
+#   - 套装技能说明: bonus-stats显示各件套属性数值(stats字段)
+#   - 修复: 删除对不存在 equipment_set_config.js 的import，改为本地 EQUIPMENT_SETS/RARITY_COLORS 定义
+#   - 代码量: 474行 → 900行 (含CSS: 967行)
+#   - API: equipmentApi.getSetConfig / getEquipped / get / equip / unequip / refine
+# [F] 宗门战UI - InterSectWarPanel.vue对接sect_war API + 宣战/对战流程
 
 # === 已完成 ===
 # xundao-frontend 任务队列
