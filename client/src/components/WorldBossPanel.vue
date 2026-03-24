@@ -1,27 +1,22 @@
 <template>
-  <div class="worldboss-panel">
-    <!-- 顶部标题栏 -->
-    <div class="panel-header">
-      <div class="title-section">
-        <span class="title-icon">💀</span>
-        <h2>世界BOSS</h2>
-        <span class="boss-status-badge" :class="bossActive ? 'active' : 'inactive'">
-          {{ bossActive ? '🔥 进行中' : '⚪ 未刷新' }}
-        </span>
-      </div>
-      <button class="close-btn" @click="$emit('close')">✕</button>
-    </div>
+  <BasePanel
+    variant="default"
+    @close="$emit('close')"
+  >
+    <template #title>
+      <span class="boss-panel-title">💀 世界BOSS</span>
+    </template>
+
+    <template #actions>
+      <span class="boss-status-badge" :class="bossActive ? 'active' : 'inactive'">
+        {{ bossActive ? '🔥 进行中' : '⚪ 未刷新' }}
+      </span>
+    </template>
 
     <!-- 加载状态 -->
     <div v-if="loading && !bossData" class="loading-state">
       <div class="loading-spinner">⚔️</div>
       <span>BOSS正在降临...</span>
-    </div>
-
-    <!-- 错误提示 -->
-    <div v-if="errorMsg" class="error-toast">
-      <span>⚠️ {{ errorMsg }}</span>
-      <button @click="errorMsg = ''">✕</button>
     </div>
 
     <!-- 世界BOSS区域 -->
@@ -32,35 +27,29 @@
           <div class="boss-avatar" :class="{ shaking: isAttacking }">👹</div>
           <div class="boss-crown" v-if="bossData.kills > 0">👑</div>
         </div>
-        
+
         <div class="boss-info">
           <div class="boss-name">{{ bossData.name || '上古凶兽' }}</div>
           <div class="boss-level">Lv.{{ bossData.level || 1 }} 世界BOSS</div>
-          
-          <!-- 血条 -->
-          <div class="boss-hp-container">
-            <div class="boss-hp-label">
-              <span>💀 HP</span>
-              <span class="hp-numbers">{{ formatNumber(bossCurrentHp) }} / {{ formatNumber(bossMaxHp) }}</span>
-            </div>
-            <div class="boss-hp-bar">
-              <div 
-                class="boss-hp-fill" 
-                :class="{ 'low': hpPercent < 30, 'critical': hpPercent < 10 }"
-                :style="{ width: Math.max(0, hpPercent) + '%' }"
-              ></div>
-              <div class="boss-hp-glow" :style="{ width: Math.max(0, hpPercent) + '%' }"></div>
-            </div>
-            <div class="boss-hp-percent">{{ hpPercent.toFixed(1) }}%</div>
-          </div>
-          
-          <!-- 愤怒条(血量低时触发) -->
-          <div class="enrage-bar" v-if="hpPercent < 30">
+
+          <!-- HP条 -->
+          <HPBar
+            :current="bossCurrentHp"
+            :max="bossMaxHp"
+            label="HP"
+            color="boss"
+          />
+
+          <!-- 愤怒状态 -->
+          <div class="enrage-bar" v-if="isEnraged">
             <div class="enrage-label">⚡ 狂暴中</div>
             <div class="enrage-effect">攻击力和防御力大幅提升！</div>
           </div>
         </div>
       </div>
+
+      <!-- 伤害飘字层 -->
+      <DamageNumber ref="dmgRef" />
 
       <!-- 操作区 -->
       <div class="action-section">
@@ -68,34 +57,25 @@
           <div class="damage-label">今日总伤害</div>
           <div class="damage-value">{{ formatNumber(bossData.damage || 0) }}</div>
         </div>
-        
-        <button 
-          class="attack-btn" 
-          :class="{ attacking: isAttacking, cooldown: attackCooldown }"
-          :disabled="isAttacking || attackCooldown"
+
+        <BaseButton
+          variant="danger"
+          size="lg"
+          :loading="isAttacking"
+          :disabled="attackCooldown"
           @click="attackBoss"
         >
           <span class="attack-icon">⚔️</span>
-          <span class="attack-text">{{ attackCooldown ? '冷却中...' : isAttacking ? '攻击中...' : '发起攻击' }}</span>
+          {{ attackCooldown ? '冷却中...' : isAttacking ? '攻击中...' : '发起攻击' }}
           <span class="attack-damage" v-if="lastDamage > 0">-{{ formatNumber(lastDamage) }}</span>
-        </button>
-        
+        </BaseButton>
+
         <div class="attack-tip" v-if="!attackCooldown && !isAttacking">
           点击攻击BOSS，每次攻击造成 {{ formatNumber(playerAttackPower) }} 伤害
         </div>
         <div class="attack-tip cooldown-tip" v-else-if="attackCooldown">
           {{ cooldownRemaining }}秒后可再次攻击
         </div>
-      </div>
-
-      <!-- 伤害飘字层 -->
-      <div class="damage-floats">
-        <div 
-          v-for="(float, idx) in damageFloats" 
-          :key="float.id"
-          class="damage-float"
-          :style="float.style"
-        >{{ float.text }}</div>
       </div>
     </div>
 
@@ -104,10 +84,10 @@
       <div class="section-title">
         <span>🏆</span> 伤害排行榜
       </div>
-      
+
       <div class="ranking-list" v-if="bossData?.rank?.length > 0">
-        <div 
-          v-for="(entry, idx) in bossData.rank" 
+        <div
+          v-for="(entry, idx) in bossData.rank"
           :key="entry.playerId || idx"
           class="rank-item"
           :class="{
@@ -133,7 +113,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="empty-ranking" v-else>
         <div class="empty-icon">📋</div>
         <div class="empty-text">暂无排名记录</div>
@@ -177,16 +157,22 @@
       <div class="no-boss-desc">每日12:00、18:00、21:00世界BOSS将出现</div>
       <div class="no-boss-tip">击杀BOSS可获得大量灵石和稀有道具</div>
     </div>
-  </div>
+  </BasePanel>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import BasePanel from './base/BasePanel.vue'
+import BaseButton from './base/BaseButton.vue'
+import HPBar from './common/HPBar.vue'
+import DamageNumber from './common/DamageNumber.vue'
+import { useToast } from './common/toastComposable.js'
+import { api } from '../core/api.js'
 
 const emit = defineEmits(['close', 'boss-killed'])
 
+const toast = useToast()
 const loading = ref(false)
-const errorMsg = ref('')
 const bossData = ref(null)
 const bossCurrentHp = ref(0)
 const bossMaxHp = ref(1)
@@ -194,12 +180,11 @@ const isAttacking = ref(false)
 const attackCooldown = ref(false)
 const cooldownRemaining = ref(0)
 const lastDamage = ref(0)
-const damageFloats = ref([])
 const playerAttackPower = ref(1000)
-const cooldownTimer = ref(null)
-const floatIdCounter = ref(0)
+const dmgRef = ref(null)
 
 let cooldownInterval = null
+let pollInterval = null
 
 function getPlayerId() {
   try {
@@ -259,26 +244,24 @@ const isEnraged = computed(() => hpPercent.value < 30)
 async function loadBossInfo() {
   loading.value = true
   try {
-    const res = await fetch('/api/worldboss')
-    const data = await res.json()
-    
-    if (data) {
+    const res = await api.get('/api/worldboss')
+
+    if (res) {
       bossData.value = {
-        ...data,
-        name: data.name || '上古凶兽',
-        level: data.level || 1,
-        kills: data.kills || 0,
-        rewards: data.rewards || {
+        ...res,
+        name: res.name || '上古凶兽',
+        level: res.level || 1,
+        kills: res.kills || 0,
+        rewards: res.rewards || {
           spiritStones: '???',
           experience: '???',
           item: '稀有装备'
         }
       }
-      bossMaxHp.value = data.hp || 1000000
-      bossCurrentHp.value = Math.max(0, (data.hp || 1000000) - (data.damage || 0))
-      playerAttackPower.value = data.playerAttack || 1000
-      
-      // Enrich rank with isMe flag
+      bossMaxHp.value = res.hp || 1000000
+      bossCurrentHp.value = Math.max(0, (res.hp || 1000000) - (res.damage || 0))
+      playerAttackPower.value = res.playerAttack || 1000
+
       if (bossData.value.rank && Array.isArray(bossData.value.rank)) {
         const myId = getPlayerId()
         bossData.value.rank = bossData.value.rank.map(e => ({
@@ -290,7 +273,7 @@ async function loadBossInfo() {
       }
     }
   } catch (err) {
-    errorMsg.value = '加载BOSS信息失败，请稍后重试'
+    toast.error('加载BOSS信息失败，请稍后重试')
     console.error('加载世界BOSS信息失败:', err)
   } finally {
     loading.value = false
@@ -299,26 +282,23 @@ async function loadBossInfo() {
 
 async function attackBoss() {
   if (isAttacking.value || attackCooldown.value) return
-  
+
   isAttacking.value = true
   const damage = playerAttackPower.value
-  
+
   try {
-    const res = await fetch('/api/worldboss/attack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ damage })
-    })
-    const data = await res.json()
-    
-    if (data.success) {
+    const res = await api.post('/api/worldboss/attack', { damage })
+
+    if (res.success) {
       lastDamage.value = damage
-      bossCurrentHp.value = Math.max(0, data.hp || 0)
-      
-      // Add damage float
-      addDamageFloat(damage)
-      
-      // Update my rank entry
+      bossCurrentHp.value = Math.max(0, res.hp || 0)
+
+      // DamageNumber飘字
+      if (dmgRef.value) {
+        dmgRef.value.crit(damage)
+      }
+
+      // 更新排名
       const myId = getPlayerId()
       const myName = getPlayerName()
       if (bossData.value) {
@@ -330,18 +310,17 @@ async function attackBoss() {
         } else {
           bossData.value.rank.push({ playerId: myId, name: myName, damage, isMe: true })
         }
-        // Re-sort by damage
         bossData.value.rank.sort((a, b) => (b.damage || 0) - (a.damage || 0))
         bossData.value.rank = bossData.value.rank.slice(0, 20)
       }
-      
-      // Check if boss killed
+
       if (bossCurrentHp.value <= 0) {
+        toast.success('BOSS已被击杀！')
         emit('boss-killed', { totalDamage: bossData.value?.damage })
       }
     }
   } catch (err) {
-    errorMsg.value = '攻击失败'
+    toast.error('攻击失败')
     console.error('攻击BOSS失败:', err)
   } finally {
     setTimeout(() => { isAttacking.value = false }, 600)
@@ -349,27 +328,10 @@ async function attackBoss() {
   }
 }
 
-function addDamageFloat(damage) {
-  const id = floatIdCounter.value++
-  const style = {
-    left: (30 + Math.random() * 40) + '%',
-    animationDelay: (Math.random() * 0.3) + 's'
-  }
-  damageFloats.value.push({
-    id,
-    text: `-${formatNumber(damage)}`,
-    style
-  })
-  
-  setTimeout(() => {
-    damageFloats.value = damageFloats.value.filter(f => f.id !== id)
-  }, 1500)
-}
-
 function startCooldown() {
   attackCooldown.value = true
   cooldownRemaining.value = 5
-  
+
   if (cooldownInterval) clearInterval(cooldownInterval)
   cooldownInterval = setInterval(() => {
     cooldownRemaining.value--
@@ -379,9 +341,6 @@ function startCooldown() {
     }
   }, 1000)
 }
-
-// Poll for boss HP updates
-let pollInterval = null
 
 onMounted(() => {
   loadBossInfo()
@@ -395,7 +354,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.worldboss-panel {
+/* Panel root — 保持WorldBoss暗红主题 */
+:deep(.base-panel) {
   background: linear-gradient(135deg, #1a0a0a 0%, #2d1010 50%, #1a0505 100%);
   border-radius: 16px;
   padding: 20px;
@@ -406,25 +366,9 @@ onUnmounted(() => {
   position: relative;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.title-section {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.title-icon { font-size: 28px; }
-
-.panel-header h2 {
+.boss-panel-title {
   font-size: 24px;
   font-weight: bold;
-  margin: 0;
   background: linear-gradient(135deg, #ff4444 0%, #ff8800 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -454,23 +398,6 @@ onUnmounted(() => {
   50% { opacity: 0.7; }
 }
 
-.close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.3s;
-}
-
-.close-btn:hover {
-  background: rgba(255, 0, 0, 0.3);
-  border-color: rgba(255, 0, 0, 0.5);
-}
-
 .loading-state {
   display: flex;
   align-items: center;
@@ -488,18 +415,6 @@ onUnmounted(() => {
 @keyframes shake {
   0%, 100% { transform: rotate(-5deg); }
   50% { transform: rotate(5deg); }
-}
-
-.error-toast {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(255, 71, 87, 0.2);
-  border: 1px solid rgba(255, 71, 87, 0.4);
-  border-radius: 10px;
-  color: #ff4757;
-  margin-bottom: 16px;
 }
 
 /* BOSS主区域 */
@@ -584,71 +499,6 @@ onUnmounted(() => {
   color: #888;
 }
 
-.boss-hp-container {
-  margin-top: 4px;
-}
-
-.boss-hp-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #aaa;
-  margin-bottom: 6px;
-}
-
-.hp-numbers {
-  color: #ff6b6b;
-  font-weight: bold;
-}
-
-.boss-hp-bar {
-  height: 24px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid rgba(255, 60, 60, 0.3);
-}
-
-.boss-hp-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ff4444, #ff6b6b, #ff8888);
-  border-radius: 12px;
-  transition: width 0.5s ease;
-  position: relative;
-}
-
-.boss-hp-fill.low {
-  background: linear-gradient(90deg, #ff6600, #ff8833);
-}
-
-.boss-hp-fill.critical {
-  background: linear-gradient(90deg, #cc0000, #ff3300);
-  animation: critical-pulse 0.5s ease infinite alternate;
-}
-
-@keyframes critical-pulse {
-  from { opacity: 0.8; }
-  to { opacity: 1; }
-}
-
-.boss-hp-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent);
-  border-radius: 12px;
-  transition: width 0.5s ease;
-}
-
-.boss-hp-percent {
-  text-align: right;
-  font-size: 12px;
-  color: #ff6b6b;
-  margin-top: 4px;
-}
-
 .enrage-bar {
   margin-top: 8px;
   padding: 8px 12px;
@@ -697,62 +547,6 @@ onUnmounted(() => {
   text-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
 }
 
-.attack-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 48px;
-  background: linear-gradient(135deg, #cc0000, #ff4400, #cc0000);
-  border: 3px solid rgba(255, 100, 0, 0.6);
-  border-radius: 40px;
-  color: #fff;
-  font-size: 18px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-  overflow: hidden;
-}
-
-.attack-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.5s;
-}
-
-.attack-btn:hover:not(:disabled)::before {
-  transform: translateX(100%);
-}
-
-.attack-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 6px 25px rgba(255, 50, 0, 0.6);
-  border-color: rgba(255, 150, 0, 0.8);
-}
-
-.attack-btn:disabled {
-  background: linear-gradient(135deg, #444, #333);
-  border-color: rgba(255, 255, 255, 0.1);
-  cursor: not-allowed;
-}
-
-.attack-btn.attacking {
-  animation: attack-pulse 0.4s ease;
-}
-
-@keyframes attack-pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.95); }
-  100% { transform: scale(1); }
-}
-
-.attack-btn.cooldown {
-  opacity: 0.7;
-}
-
 .attack-icon { font-size: 22px; }
 
 .attack-damage {
@@ -774,34 +568,6 @@ onUnmounted(() => {
 
 .attack-tip.cooldown-tip {
   color: #ff8800;
-}
-
-/* 伤害飘字 */
-.damage-floats {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100%;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.damage-float {
-  position: absolute;
-  top: 30%;
-  font-size: 24px;
-  font-weight: bold;
-  color: #ff4400;
-  text-shadow: 0 0 10px rgba(255, 0, 0, 0.8), 2px 2px 0 rgba(0,0,0,0.5);
-  animation: floatUp 1.2s ease forwards;
-  white-space: nowrap;
-}
-
-@keyframes floatUp {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  50% { opacity: 1; transform: translateY(-40px) scale(1.2); }
-  100% { opacity: 0; transform: translateY(-80px) scale(0.8); }
 }
 
 /* 排行榜 */
