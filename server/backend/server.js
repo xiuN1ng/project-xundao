@@ -87,6 +87,10 @@ app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));
 app.use('/api/marriage', require('./routes/marriage'));
 app.use('/api/master', require('./routes/master'));
+app.use('/api/tower', require('./routes/tower'));
+app.use('/api/heartDemon', require('./routes/heart_demon'));
+app.use('/api/lingdao', require('./routes/lingdao'));
+app.use('/api/welfare', require('../game/welfare_api'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 

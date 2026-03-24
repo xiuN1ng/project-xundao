@@ -141,6 +141,20 @@ router.get('/', (req, res) => {
   res.json({ chapters: chaptersWithStars, progress: { currentChapter: progress.currentChapter, totalKills: progress.totalKills } });
 });
 
+// 获取章节列表 (兼容 /list 路径)
+router.get('/list', (req, res) => {
+  const userId = parseInt(req.query.userId) || 1;
+  const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
+  
+  const chaptersWithStars = chapters.map(ch => ({
+    ...ch,
+    stars: progress.stars?.[ch.id] || 0,
+    unlocked: ch.id <= progress.currentChapter
+  }));
+  
+  res.json({ chapters: chaptersWithStars, progress: { currentChapter: progress.currentChapter, totalKills: progress.totalKills } });
+});
+
 // 获取特定章节
 router.get('/:id', (req, res) => {
   const chapterId = parseInt(req.params.id);
