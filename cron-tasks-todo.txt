@@ -16,7 +16,15 @@
 #   - 日历展示: 月份切换 + 签到历史标记(✓/补) + 可选日期补签
 #   - 代码量: 749行 → 578行
 [F] 宗门战UI - InterSectWarPanel.vue对接sect_war API + 宣战/对战流程
-[F] 成就达成反馈UI - AchievementEffectPanel.vue弹窗动画 + 特效 + 音效
+# ✅ [F] 成就达成反馈UI - AchievementEffectPanel.vue - 2026-03-24
+#   - Options API → <script setup> Composition API
+#   - 粒子系统: 手写20个emoji粒子 → 40个粒子 + CSS动画(旋转/爆炸/缩放)
+#   - 品质分级: tier系统 (bronze/silver/gold/purple/mythic) + 各自配色+光晕
+#   - 屏幕闪光: 全屏flash效果(根据品质变色)
+#   - 徽章动画: 弹出动画 + 旋转光环 + mythic额外呼吸光效
+#   - 音效: 升级和弦 + 5音符琶音 + 6音符加强版(传说级)
+#   - 过渡动画: Teleport + Vue Transition (popIn/popOut)
+#   - 关闭按钮 + 自动dismiss + 手动dismiss
 
 # === P2 体验优化 ===
 [F] 深渊副本新手指引 - 解锁提示弹窗 + 图文攻略 + 境界要求说明
