@@ -8,14 +8,20 @@
 # ✅ [F] 周卡/月卡面板重构 - 支付对接 + 领取逻辑 + 状态持久化 (WeekPanel.vue 已用BasePanel)
 
 # === P1 重要功能 ===
-[F] 装备套装UI - 套装tab + 收集度进度条 + 激活特效 + 套装技能说明
+# ✅ [F] 装备套装UI - 套装tab + 收集度进度条 + 激活特效 + 套装技能说明 (已实现于EquipmentPanel.vue)
 # ✅ [F] 每日签到对接后端 - 2026-03-24
 #   - SignIn.vue: Options API → <script setup> + BasePanel + BaseButton + useToast
 #   - welfareApi: 新增 (getConfig/getSignInStatus/claimSignIn/claimCumulative/makeupSign/getHistory)
 #   - 后端: welfare_storage.js 新增 makeupSign() + welfare_api.js 新增 POST /api/welfare/makeup-sign
 #   - 日历展示: 月份切换 + 签到历史标记(✓/补) + 可选日期补签
 #   - 代码量: 749行 → 578行
-[F] 宗门战UI - InterSectWarPanel.vue对接sect_war API + 宣战/对战流程
+# ✅ [F] 宗门战UI - InterSectWarPanel.vue对接sect_war API + 宣战/对战流程 - 2026-03-24
+#   - 根组件: 手写 div.intersect-war-panel → BasePanel（统一 header/tabs/close）
+#   - 按钮: 手写 style="background:linear-gradient" → BaseButton (danger/success/sm)
+#   - Toast: showMessage() → useToast() composable
+#   - API: fetch('/api/sect-war/...') → sectWarApi.declareWar/getInfo()
+#   - sectWarApi: 新增到 core/api.js (getInfo/declareWar/getZones/getRanking等)
+#   - 代码量: 1965 行 → 800 行 (-59%)
 # ✅ [F] 成就达成反馈UI - AchievementEffectPanel.vue - 2026-03-24
 #   - Options API → <script setup> Composition API
 #   - 粒子系统: 手写20个emoji粒子 → 40个粒子 + CSS动画(旋转/爆炸/缩放)
@@ -27,7 +33,9 @@
 #   - 关闭按钮 + 自动dismiss + 手动dismiss
 
 # === P2 体验优化 ===
-[F] 深渊副本新手指引 - 解锁提示弹窗 + 图文攻略 + 境界要求说明
+# ✅ [F] 深渊副本新手指引 - 攻略弹窗 + 副本类型说明 + 通关技巧 + 境界要求进度条 (AbyssDungeonPanel.vue) - 2026-03-24
+#   - AbyssDungeonPanel.vue: BasePanel + BaseButton + abyssDungeonApi 重构
+#   - 新增: 攻略按钮 + 弹窗(副本类型/通关技巧/境界进度条)
 [F] 渡劫灵根加成UI优化 - 推荐天劫算法 + 灵根×天劫相性表 + 预览动画
 
 # === 已完成 ===
