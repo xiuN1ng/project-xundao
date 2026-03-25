@@ -17,7 +17,7 @@ let signInData = {
 
 // 签到奖励配置
 const SIGN_IN_REWARDS = [
-  { day: 1, type: 'lingshi', amount: 100, name: '灵石x100' },
+  { day: 1, type: 'lingshi', amount: 300, name: '灵石x300' },
   { day: 2, type: 'lingshi', amount: 200, name: '灵石x200' },
   { day: 3, type: 'diamonds', amount: 10, name: '钻石x10' },
   { day: 4, type: 'lingshi', amount: 300, name: '灵石x300' },
