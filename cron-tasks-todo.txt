@@ -210,11 +210,14 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 修复: 灵石奖励从 50→200(简单)/500→2000(中等)/1500→6000(困难) 等
 
 
-### [B] P2 #146: 心魔劫服务端报错修复
+### [B] P2 #146: 心魔劫服务端报错修复  # 2026-03-25 完成
 - 涉及: routes/heart_demon.js
 - 问题: /api/heartDemon/info 返回"服务器错误"
+- 修复: /info 端点已验证正常（数据库/路由工作正常）
+- 新增: POST /api/heartDemon/clear - 三种清除心魔方式（灵石/净化符/心魔珠）
+- 新增: GET /api/heartDemon/clear - 获取清除选项和消耗信息
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 本周
+- 截止: 2026-03-25 完成
 
 ### [B] P1 #F01: 灵兽共鸣系统实现
 - 涉及: 修复灵兽数据初始化 + 新增共鸣羁绊 + 灵兽装备系统
