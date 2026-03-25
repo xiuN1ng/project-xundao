@@ -364,24 +364,16 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 状态: 新增 P1
 
 # ===== 2026-03-26 新增任务 =====
-[P0-B-2026-03-26-1] 修复 shop.js DB 路径：从 ../../data/game.db 改为 ../data/game.db
-- 文件: server/backend/routes/shop.js 第7-11行
-- 问题: shop.js 连接 xundao-server/server/data/game.db (DB1)，但主服务器用 backend/data/game.db (DB2)
-- DB1 的 shop_items 表有 vip_level_req 列，DB2 有 vip_level_required 列
-- getShopItems() 查询 vip_level_required 在 DB1 中不存在 → query 失败 → 只返回 3 件 hardcoded 商品
+[P0-B-2026-03-26-1] 修复 shop.js DB 路径：从 ../../data/game.db 改为 ../data/game.db  # 2026-03-26 完成
+- 文件: server/backend/routes/shop.js 第6-7行
 - 修复: const DATA_DIR = path.join(__dirname, '..', 'data');  // 指向 backend/data/
-- 状态: P0 新增
-[P0-B-2026-03-26-2] 修复 lottery.js DB 路径：同 shop.js
+[P0-B-2026-03-26-2] 修复 lottery.js DB 路径：同 shop.js  # 2026-03-26 完成
 - 文件: server/backend/routes/lottery.js 第10-11行
-- 问题: 同样连接 DB1，导致 lottery/draw 报"灵石不足"（找不到 player）
 - 修复: 路径改为 ../data/game.db 统一使用 DB2
-- 状态: P0 新增
-[P0-B-2026-03-26-3] 创建 Users 表玩家初始化或修复 auth 注册流程
-- 文件: server/backend/routes/auth.js, server.js
-- 问题: backend/data/game.db 的 Users 表为空（0行），/api/player 返回 mock 内存数据
-- 服务器重启后所有玩家数据归零，shop/buy、lottery/draw 等均报"玩家不存在"
-- 修复: auth.js 注册时写入 Users 表；或服务器启动时初始化默认 player
-- 状态: P0 新增
+[P0-B-2026-03-26-3] 创建 Users 表玩家初始化或修复 auth 注册流程  # 2026-03-26 完成
+- 文件: server/backend/routes/auth.js
+- auth.js 重写为DB持久化：注册/登录均写入 Users 表 + 初始化 player 表
+- loadUsersFromDB() 启动时从DB恢复用户到内存
 [P1-B-2026-03-26-4] worldBoss.js 添加根路径 router.get('/') 处理函数
 - 文件: server/backend/routes/worldBoss.js
 - 问题: server.js 注册了 /api/worldBoss，但 worldBoss.js 无根路径处理，/api/worldBoss 和 /api/worldboss 均 404
