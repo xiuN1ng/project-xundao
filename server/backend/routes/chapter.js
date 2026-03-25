@@ -245,4 +245,58 @@ router.get('/story/:id', (req, res) => {
   res.json({ id: chapter.id, name: chapter.name, desc: chapter.desc, reward: chapter.reward });
 });
 
+// 章节战斗 (兼容前端 /chapter/battle 路由)
+router.post('/battle', (req, res) => {
+  // 直接映射到 /complete 的逻辑
+  const { userId, chapterId, kills, time } = req.body;
+  
+  userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
+  const progress = userProgress[userId];
+  
+  const chapter = chapters.find(c => c.id === chapterId);
+  
+  // 计算星级
+  let stars = 1;
+  if (kills >= chapter.enemies) stars = 3;
+  else if (kills >= chapter.enemies * 0.7) stars = 2;
+  
+  progress.stars = progress.stars || {};
+  progress.stars[chapterId] = Math.max(progress.stars[chapterId] || 0, stars);
+  
+  // 开启下一章
+  if (chapterId === progress.currentChapter && chapterId < 100) {
+    progress.currentChapter = chapterId + 1;
+  }
+  
+  progress.totalKills += kills;
+  
+  // 计算评价
+  const evaluation = stars === 3 ? '完美通关' : stars === 2 ? '顺利通关' : '艰难通关';
+  
+  // 成就触发
+  let achievementResults = [];
+  if (achievementTrigger) {
+    try {
+      achievementResults = achievementTrigger.onChapterClear(userId, chapterId);
+    } catch (e) {
+      console.error('[chapter] 成就触发失败:', e.message);
+    }
+  }
+  
+  res.json({ 
+    success: true, 
+    reward: chapter.reward, 
+    exp: chapter.exp,
+    stars,
+    evaluation,
+    nextChapter: chapterId < 100 ? chapterId + 1 : null,
+    achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
+      id: a.id,
+      name: a.name,
+      desc: a.desc,
+      reward: a.reward
+    })) : undefined
+  });
+});
+
 module.exports = router;

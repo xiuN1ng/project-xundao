@@ -729,4 +729,179 @@ router.post('/claim-reward', (req, res) => {
   }
 });
 
+// ============================================
+// GET /info - 获取玩家竞技场信息 (当前排名/积分/赛季)
+// ============================================
+router.get('/info', (req, res) => {
+  try {
+    const userId = parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
+    
+    if (!db || !ArenaSystem) {
+      return res.json({
+        success: true,
+        data: { arenaPoints: 0, rankId: 0, rankName: '凡人', seasonDaysLeft: 7 }
+      });
+    }
+    
+    const arenaPlayer = getOrCreateArenaPlayer(userId);
+    if (!arenaPlayer) {
+      return res.status(404).json({ success: false, error: '竞技场数据不存在' });
+    }
+    
+    const currentRank = ArenaSystem.getRank(arenaPlayer.rank_id);
+    const seasonInfo = ArenaSystem.getSeasonRemainingTime();
+    const dailyInfo = checkAndResetDailyChallenges(userId);
+    const vipLevel = db.prepare('SELECT vip_level FROM player WHERE id = ?').get(userId)?.vip_level || 0;
+    const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    
+    // 计算排名
+    const totalPlayers = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 1;
+    const higherRanked = db.prepare('SELECT COUNT(*) as count FROM arena_player WHERE arena_points > ?').get(arenaPlayer.arena_points).count || 0;
+    const ranking = higherRanked + 1;
+    
+    res.json({
+      success: true,
+      data: {
+        arenaPoints: arenaPlayer.arena_points,
+        rankId: arenaPlayer.rank_id,
+        rankName: arenaPlayer.rank_name,
+        rankIcon: currentRank.icon,
+        winCount: arenaPlayer.win_count,
+        loseCount: arenaPlayer.lose_count,
+        totalBattles: arenaPlayer.total_battles,
+        highestRank: arenaPlayer.highest_rank,
+        highestRankId: arenaPlayer.highest_rank_id,
+        ranking,
+        totalPlayers,
+        winRate: arenaPlayer.total_battles > 0
+          ? Math.round((arenaPlayer.win_count / arenaPlayer.total_battles) * 100)
+          : 0,
+        daily: {
+          challengesUsed: dailyInfo.challengesUsed,
+          remainingChallenges: Math.max(0, dailyChallengeCount - dailyInfo.challengesUsed),
+          maxChallenges: dailyChallengeCount
+        },
+        season: {
+          currentSeasonId: ArenaSystem.getCurrentSeasonId(),
+          remainingDays: seasonInfo.remainingDays
+        }
+      }
+    });
+  } catch (error) {
+    Logger.error('GET /info 错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// POST /match - 匹配对手
+// ============================================
+router.post('/match', (req, res) => {
+  try {
+    const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+    
+    if (!db || !ArenaSystem) {
+      return res.status(500).json({ success: false, error: '系统不可用' });
+    }
+    
+    // 检查每日挑战次数
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+    
+    const dailyInfo = checkAndResetDailyChallenges(userId);
+    const vipLevel = player.vip_level || 0;
+    const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    
+    if (dailyInfo.challengesUsed >= dailyChallengeCount) {
+      return res.status(400).json({
+        success: false,
+        error: '今日挑战次数已用完',
+        remainingChallenges: 0,
+        maxChallenges: dailyChallengeCount
+      });
+    }
+    
+    // 获取当前积分
+    const arenaPlayer = getOrCreateArenaPlayer(userId);
+    if (!arenaPlayer) {
+      return res.status(500).json({ success: false, error: '竞技场数据不存在' });
+    }
+    
+    const currentPoints = arenaPlayer.arena_points;
+    const range = 2000;
+    
+    // 查找附近对手
+    let opponents = db.prepare(`
+      SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+             ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
+      FROM player p
+      JOIN arena_player ap ON p.id = ap.player_id
+      WHERE ap.player_id != ?
+        AND ap.arena_points BETWEEN ? AND ?
+      ORDER BY ABS(ap.arena_points - ?) ASC
+      LIMIT 5
+    `).all(userId, Math.max(0, currentPoints - range), currentPoints + range, currentPoints);
+    
+    // 补充高排名玩家
+    if (opponents.length < 3) {
+      const topOpponents = db.prepare(`
+        SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+               ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
+        FROM player p
+        JOIN arena_player ap ON p.id = ap.player_id
+        WHERE ap.player_id != ?
+        ORDER BY ap.arena_points DESC
+        LIMIT ?
+      `).all(userId, 3 - opponents.length);
+      
+      const existingIds = new Set(opponents.map(o => o.id));
+      for (const top of topOpponents) {
+        if (!existingIds.has(top.id)) {
+          opponents.push(top);
+          existingIds.add(top.id);
+        }
+        if (opponents.length >= 3) break;
+      }
+    }
+    
+    if (opponents.length === 0) {
+      return res.json({ success: false, error: '暂无可用对手' });
+    }
+    
+    // 随机选择一个对手
+    const target = opponents[Math.floor(Math.random() * opponents.length)];
+    const targetRank = ArenaSystem.getRank(target.rank_id);
+    
+    res.json({
+      success: true,
+      data: {
+        matchId: Date.now(),
+        opponent: {
+          playerId: target.id,
+          username: target.username,
+          level: target.level,
+          realmLevel: target.realm_level,
+          combatPower: target.combat_power || 0,
+          arenaPoints: target.arena_points,
+          rankId: target.rank_id,
+          rankName: target.rank_name,
+          rankIcon: targetRank.icon,
+          winCount: target.win_count,
+          loseCount: target.lose_count,
+          winRate: (target.win_count + target.lose_count) > 0
+            ? Math.round((target.win_count / (target.win_count + target.lose_count)) * 100)
+            : 0
+        },
+        remainingChallenges: dailyChallengeCount - dailyInfo.challengesUsed,
+        maxChallenges: dailyChallengeCount
+      }
+    });
+  } catch (error) {
+    Logger.error('POST /match 错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

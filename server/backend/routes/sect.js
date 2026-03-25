@@ -194,4 +194,66 @@ router.post('/building/upgrade', (req, res) => {
   }
 });
 
+// 宗门列表 (分页)
+router.get('/list', (req, res) => {
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  
+  const path = require('path');
+  const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+  const DB_PATH = path.join(DATA_DIR, 'game.db');
+  
+  let db;
+  try {
+    const Database = require('better-sqlite3');
+    db = new Database(DB_PATH);
+  } catch (e) {
+    db = null;
+  }
+  
+  if (db) {
+    try {
+      const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
+      const sects = db.prepare('SELECT * FROM sects ORDER BY level DESC, member_count DESC LIMIT ? OFFSET ?').all(parseInt(limit), offset);
+      
+      return res.json({
+        success: true,
+        sects: sects.map(s => ({
+          id: s.id,
+          name: s.name,
+          level: s.level,
+          icon: s.icon || '🏯',
+          memberCount: s.member_count || 0,
+          leaderName: s.leader_name || '掌门',
+          rank: s.rank || 0,
+          contribution: s.total_contribution || 0
+        })),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / parseInt(limit))
+        }
+      });
+    } catch (e) {
+      console.log('[sect] list查询:', e.message);
+    }
+  }
+  
+  // 无数据库时返回模拟数据
+  const mockSects = [
+    { id: 1, name: '青云宗', level: 8, icon: '🏯', memberCount: 128, leaderName: '掌门真人', rank: 1, contribution: 580000 },
+    { id: 2, name: '天机阁', level: 7, icon: '🔮', memberCount: 95, leaderName: '天机子', rank: 2, contribution: 420000 },
+    { id: 3, name: '万剑宗', level: 6, icon: '⚔️', memberCount: 156, leaderName: '剑圣', rank: 3, contribution: 380000 },
+    { id: 4, name: '玄冰宫', level: 5, icon: '❄️', memberCount: 72, leaderName: '冰皇', rank: 4, contribution: 290000 },
+    { id: 5, name: '烈火门', level: 4, icon: '🔥', memberCount: 88, leaderName: '火神', rank: 5, contribution: 210000 }
+  ];
+  
+  res.json({
+    success: true,
+    sects: mockSects.slice(offset, offset + parseInt(limit)),
+    pagination: { page: parseInt(page), limit: parseInt(limit), total: mockSects.length, totalPages: 1 }
+  });
+});
+
 module.exports = router;
