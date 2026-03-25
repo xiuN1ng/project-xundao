@@ -207,8 +207,21 @@ function calculateBeastStats(beast, beastTemplate) {
 
 // 导出初始化函数供主服务器调用
 function initBeastDatabase(database) {
+  // 如果已初始化，检查是否是相同数据库；否则覆盖（支持多进程场景）
+  if (db && db !== database) {
+    // 不同数据库实例，比较路径
+    const existingPath = db.name || '';
+    const newPath = database.name || '';
+    if (existingPath !== newPath) {
+      console.log('[beast_api] initBeastDatabase: switching db from', existingPath, 'to', newPath);
+      db = database;
+    } else {
+      console.log('[beast_api] initBeastDatabase skipped (same db already initialized)');
+    }
+    return;
+  }
+  if (db) return; // already initialized with same db
   db = database;
-  // 灵兽模板表
   db.exec(`
     CREATE TABLE IF NOT EXISTS beast_templates (
       id TEXT PRIMARY KEY,
@@ -1328,7 +1341,6 @@ router.post('/release', (req, res) => {
     // 传说及以上返还道具
     let reward = null;
     if (['legendary', 'mythical'].includes(beastTemplate.quality)) {
-      // 这里可以添加返还逻辑，暂时记录
       reward = { type: 'beast_soul', amount: 1 };
     }
     
@@ -1349,9 +1361,402 @@ router.post('/release', (req, res) => {
   }
 });
 
+// ============ 灵兽共鸣羁绊系统 API ============
+
+// 共鸣羁绊配置
+const RESONANCE_BONDS = {
+  // 双兽羁绊
+  'wind_fire': {
+    id: 'wind_fire',
+    name: '风火轮',
+    beasts: ['spirit_fox', 'thunder_eagle'],
+    type: 'dual',
+    bonus: { stat: 'speed', value: 0.20, name: '速度+20%' },
+    description: '狐狸与雷鹰共鸣，风火交融',
+    icon: '🌀'
+  },
+  'earth_mountain': {
+    id: 'earth_mountain',
+    name: '山河之势',
+    beasts: ['flame_qilin', 'divine_dragon'],
+    type: 'dual',
+    bonus: { stat: 'atk', value: 0.25, name: '攻击+25%' },
+    description: '火麒麟与神龙共鸣，山河震动',
+    icon: '⛰️'
+  },
+  'ice_thunder': {
+    id: 'ice_thunder',
+    name: '冰雷九天',
+    beasts: ['ice_phoenix', 'thunder_eagle'],
+    type: 'dual',
+    bonus: { stat: 'crit_rate', value: 0.15, name: '暴击率+15%' },
+    description: '冰凤凰与雷鹰共鸣，冰雷交加',
+    icon: '⚡'
+  },
+  // 四圣羁绊
+  'four_sages': {
+    id: 'four_sages',
+    name: '四圣灵',
+    beasts: ['divine_dragon', 'flame_qilin', 'ice_phoenix', 'chaos_beast'],
+    type: 'quad',
+    bonus: { stat: 'all', value: 0.15, name: '全属性+15%' },
+    description: '青龙、白虎、朱雀、玄武四圣灵齐聚',
+    icon: '🐲'
+  },
+  'sky_dragon': {
+    id: 'sky_dragon',
+    name: '苍穹之龙',
+    beasts: ['divine_dragon', 'thunder_eagle', 'spirit_fox'],
+    type: 'triple',
+    bonus: { stat: 'hp', value: 0.30, name: '生命+30%' },
+    description: '龙鹰狐三者共鸣，苍穹之主',
+    icon: '🌌'
+  },
+  'phoenix_reborn': {
+    id: 'phoenix_reborn',
+    name: '凤凰涅槃',
+    beasts: ['ice_phoenix', 'flame_qilin', 'chaos_beast'],
+    type: 'triple',
+    bonus: { stat: 'atk', value: 0.35, name: '攻击+35%' },
+    description: '冰火混沌三兽共鸣，涅槃重生',
+    icon: '🔥'
+  },
+  'beast_king': {
+    id: 'beast_king',
+    name: '万兽之王',
+    beasts: ['chaos_beast', 'divine_dragon', 'ice_phoenix', 'flame_qilin', 'thunder_eagle', 'spirit_fox'],
+    type: 'six',
+    bonus: { stat: 'all', value: 0.25, name: '全属性+25%' },
+    description: '六大灵兽齐聚，万兽朝拜',
+    icon: '👑'
+  }
+};
+
+// 初始化共鸣羁绊表
+function initResonanceTables() {
+  if (!db) {
+    console.error('[beast_api] initResonanceTables: db not initialized!');
+    return;
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_resonance_bonds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      bond_id TEXT NOT NULL,
+      activated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, bond_id)
+    )
+  `);
+  
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_beast_equipment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      beast_id INTEGER NOT NULL,
+      gear_id TEXT,
+      mount_id TEXT,
+      accessory_id TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, beast_id)
+    )
+  `);
+}
+
+// 获取玩家共鸣羁绊信息
+router.get('/resonance/bonds', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
+    }
+    
+    // 获取玩家拥有的灵兽
+    console.log('[resonance] player_id:', player_id, 'type:', typeof player_id);
+    console.log('[resonance] db open:', !!db, 'db name:', db ? (db.name || 'unknown') : 'null');
+    const ownedBeasts = db.prepare(
+      'SELECT beast_id FROM player_beasts WHERE player_id = ?'
+    ).all(player_id);
+    console.log('[resonance] ownedBeasts:', JSON.stringify(ownedBeasts));
+    const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
+    
+    // 获取已激活的羁绊
+    let activatedBonds;
+    try {
+      activatedBonds = db.prepare('SELECT bond_id FROM player_resonance_bonds WHERE player_id = ?').all(player_id);
+    } catch(e) {
+      console.error('[beast_api] resonance query error:', e.message);
+      return res.status(500).json({ success: false, error: e.message });
+    }
+    const activatedSet = new Set(activatedBonds.map(b => b.bond_id));
+    
+    // 计算所有羁绊状态
+    const bonds = Object.entries(RESONANCE_BONDS).map(([id, bond]) => {
+      const owned = bond.beasts.filter(b => ownedIds.has(b));
+      const canActivate = owned.length === bond.beasts.length;
+      const isActive = activatedSet.has(id);
+      
+      return {
+        id: bond.id,
+        name: bond.name,
+        type: bond.type,
+        beasts: bond.beasts.map(bid => {
+          const template = BEAST_DATA[bid];
+          return {
+            id: bid,
+            name: template?.name || bid,
+            icon: template?.icon || '❓',
+            owned: ownedIds.has(bid)
+          };
+        }),
+        bonus: bond.bonus,
+        description: bond.description,
+        icon: bond.icon,
+        owned_count: owned.length,
+        required_count: bond.beasts.length,
+        can_activate: canActivate,
+        is_active: isActive
+      };
+    });
+    
+    // 计算当前激活的共鸣加成
+    let totalBonus = { atk: 0, hp: 0, speed: 0, crit_rate: 0 };
+    for (const bondId of activatedSet) {
+      const bond = RESONANCE_BONDS[bondId];
+      if (bond) {
+        if (bond.bonus.stat === 'all') {
+          totalBonus.atk += bond.bonus.value;
+          totalBonus.hp += bond.bonus.value;
+          totalBonus.speed += bond.bonus.value;
+          totalBonus.crit_rate += bond.bonus.value;
+        } else if (bond.bonus.stat === 'atk') {
+          totalBonus.atk += bond.bonus.value;
+        } else if (bond.bonus.stat === 'hp') {
+          totalBonus.hp += bond.bonus.value;
+        } else if (bond.bonus.stat === 'speed') {
+          totalBonus.speed += bond.bonus.value;
+        } else if (bond.bonus.stat === 'crit_rate') {
+          totalBonus.crit_rate += bond.bonus.value;
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        bonds,
+        active_bonds: Array.from(activatedSet),
+        total_bonus: {
+          atk_bonus: Math.round(totalBonus.atk * 100) / 100,
+          hp_bonus: Math.round(totalBonus.hp * 100) / 100,
+          speed_bonus: Math.round(totalBonus.speed * 100) / 100,
+          crit_rate_bonus: Math.round(totalBonus.crit_rate * 100) / 100
+        }
+      }
+    });
+  } catch (error) {
+    console.error('获取共鸣羁绊失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 激活共鸣羁绊
+router.post('/resonance/activate', (req, res) => {
+  try {
+    const { player_id, bond_id } = req.body;
+    
+    if (!player_id || !bond_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const bond = RESONANCE_BONDS[bond_id];
+    if (!bond) {
+      return res.status(404).json({ success: false, error: '羁绊不存在' });
+    }
+    
+    // 检查是否已激活
+    const existing = db.prepare(
+      'SELECT * FROM player_resonance_bonds WHERE player_id = ? AND bond_id = ?'
+    ).get(player_id, bond_id);
+    if (existing) {
+      return res.status(400).json({ success: false, error: '该羁绊已经激活' });
+    }
+    
+    // 检查玩家是否拥有所有需要的灵兽
+    const ownedBeasts = db.prepare(
+      'SELECT beast_id FROM player_beasts WHERE player_id = ?'
+    ).all(player_id);
+    const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
+    
+    const missingBeasts = bond.beasts.filter(b => !ownedIds.has(b));
+    if (missingBeasts.length > 0) {
+      const missingNames = missingBeasts.map(bid => BEAST_DATA[bid]?.name || bid).join('、');
+      return res.status(400).json({ 
+        success: false, 
+        error: `缺少灵兽: ${missingNames}，无法激活此羁绊` 
+      });
+    }
+    
+    // 激活羁绊
+    db.prepare(
+      'INSERT INTO player_resonance_bonds (player_id, bond_id) VALUES (?, ?)'
+    ).run(player_id, bond_id);
+    
+    res.json({
+      success: true,
+      message: `🎉 激活【${bond.name}】成功！${bond.bonus.name}`,
+      data: {
+        bond_id: bond.id,
+        bond_name: bond.name,
+        bonus: bond.bonus,
+        icon: bond.icon
+      }
+    });
+  } catch (error) {
+    console.error('激活共鸣羁绊失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 取消激活共鸣羁绊
+router.post('/resonance/deactivate', (req, res) => {
+  try {
+    const { player_id, bond_id } = req.body;
+    
+    if (!player_id || !bond_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    const bond = RESONANCE_BONDS[bond_id];
+    
+    db.prepare(
+      'DELETE FROM player_resonance_bonds WHERE player_id = ? AND bond_id = ?'
+    ).run(player_id, bond_id);
+    
+    res.json({
+      success: true,
+      message: `已取消【${bond?.name || bond_id}】羁绊`,
+      data: { bond_id }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ 灵兽装备 API (基于SQLite) ============
+
+// 获取灵兽装备信息（使用SQLite）
+router.get('/equipment/info', (req, res) => {
+  try {
+    const { player_id, beast_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
+    }
+    
+    // 获取玩家灵兽
+    const playerBeast = beast_id
+      ? db.prepare('SELECT pb.*, bt.name, bt.icon FROM player_beasts pb JOIN beast_templates bt ON pb.beast_id = bt.id WHERE pb.id = ? AND pb.player_id = ?').get(beast_id, player_id)
+      : db.prepare('SELECT pb.*, bt.name, bt.icon FROM player_beasts pb JOIN beast_templates bt ON pb.beast_id = bt.id WHERE pb.player_id = ? AND pb.is_active = 1').get(player_id);
+    
+    if (!playerBeast) {
+      return res.json({ success: true, data: { equipped: null, bonuses: {} } });
+    }
+    
+    // 获取装备
+    const equipped = db.prepare(
+      'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
+    ).get(player_id, playerBeast.id);
+    
+    res.json({
+      success: true,
+      data: {
+        beast: {
+          id: playerBeast.id,
+          name: playerBeast.name,
+          icon: playerBeast.icon,
+          level: playerBeast.level
+        },
+        equipped: equipped ? {
+          gear: equipped.gear_id,
+          mount: equipped.mount_id,
+          accessory: equipped.accessory_id
+        } : { gear: null, mount: null, accessory: null }
+      }
+    });
+  } catch (error) {
+    console.error('获取灵兽装备失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 装备灵兽装备
+router.post('/equipment/equip', (req, res) => {
+  try {
+    const { player_id, beast_id, slot, equipment_id } = req.body;
+    
+    if (!player_id || !beast_id || !slot) {
+      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    }
+    
+    if (!['gear', 'mount', 'accessory'].includes(slot)) {
+      return res.status(400).json({ success: false, error: '无效的装备槽位' });
+    }
+    
+    // 获取玩家灵兽
+    const playerBeast = db.prepare(
+      'SELECT * FROM player_beasts WHERE id = ? AND player_id = ?'
+    ).get(beast_id, player_id);
+    if (!playerBeast) {
+      return res.status(404).json({ success: false, error: '灵兽不存在' });
+    }
+    
+    // 初始化装备记录
+    const existing = db.prepare(
+      'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
+    ).get(player_id, beast_id);
+    
+    if (!existing) {
+      db.prepare(
+        'INSERT INTO player_beast_equipment (player_id, beast_id) VALUES (?, ?)'
+      ).run(player_id, beast_id);
+    }
+    
+    // 更新装备
+    const colMap = { gear: 'gear_id', mount: 'mount_id', accessory: 'accessory_id' };
+    const col = colMap[slot];
+    
+    if (equipment_id) {
+      db.prepare(`UPDATE player_beast_equipment SET ${col} = ?, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_id = ?`).run(equipment_id, player_id, beast_id);
+    } else {
+      db.prepare(`UPDATE player_beast_equipment SET ${col} = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_id = ?`).run(player_id, beast_id);
+    }
+    
+    // 获取更新后的装备
+    const updated = db.prepare(
+      'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
+    ).get(player_id, beast_id);
+    
+    res.json({
+      success: true,
+      message: equipment_id ? `装备成功` : '卸下成功',
+      data: {
+        gear: updated.gear_id,
+        mount: updated.mount_id,
+        accessory: updated.accessory_id
+      }
+    });
+  } catch (error) {
+    console.error('装备灵兽失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 导出模块
 module.exports = router;
 module.exports.initBeastDatabase = initBeastDatabase;
+module.exports.initResonanceTables = initResonanceTables;
 module.exports.BEAST_DATA = BEAST_DATA;
 module.exports.BEAST_QUALITY = BEAST_QUALITY;
 module.exports.BEAST_FOODS = BEAST_FOODS;
+module.exports.RESONANCE_BONDS = RESONANCE_BONDS;

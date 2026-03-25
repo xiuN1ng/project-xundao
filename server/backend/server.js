@@ -13,6 +13,25 @@ try {
   console.log('婚姻系统存储层初始化:', e.message);
 }
 
+// 初始化灵兽系统数据库表
+try {
+  const Database = require('better-sqlite3');
+  const dbPath = path.join(__dirname, 'data', 'game.db');
+  const beastDb = new Database(dbPath);
+  
+  const beastApi = require('../game/beast_api');
+  if (beastApi.initBeastDatabase) {
+    beastApi.initBeastDatabase(beastDb);
+    console.log('✓ 灵兽系统数据库初始化成功');
+  }
+  if (beastApi.initResonanceTables) {
+    beastApi.initResonanceTables();
+    console.log('✓ 灵兽共鸣羁绊表初始化成功');
+  }
+} catch (e) {
+  console.log('灵兽系统初始化:', e.message);
+}
+
 const app = express();
 const PORT = 3001;
 
@@ -39,7 +58,8 @@ app.use('/api/tribulation', require('./routes/tribulation'));
 app.use('/api/sect', require('./routes/sect'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
-app.use('/api/beast', require('./routes/beast'));
+app.use('/api/beast', require('../game/beast_api'));
+app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/equipment', require('./routes/equipment'));

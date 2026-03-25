@@ -4,36 +4,53 @@
  * 功能：穿戴、卸下、强化、合成
  */
 
+/**
+ * 灵兽装备系统 API (独立SQLite版本)
+ * 灵兽装备：装备、坐骑、饰品
+ * 功能：穿戴、卸下、强化、合成
+ */
+
 const express = require('express');
 const router = express.Router();
+const Database = require('better-sqlite3');
+const path = require('path');
 
-// 延迟加载依赖
-let beastStorage, playerStorage, playerEquipmentStorage;
+// 独立数据库连接
 let db = null;
 
-function loadDependencies() {
-  if (!beastStorage) {
-    try {
-      // 尝试从现有模块加载
-      const beastApi = require('./beast_api');
-      if (beastApi && beastApi.db) {
-        db = beastApi.db;
-      }
-    } catch (e) {
-      console.error('加载beast_api失败:', e.message);
-    }
+function getDb() {
+  if (!db) {
+    const dbPath = path.join(__dirname, '..', 'backend', 'data', 'game.db');
+    db = new Database(dbPath);
+    initTables();
   }
+  return db;
+}
+
+function initTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS beast_equipment_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      equipment_id TEXT NOT NULL,
+      enhance_level INTEGER DEFAULT 0,
+      obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, equipment_id)
+    )
+  `);
   
-  if (!playerStorage) {
-    try {
-      const storage = require('./storage');
-      playerStorage = storage.playerStorage;
-    } catch (e) {
-      console.error('加载storage失败:', e.message);
-    }
-  }
-  
-  return true;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS beast_equipment_equipped (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      beast_db_id INTEGER NOT NULL,
+      gear_id TEXT,
+      mount_id TEXT,
+      accessory_id TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, beast_db_id)
+    )
+  `);
 }
 
 // ============ 灵兽装备配置数据 ============
@@ -357,34 +374,28 @@ function getEquipmentStats(equipment) {
 // ============ API 路由 ============
 
 // 获取灵兽装备列表
-router.get('/list', async (req, res) => {
+router.get('/list', (req, res) => {
   try {
-    loadDependencies();
-    
+    const database = getDb();
     const { player_id, type, quality } = req.query;
     
-    // 获取玩家数据
-    let player = null;
-    if (player_id && playerStorage) {
-      player = await playerStorage.get(player_id);
+    // 获取玩家背包中的装备
+    let ownedIds = new Set();
+    if (player_id) {
+      const owned = database.prepare('SELECT equipment_id FROM beast_equipment_inventory WHERE player_id = ?').all(player_id);
+      ownedIds = new Set(owned.map(e => e.equipment_id));
     }
     
     // 获取装备模板列表
     let equipmentList = Object.values(BEAST_EQUIPMENT_DATA);
     
-    // 按类型筛选
     if (type) {
       equipmentList = equipmentList.filter(e => e.type === type);
     }
     
-    // 按稀有度筛选
     if (quality) {
       equipmentList = equipmentList.filter(e => e.quality === quality);
     }
-    
-    // 获取玩家背包中的装备
-    const inventory = player?.beast_equipment?.inventory || [];
-    const inventoryIds = new Set(inventory.map(e => e.id));
     
     const result = equipmentList.map(equip => {
       const qual = EQUIPMENT_QUALITY[equip.quality];
@@ -403,15 +414,14 @@ router.get('/list', async (req, res) => {
         crit_bonus: equip.crit_bonus,
         description: equip.description,
         level_req: equip.level_req,
-        owned: inventoryIds.has(equip.id)
+        owned: ownedIds.has(equip.id)
       };
     });
     
     res.json({ 
       success: true, 
       data: result,
-      inventory_count: inventory.length,
-      inventory: inventory.map(getEquipmentStats).filter(Boolean)
+      inventory_count: ownedIds.size
     });
   } catch (error) {
     console.error('获取灵兽装备列表失败:', error);
@@ -420,83 +430,50 @@ router.get('/list', async (req, res) => {
 });
 
 // 穿戴装备
-router.post('/equip', async (req, res) => {
+router.post('/equip', (req, res) => {
   try {
-    loadDependencies();
+    const database = getDb();
+    const { player_id, beast_db_id, equipment_id } = req.body;
     
-    const { player_id, beast_index, equipment_id } = req.body;
-    
-    if (!player_id || beast_index === undefined || !equipment_id) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    if (!player_id || !beast_db_id || !equipment_id) {
+      return res.status(400).json({ success: false, error: '缺少必要参数 player_id/beast_db_id/equipment_id' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
+    // 检查装备是否在背包中
+    const invRecord = database.prepare(
+      'SELECT * FROM beast_equipment_inventory WHERE player_id = ? AND equipment_id = ?'
+    ).get(player_id, equipment_id);
     
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
-    
-    // 初始化装备数据
-    const equipData = initPlayerBeastEquipment(player);
-    
-    // 查找装备
-    const equipIndex = equipData.inventory.findIndex(e => e.id === equipment_id);
-    if (equipIndex === -1) {
+    if (!invRecord) {
       return res.status(404).json({ success: false, error: '装备不存在于背包中' });
     }
     
-    const equipment = equipData.inventory[equipIndex];
-    const template = BEAST_EQUIPMENT_DATA[equipment.id];
-    
+    const template = BEAST_EQUIPMENT_DATA[equipment_id];
     if (!template) {
       return res.status(404).json({ success: false, error: '装备模板不存在' });
     }
     
-    // 检查灵兽等级是否满足需求
-    const beast = player.beasts?.[beast_index];
-    if (!beast) {
-      return res.status(404).json({ success: false, error: '灵兽不存在' });
+    // 初始化装备记录
+    const existingEquip = database.prepare(
+      'SELECT * FROM beast_equipment_equipped WHERE player_id = ? AND beast_db_id = ?'
+    ).get(player_id, beast_db_id);
+    
+    if (!existingEquip) {
+      database.prepare(
+        'INSERT INTO beast_equipment_equipped (player_id, beast_db_id) VALUES (?, ?)'
+      ).run(player_id, beast_db_id);
     }
     
-    if (beast.level < template.level_req) {
-      return res.status(400).json({ success: false, error: `灵兽等级不足，需要 ${template.level_req} 级` });
-    }
-    
-    // 确保该灵兽的装备槽位存在
-    if (!equipData.equipped[beast_index]) {
-      equipData.equipped[beast_index] = { gear: null, mount: null, accessory: null };
-    }
-    
-    // 检查装备类型槽位
-    const slot = template.type;
-    const currentEquipped = equipData.equipped[beast_index][slot];
-    
-    // 卸下当前装备（如果有）
-    if (currentEquipped) {
-      equipData.inventory.push(currentEquipped);
-    }
-    
-    // 穿戴新装备
-    equipData.equipped[beast_index][slot] = equipment;
-    equipData.inventory.splice(equipIndex, 1);
-    
-    // 保存玩家数据
-    if (playerStorage) {
-      await playerStorage.set(player_id, player);
-    }
+    // 更新装备槽位
+    const slotCol = { gear: 'gear_id', mount: 'mount_id', accessory: 'accessory_id' }[template.type];
+    database.prepare(
+      `UPDATE beast_equipment_equipped SET ${slotCol} = ?, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_db_id = ?`
+    ).run(equipment_id, player_id, beast_db_id);
     
     res.json({
       success: true,
       message: `成功穿戴 ${template.name}`,
-      equipped: {
-        gear: getEquipmentStats(equipData.equipped[beast_index].gear),
-        mount: getEquipmentStats(equipData.equipped[beast_index].mount),
-        accessory: getEquipmentStats(equipData.equipped[beast_index].accessory)
-      }
+      data: { equipment_id, slot: template.type, beast_db_id }
     });
   } catch (error) {
     console.error('穿戴装备失败:', error);
@@ -505,60 +482,42 @@ router.post('/equip', async (req, res) => {
 });
 
 // 卸下装备
-router.post('/unequip', async (req, res) => {
+router.post('/unequip', (req, res) => {
   try {
-    loadDependencies();
+    const database = getDb();
+    const { player_id, beast_db_id, slot } = req.body;
     
-    const { player_id, beast_index, slot } = req.body;
-    
-    if (!player_id || beast_index === undefined || !slot) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    if (!player_id || !beast_db_id || !slot) {
+      return res.status(400).json({ success: false, error: '缺少必要参数 player_id/beast_db_id/slot' });
     }
     
-    // 验证槽位
     if (!['gear', 'mount', 'accessory'].includes(slot)) {
       return res.status(400).json({ success: false, error: '无效的装备槽位' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
+    const slotCol = { gear: 'gear_id', mount: 'mount_id', accessory: 'accessory_id' }[slot];
     
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
+    // 获取当前装备
+    const equipped = database.prepare(
+      'SELECT * FROM beast_equipment_equipped WHERE player_id = ? AND beast_db_id = ?'
+    ).get(player_id, beast_db_id);
     
-    // 初始化装备数据
-    const equipData = initPlayerBeastEquipment(player);
-    
-    // 检查灵兽装备槽位
-    if (!equipData.equipped[beast_index] || !equipData.equipped[beast_index][slot]) {
+    if (!equipped || !equipped[slotCol]) {
       return res.status(404).json({ success: false, error: '该槽位没有装备' });
     }
     
-    // 卸下装备
-    const unequipped = equipData.equipped[beast_index][slot];
-    equipData.inventory.push(unequipped);
-    equipData.equipped[beast_index][slot] = null;
+    const unequippedId = equipped[slotCol];
+    const template = BEAST_EQUIPMENT_DATA[unequippedId];
     
-    // 保存玩家数据
-    if (playerStorage) {
-      await playerStorage.set(player_id, player);
-    }
-    
-    const template = BEAST_EQUIPMENT_DATA[unequipped.id];
+    // 清除装备槽位
+    database.prepare(
+      `UPDATE beast_equipment_equipped SET ${slotCol} = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_db_id = ?`
+    ).run(player_id, beast_db_id);
     
     res.json({
       success: true,
       message: `成功卸下 ${template?.name || '装备'}`,
-      unequipped: getEquipmentStats(unequipped),
-      equipped: {
-        gear: getEquipmentStats(equipData.equipped[beast_index].gear),
-        mount: getEquipmentStats(equipData.equipped[beast_index].mount),
-        accessory: getEquipmentStats(equipData.equipped[beast_index].accessory)
-      }
+      data: { unequipped_id: unequippedId, slot }
     });
   } catch (error) {
     console.error('卸下装备失败:', error);
@@ -567,39 +526,44 @@ router.post('/unequip', async (req, res) => {
 });
 
 // 获取灵兽装备信息
-router.get('/info', async (req, res) => {
+router.get('/info', (req, res) => {
   try {
-    loadDependencies();
+    const database = getDb();
+    const { player_id, beast_db_id } = req.query;
     
-    const { player_id, beast_index } = req.query;
-    
-    if (!player_id || beast_index === undefined) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
+    // 获取装备信息
+    const equipped = beast_db_id
+      ? database.prepare('SELECT * FROM beast_equipment_equipped WHERE player_id = ? AND beast_db_id = ?').get(player_id, beast_db_id)
+      : database.prepare('SELECT * FROM beast_equipment_equipped WHERE player_id = ? LIMIT 1').get(player_id);
     
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
+    // 获取背包
+    const inventory = database.prepare(
+      'SELECT equipment_id, enhance_level FROM beast_equipment_inventory WHERE player_id = ?'
+    ).all(player_id);
     
-    const equipData = initPlayerBeastEquipment(player);
-    const equipped = equipData.equipped[beast_index] || { gear: null, mount: null, accessory: null };
+    const inventoryStats = inventory.map(inv => {
+      const invEquip = { id: inv.equipment_id, enhance_level: inv.enhance_level };
+      return getEquipmentStats(invEquip);
+    }).filter(Boolean);
     
-    // 计算装备加成
+    // 计算总加成
     let totalBonus = { atk: 0, hp: 0, speed: 0, crit: 0 };
-    for (const slot of ['gear', 'mount', 'accessory']) {
-      if (equipped[slot]) {
-        const stats = getEquipmentStats(equipped[slot]);
-        if (stats) {
-          totalBonus.atk += stats.atk_bonus;
-          totalBonus.hp += stats.hp_bonus;
-          totalBonus.speed += stats.speed_bonus;
-          totalBonus.crit += stats.crit_bonus;
+    if (equipped) {
+      for (const slotCol of ['gear_id', 'mount_id', 'accessory_id']) {
+        if (equipped[slotCol]) {
+          const inv = inventory.find(i => i.equipment_id === equipped[slotCol]);
+          const invEquip = { id: equipped[slotCol], enhance_level: inv?.enhance_level || 0 };
+          const stats = getEquipmentStats(invEquip);
+          if (stats) {
+            totalBonus.atk += stats.atk_bonus;
+            totalBonus.hp += stats.hp_bonus;
+            totalBonus.speed += stats.speed_bonus;
+            totalBonus.crit += stats.crit_bonus;
+          }
         }
       }
     }
@@ -607,19 +571,15 @@ router.get('/info', async (req, res) => {
     res.json({
       success: true,
       data: {
-        beast_index: parseInt(beast_index),
-        beast: player.beasts?.[beast_index] ? {
-          id: player.beasts[beast_index].id,
-          level: player.beasts[beast_index].level,
-          name: player.beasts[beast_index].name
+        equipped: equipped ? {
+          beast_db_id: equipped.beast_db_id,
+          gear: equipped.gear_id ? getEquipmentStats({ id: equipped.gear_id, enhance_level: 0 }) : null,
+          mount: equipped.mount_id ? getEquipmentStats({ id: equipped.mount_id, enhance_level: 0 }) : null,
+          accessory: equipped.accessory_id ? getEquipmentStats({ id: equipped.accessory_id, enhance_level: 0 }) : null
         } : null,
-        equipped: {
-          gear: getEquipmentStats(equipped.gear),
-          mount: getEquipmentStats(equipped.mount),
-          accessory: getEquipmentStats(equipped.accessory)
-        },
         total_bonus: totalBonus,
-        inventory_count: equipData.inventory.length
+        inventory_count: inventory.length,
+        inventory: inventoryStats
       }
     });
   } catch (error) {
@@ -629,85 +589,73 @@ router.get('/info', async (req, res) => {
 });
 
 // 强化装备
-router.post('/enhance', async (req, res) => {
+router.post('/enhance', (req, res) => {
   try {
-    loadDependencies();
-    
+    const database = getDb();
     const { player_id, equipment_id } = req.body;
     
     if (!player_id || !equipment_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
-    
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
-    
-    const equipData = initPlayerBeastEquipment(player);
-    
     // 查找装备
-    const equipIndex = equipData.inventory.findIndex(e => e.id === equipment_id);
-    if (equipIndex === -1) {
-      // 检查是否已穿戴
-      for (const beastIndex in equipData.equipped) {
-        for (const slot of ['gear', 'mount', 'accessory']) {
-          if (equipData.equipped[beastIndex][slot]?.id === equipment_id) {
-            return res.status(400).json({ success: false, error: '请先卸下装备再强化' });
-          }
-        }
-      }
+    const invRecord = database.prepare(
+      'SELECT * FROM beast_equipment_inventory WHERE player_id = ? AND equipment_id = ?'
+    ).get(player_id, equipment_id);
+    
+    if (!invRecord) {
       return res.status(404).json({ success: false, error: '装备不存在' });
     }
     
-    const equipment = equipData.inventory[equipIndex];
-    const currentLevel = equipment.enhance_level || 0;
+    const currentLevel = invRecord.enhance_level || 0;
     
     if (currentLevel >= 10) {
       return res.status(400).json({ success: false, error: '装备强化等级已达上限' });
     }
     
-    const template = BEAST_EQUIPMENT_DATA[equipment.id];
+    const template = BEAST_EQUIPMENT_DATA[equipment_id];
     const successRate = ENHANCE_SUCCESS_RATES[currentLevel + 1] || 0.5;
     const cost = ENHANCE_COST.spirit_stones[currentLevel] || 100;
     
     // 检查灵石
-    if (player.spiritStones < cost) {
-      return res.status(400).json({ success: false, error: `灵石不足，需要 ${cost} 灵石` });
+    const player = database.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
     }
-    player.spiritStones -= cost;
+    
+    const playerSpiritStones = player.spirit_stones || player.lingshi || 0;
+    if (playerSpiritStones < cost) {
+      return res.status(400).json({ success: false, error: `灵石不足，需要 ${cost} 灵石，当前 ${playerSpiritStones}` });
+    }
+    
+    // 扣除灵石
+    const stoneCol = player.spirit_stones !== undefined ? 'spirit_stones' : 'lingshi';
+    database.prepare(`UPDATE player SET ${stoneCol} = ${stoneCol} - ? WHERE id = ?`).run(cost, player_id);
     
     // 强化判定
     const success = Math.random() < successRate;
     
     if (success) {
-      equipment.enhance_level = currentLevel + 1;
+      const newLevel = currentLevel + 1;
+      database.prepare(
+        'UPDATE beast_equipment_inventory SET enhance_level = ? WHERE player_id = ? AND equipment_id = ?'
+      ).run(newLevel, player_id, equipment_id);
       
-      // 保存玩家数据
-      if (playerStorage) {
-        await playerStorage.set(player_id, player);
-      }
-      
+      const newEquip = { id: equipment_id, enhance_level: newLevel };
       res.json({
         success: true,
-        message: `强化成功！装备强化等级提升至 +${equipment.enhance_level}`,
-        equipment: getEquipmentStats(equipment),
+        message: `强化成功！装备强化等级提升至 +${newLevel}`,
+        equipment: getEquipmentStats(newEquip),
         new_bonus: {
-          atk: getEquipmentStats(equipment)?.atk_bonus,
-          hp: getEquipmentStats(equipment)?.hp_bonus
+          atk: getEquipmentStats(newEquip)?.atk_bonus,
+          hp: getEquipmentStats(newEquip)?.hp_bonus
         }
       });
     } else {
-      // 强化失败，等级不变
       res.json({
         success: false,
         message: `强化失败，装备等级保持 +${currentLevel}`,
-        equipment: getEquipmentStats(equipment)
+        equipment: getEquipmentStats({ id: equipment_id, enhance_level: currentLevel })
       });
     }
   } catch (error) {
@@ -717,40 +665,26 @@ router.post('/enhance', async (req, res) => {
 });
 
 // 合成装备
-router.post('/synthesize', async (req, res) => {
+router.post('/synthesize', (req, res) => {
   try {
-    loadDependencies();
-    
+    const database = getDb();
     const { player_id, target_equipment_id } = req.body;
     
     if (!player_id || !target_equipment_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    // 获取合成配方
     const recipe = SYNTHESIS_RECIPES[target_equipment_id];
     if (!recipe) {
       return res.status(404).json({ success: false, error: '没有该装备的合成配方' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
-    
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
-    
-    const equipData = initPlayerBeastEquipment(player);
-    
-    // 检查材料是否足够
-    const inventory = equipData.inventory;
+    // 检查材料
     const missingMaterials = [];
-    
     for (const ingredientId of recipe.ingredients) {
-      const found = inventory.find(e => e.id === ingredientId);
+      const found = database.prepare(
+        'SELECT * FROM beast_equipment_inventory WHERE player_id = ? AND equipment_id = ?'
+      ).get(player_id, ingredientId);
       if (!found) {
         const template = BEAST_EQUIPMENT_DATA[ingredientId];
         missingMaterials.push(template?.name || ingredientId);
@@ -758,56 +692,41 @@ router.post('/synthesize', async (req, res) => {
     }
     
     if (missingMaterials.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `材料不足: ${missingMaterials.join(', ')}` 
-      });
+      return res.status(400).json({ success: false, error: `材料不足: ${missingMaterials.join(', ')}` });
     }
     
     // 检查灵石
-    if (player.spiritStones < recipe.cost) {
-      return res.status(400).json({ success: false, error: `灵石不足，需要 ${recipe.cost} 灵石` });
-    }
-    player.spiritStones -= recipe.cost;
+    const player = database.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
+    if (!player) return res.status(404).json({ success: false, error: '玩家不存在' });
     
-    // 移除材料
+    const playerSpiritStones = player.spirit_stones || player.lingshi || 0;
+    if (playerSpiritStones < recipe.cost) {
+      return res.status(400).json({ success: false, error: `灵石不足，需要 ${recipe.cost} 灵石，当前 ${playerSpiritStones}` });
+    }
+    
+    // 扣除灵石和材料
+    const stoneCol = player.spirit_stones !== undefined ? 'spirit_stones' : 'lingshi';
+    database.prepare(`UPDATE player SET ${stoneCol} = ${stoneCol} - ? WHERE id = ?`).run(recipe.cost, player_id);
     for (const ingredientId of recipe.ingredients) {
-      const index = inventory.findIndex(e => e.id === ingredientId);
-      if (index !== -1) {
-        inventory.splice(index, 1);
-      }
+      database.prepare('DELETE FROM beast_equipment_inventory WHERE player_id = ? AND equipment_id = ?').run(player_id, ingredientId);
     }
     
     // 合成判定
     const success = Math.random() < recipe.success_rate;
     
     if (success) {
-      // 添加新装备
-      const newEquipment = {
-        id: target_equipment_id,
-        enhance_level: 0,
-        obtainedAt: Date.now()
-      };
-      inventory.push(newEquipment);
-      
-      // 保存玩家数据
-      if (playerStorage) {
-        await playerStorage.set(player_id, player);
-      }
+      database.prepare(
+        'INSERT INTO beast_equipment_inventory (player_id, equipment_id, enhance_level) VALUES (?, ?, 0)'
+      ).run(player_id, target_equipment_id);
       
       const template = BEAST_EQUIPMENT_DATA[target_equipment_id];
-      
       res.json({
         success: true,
         message: `合成成功！获得 ${template?.name || target_equipment_id}`,
-        equipment: getEquipmentStats(newEquipment)
+        equipment: getEquipmentStats({ id: target_equipment_id, enhance_level: 0 })
       });
     } else {
-      // 合成失败，返还部分材料（可选，这里选择不返还增加难度）
-      res.json({
-        success: false,
-        message: '合成失败，材料已消耗'
-      });
+      res.json({ success: false, message: '合成失败，材料已消耗' });
     }
   } catch (error) {
     console.error('合成装备失败:', error);
@@ -846,10 +765,9 @@ router.get('/synthesis/recipes', (req, res) => {
 });
 
 // 添加装备到玩家背包（GM/奖励用）
-router.post('/add', async (req, res) => {
+router.post('/add', (req, res) => {
   try {
-    loadDependencies();
-    
+    const database = getDb();
     const { player_id, equipment_id, count = 1 } = req.body;
     
     if (!player_id || !equipment_id) {
@@ -861,36 +779,24 @@ router.post('/add', async (req, res) => {
       return res.status(404).json({ success: false, error: '装备不存在' });
     }
     
-    // 获取玩家数据
-    let player = null;
-    if (playerStorage) {
-      player = await playerStorage.get(player_id);
-    }
-    
-    if (!player) {
-      return res.status(404).json({ success: false, error: '玩家不存在' });
-    }
-    
-    const equipData = initPlayerBeastEquipment(player);
-    
-    // 添加装备
     for (let i = 0; i < count; i++) {
-      equipData.inventory.push({
-        id: equipment_id,
-        enhance_level: 0,
-        obtainedAt: Date.now()
-      });
+      try {
+        database.prepare(
+          'INSERT INTO beast_equipment_inventory (player_id, equipment_id, enhance_level) VALUES (?, ?, 0)'
+        ).run(player_id, equipment_id);
+      } catch (e) {
+        // ignore duplicate key errors for same item
+      }
     }
     
-    // 保存玩家数据
-    if (playerStorage) {
-      await playerStorage.set(player_id, player);
-    }
+    const total = database.prepare(
+      'SELECT COUNT(*) as cnt FROM beast_equipment_inventory WHERE player_id = ? AND equipment_id = ?'
+    ).get(player_id, equipment_id);
     
     res.json({
       success: true,
       message: `获得 ${count} 个 ${template.name}`,
-      inventory_count: equipData.inventory.length
+      inventory_count: total.cnt
     });
   } catch (error) {
     console.error('添加装备失败:', error);
