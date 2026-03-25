@@ -1,33 +1,33 @@
 const express = require('express');
 const router = express.Router();
 
-// 每日任务配置
+// 每日任务配置（奖励提升3-5倍）
 const questTemplates = [
   // 修炼类
-  { id: 1, type: 'cultivate', name: '修炼时长', desc: '修炼10分钟', target: 10, unit: '分钟', reward: { lingshi: 100, exp: 50 }, difficulty: 1 },
-  { id: 2, type: 'cultivate', name: '专注修炼', desc: '修炼30分钟', target: 30, unit: '分钟', reward: { lingshi: 300, exp: 150 }, difficulty: 2 },
-  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '修炼60分钟', target: 60, unit: '分钟', reward: { lingshi: 600, exp: 300 }, difficulty: 3 },
+  { id: 1, type: 'cultivate', name: '修炼时长', desc: '修炼10分钟', target: 10, unit: '分钟', reward: { lingshi: 500, exp: 200 }, difficulty: 1 },
+  { id: 2, type: 'cultivate', name: '专注修炼', desc: '修炼30分钟', target: 30, unit: '分钟', reward: { lingshi: 1500, exp: 600 }, difficulty: 2 },
+  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '修炼60分钟', target: 60, unit: '分钟', reward: { lingshi: 3000, exp: 1200 }, difficulty: 3 },
   
   // 战斗类
-  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 50, exp: 30 }, difficulty: 1 },
-  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 500, exp: 250 }, difficulty: 2 },
-  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 1500, exp: 750 }, difficulty: 3 },
+  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 200, exp: 100 }, difficulty: 1 },
+  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 2000, exp: 800 }, difficulty: 2 },
+  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 6000, exp: 2400 }, difficulty: 3 },
   
   // 副本类
-  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 100, exp: 100 }, difficulty: 1 },
-  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 500, exp: 500 }, difficulty: 2 },
-  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 1000, exp: 1000 }, difficulty: 3 },
+  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 500, exp: 300 }, difficulty: 1 },
+  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 2500, exp: 1500 }, difficulty: 2 },
+  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 5000, exp: 3000 }, difficulty: 3 },
   
   // 消费类
-  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 10 }, difficulty: 1 },
-  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 50 }, difficulty: 2 },
+  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 30 }, difficulty: 1 },
+  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 150 }, difficulty: 2 },
   
   // 社交类
-  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 50 }, difficulty: 1 },
+  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 200 }, difficulty: 1 },
   
   // 装备类
-  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 100, exp: 50 }, difficulty: 1 },
-  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 500, exp: 250 }, difficulty: 2 }
+  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 300, exp: 150 }, difficulty: 1 },
+  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 1500, exp: 750 }, difficulty: 2 }
 ];
 
 // 用户任务进度
