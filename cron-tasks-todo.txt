@@ -345,7 +345,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 修复: updatePlayer()和addResource()必须写入DB，服务器启动从DB恢复
 - 状态: 完成 | 2026-03-25 | player.js添加setDb() + PUT/POST/resources DB持久化
 
-[P1-B-NEW1] 成就系统触发器
+[P1-B-NEW1] 成就系统触发器  # 完成 | 2026-03-26 | achievement.js添加achievement_progress表DB持久化，dungeon.js和cultivation.js添加成就触发调用
 - 文件: server/backend/routes/achievement.js 或新增
 - 问题: 31个成就progress全0，无追踪逻辑
 - 修复: 在战斗/章节/修炼等关键节点调用成就检查，创建achievement_progress表
@@ -420,7 +420,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1-B-NEW1] server.js worldBoss 小写别名路由  # /api/worldboss 404  # 2026-03-26 完成
   - 在 server.js 添加 app.use('/api/worldboss', require('./routes/worldBoss'))  # 2026-03-26 完成
 [P1-B-NEW2] routes/welfare.js 实现 GET /api/welfare/daily  # 完成 | 2026-03-26 | 在 server/game/welfare_api.js 中实现（已注册路由）
-[P1-B-NEW3] database.js 初始化中创建 game_meta 表  # 连续多轮未修复
+[P1-B-NEW3] database.js 初始化中创建 game_meta 表  # 完成 | 2026-03-26 | initDatabase()中添加 sequelize.query(CREATE TABLE IF NOT EXISTS game_meta)
 [P1-B-NEW4] chapter.js 第260行 enemies undefined 修复  # 2026-03-26 完成
   - /battle 和 /complete 端点：添加 chapter 存在性检查 + kills 默认值0 + enemyCount 局部变量防止 undefined  # 2026-03-26 完成
 [P1-B-NEW5] 创建 routes/equipment_dismantle.js：装备分解接口  # 完成 | 2026-03-26 | GET /info + POST /dismantle + GET /list，已在server.js注册
