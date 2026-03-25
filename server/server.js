@@ -39,7 +39,7 @@ try {
 // 境界压制系统
 let realmSuppression;
 try {
-  realmSuppression = require('./src/core/realm_suppression');
+  realmSuppression = require('./game/realm_suppression');
 } catch (e) {
   Logger.warn('境界压制模块加载失败:', e.message);
   realmSuppression = null;
@@ -48,7 +48,7 @@ try {
 // 战力评分系统
 let combatPowerSystem;
 try {
-  combatPowerSystem = require('./src/core/combat_power');
+  combatPowerSystem = require('./game/combat_power');
 } catch (e) {
   Logger.warn('战力评分模块加载失败:', e.message);
   combatPowerSystem = null;
@@ -1087,7 +1087,7 @@ function initDatabase() {
 
   // ============ 灵兽系统数据库初始化 ============
   try {
-    const beastApi = require('./src/beast_api');
+    const beastApi = require('./game/beast_api');
     beastApi.initBeastDatabase(db);
     Logger.info('✅ 灵兽系统数据库初始化完成');
   } catch (e) {

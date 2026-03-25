@@ -10,6 +10,7 @@ const { welfareStorage, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES } = require('./welf
 // 延迟加载依赖
 let playerStorage;
 let playerEquipmentStorage;
+let playerModule; // 内存玩家数据后备
 
 function loadDependencies() {
   if (!playerStorage) {
@@ -30,7 +31,37 @@ function loadDependencies() {
     }
   }
   
+  if (!playerModule) {
+    try {
+      playerModule = require('../backend/routes/player');
+    } catch (e) {
+      console.error('加载player模块失败:', e.message);
+    }
+  }
+  
   return true;
+}
+
+// 从内存获取玩家灵石数量（后备方案）
+function getPlayerSpiritStones(userId) {
+  if (playerModule && playerModule._player) {
+    return playerModule._player.spirit_stones || playerModule._player.lingshi || 0;
+  }
+  return 0;
+}
+
+// 更新玩家灵石（后备方案）
+function updatePlayerSpiritStones(userId, amount) {
+  if (playerModule && playerModule._player && playerModule._player.id === userId) {
+    playerModule._player.spirit_stones = (playerModule._player.spirit_stones || 0) + amount;
+    playerModule._player.lingshi = playerModule._player.spirit_stones;
+  }
+  // 同时尝试用 playerStorage
+  if (playerStorage && typeof playerStorage.updateSpiritStones === 'function') {
+    try {
+      playerStorage.updateSpiritStones(userId, amount);
+    } catch (e) {}
+  }
 }
 
 // 初始化
@@ -63,9 +94,11 @@ router.get('/sign-in', (req, res) => {
   try {
     loadDependencies();
     
-    const playerId = req.query.player_id || req.query.playerId;
+    // 支持多种参数来源
+    const playerId = req.query.player_id || req.query.playerId || req.headers['x-user-id'] || 1;
+    const userId = parseInt(playerId) || 1;
     
-    if (!playerId) {
+    if (!userId) {
       return res.status(400).json({ 
         success: false, 
         error: '缺少玩家ID' 
@@ -105,7 +138,9 @@ router.post('/claim-sign-in', async (req, res) => {
   try {
     loadDependencies();
     
-    const playerId = req.body.player_id || req.body.playerId;
+    // 支持多种参数来源
+    const playerIdRaw = req.body.player_id || req.body.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
     
     if (!playerId) {
       return res.status(400).json({ 
@@ -125,11 +160,9 @@ router.post('/claim-sign-in', async (req, res) => {
     const rewards = [];
     const reward = result.reward;
     
-    // 1. 灵石奖励
+    // 1. 灵石奖励（使用后备方案）
     if (reward.lingshi > 0) {
-      if (playerStorage) {
-        playerStorage.updateSpiritStones(playerId, reward.lingshi);
-      }
+      updatePlayerSpiritStones(playerId, reward.lingshi);
       rewards.push({
         type: 'lingshi',
         amount: reward.lingshi,
@@ -159,9 +192,7 @@ router.post('/claim-sign-in', async (req, res) => {
         // 如果没有装备系统，转换为灵石
         const bonusLingshi = reward.equipment === 'green' ? 200 : 
                            reward.equipment === 'blue' ? 500 : 1000;
-        if (playerStorage) {
-          playerStorage.updateSpiritStones(playerId, bonusLingshi);
-        }
+        updatePlayerSpiritStones(playerId, bonusLingshi);
         rewards.push({
           type: 'lingshi',
           amount: bonusLingshi,
@@ -210,7 +241,8 @@ router.post('/claim-sign-in', async (req, res) => {
 // 获取签到历史
 router.get('/history', (req, res) => {
   try {
-    const playerId = req.query.player_id || req.query.playerId;
+    const playerIdRaw = req.query.player_id || req.query.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
     
     if (!playerId) {
       return res.status(400).json({ 

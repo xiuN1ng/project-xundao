@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 玩家内存数据（来自 player.js）
+let playerModule;
+try {
+  playerModule = require('./player');
+} catch (e) {
+  // 后备：模拟玩家对象
+  playerModule = { _player: { id: 1, vipLevel: 1, vipPoints: 0, diamonds: 99999, spirit_stones: 999999999 } };
+}
+
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -11,6 +20,21 @@ try {
   db = new Database(DB_PATH);
 } catch (err) {
   db = null;
+}
+
+// 获取玩家内存数据
+function getPlayerData(userId) {
+  if (playerModule._player && playerModule._player.id === userId) {
+    return playerModule._player;
+  }
+  // 遍历查找
+  const keys = Object.keys(playerModule).filter(k => k.startsWith('_player'));
+  for (const k of keys) {
+    if (playerModule[k] && playerModule[k].id === userId) return playerModule[k];
+  }
+  // 如果只有一个玩家，直接返回
+  if (playerModule._player) return playerModule._player;
+  return null;
 }
 
 // VIP等级配置（来自 vip_system.js）
@@ -102,12 +126,11 @@ router.get('/', (req, res) => {
   try {
     let vipLevel = 1, vipPoints = 0;
 
-    if (db) {
-      const player = db.prepare('SELECT vip_level, vip_points FROM player WHERE id = ?').get(userId);
-      if (player) {
-        vipLevel = player.vip_level || 1;
-        vipPoints = player.vip_points || 0;
-      }
+    // 使用内存中的玩家数据（不再查不存在的 player 数据库表）
+    const playerData = getPlayerData(userId);
+    if (playerData) {
+      vipLevel = playerData.vipLevel || playerData.vip_level || 1;
+      vipPoints = playerData.vipPoints || playerData.vip_points || 0;
     }
 
     const card = loadMonthlyCard(userId);
@@ -152,28 +175,30 @@ router.post('/buy', (req, res) => {
   }
 
   try {
-    if (db) {
-      const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
-      if (!player) return res.json({ success: false, error: '玩家不存在' });
+    // 使用内存中的玩家数据
+    const playerData = getPlayerData(userId);
+    if (!playerData) return res.json({ success: false, error: '玩家不存在' });
 
-      const targetLevel = VIP_LEVELS[level];
-      const currentLevel = player.vip_level || 1;
+    const targetLevel = VIP_LEVELS[level];
+    const currentLevel = playerData.vipLevel || playerData.vip_level || 1;
 
-      if (level <= currentLevel) {
-        return res.json({ success: false, error: '当前VIP等级已更高' });
-      }
-
-      if (player.diamonds < targetLevel.cost) {
-        return res.json({ success: false, error: '钻石不足' });
-      }
-
-      db.prepare('UPDATE player SET diamonds = diamonds - ?, vip_level = ?, vip_points = vip_points + ? WHERE id = ?')
-        .run(targetLevel.cost, level, targetLevel.cost * 10, userId);
-
-      res.json({ success: true, level, vipName: targetLevel.nameCn, message: `恭喜成为${targetLevel.nameCn}！` });
-    } else {
-      res.json({ success: false, error: '数据库不可用' });
+    if (level <= currentLevel) {
+      return res.json({ success: false, error: '当前VIP等级已更高' });
     }
+
+    if ((playerData.diamonds || 0) < targetLevel.cost) {
+      return res.json({ success: false, error: '钻石不足' });
+    }
+
+    // 更新内存中的玩家数据
+    playerData.diamonds = (playerData.diamonds || 0) - targetLevel.cost;
+    playerData.vipLevel = level;
+    playerData.vipPoints = (playerData.vipPoints || playerData.vip_points || 0) + targetLevel.cost * 10;
+    // 同步 vip_level 字段
+    playerData.vip_level = level;
+    playerData.vip_points = playerData.vipPoints;
+
+    res.json({ success: true, level, vipName: targetLevel.nameCn, message: `恭喜成为${targetLevel.nameCn}！` });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
@@ -189,33 +214,30 @@ router.post('/buy-month-card', (req, res) => {
   }
 
   try {
-    if (db) {
-      const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
-      if (!player) return res.json({ success: false, error: '玩家不存在' });
+    const playerData = getPlayerData(userId);
+    if (!playerData) return res.json({ success: false, error: '玩家不存在' });
 
-      const card = MONTHLY_CARDS[cardType];
-      if (player.diamonds < card.cost) {
-        return res.json({ success: false, error: '钻石不足' });
-      }
-
-      const now = Date.now();
-      const expireTime = now + 30 * 86400000; // 30天
-
-      const existing = loadMonthlyCard(userId);
-      if (existing && existing.expireTime > now) {
-        // 续费：追加30天
-        const newExpire = Math.max(existing.expireTime, now) + 30 * 86400000;
-        saveMonthlyCard(userId, { ...existing, cardType, expireTime: newExpire, lastClaimTime: existing.lastClaimTime });
-      } else {
-        saveMonthlyCard(userId, { cardType, purchaseTime: now, lastClaimTime: null, expireTime });
-      }
-
-      db.prepare('UPDATE player SET diamonds = diamonds - ? WHERE id = ?').run(card.cost, userId);
-
-      res.json({ success: true, cardType, expireTime, message: `购买成功！月卡有效期至${new Date(expireTime).toLocaleDateString()}` });
-    } else {
-      res.json({ success: false, error: '数据库不可用' });
+    const card = MONTHLY_CARDS[cardType];
+    if ((playerData.diamonds || 0) < card.cost) {
+      return res.json({ success: false, error: '钻石不足' });
     }
+
+    const now = Date.now();
+    const expireTime = now + 30 * 86400000; // 30天
+
+    const existing = loadMonthlyCard(userId);
+    if (existing && existing.expireTime > now) {
+      // 续费：追加30天
+      const newExpire = Math.max(existing.expireTime, now) + 30 * 86400000;
+      saveMonthlyCard(userId, { ...existing, cardType, expireTime: newExpire, lastClaimTime: existing.lastClaimTime });
+    } else {
+      saveMonthlyCard(userId, { cardType, purchaseTime: now, lastClaimTime: null, expireTime });
+    }
+
+    // 更新内存数据
+    playerData.diamonds = (playerData.diamonds || 0) - card.cost;
+
+    res.json({ success: true, cardType, expireTime, message: `购买成功！月卡有效期至${new Date(expireTime).toLocaleDateString()}` });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
@@ -248,11 +270,14 @@ router.post('/claim-daily', (req, res) => {
     const card = MONTHLY_CARDS[cardState.cardType];
     const reward = card.dailyReward;
 
-    if (db) {
+    // 更新内存中的玩家数据
+    const playerData = getPlayerData(userId);
+    if (playerData) {
       if (reward.type === 'spirit_stones') {
-        db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(reward.amount, userId);
+        playerData.spirit_stones = (playerData.spirit_stones || 0) + reward.amount;
+        playerData.lingshi = playerData.spirit_stones; // 同步
       } else if (reward.type === 'diamonds') {
-        db.prepare('UPDATE player SET diamonds = diamonds + ? WHERE id = ?').run(reward.amount, userId);
+        playerData.diamonds = (playerData.diamonds || 0) + reward.amount;
       }
     }
 

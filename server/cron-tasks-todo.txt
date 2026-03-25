@@ -93,3 +93,38 @@
   - 目标: 通关副本/世界BOSS/挂机/竞技场
   - 全部完成奖励: 月卡优惠券/限定称号
   - 负责人: [B] - 截止: 2026-03-28
+
+## 2026-03-25 v17 — 后端任务追加
+
+[P0-B-NEW1] 【B】【解决#192】cultivation.js — 将 exp 列改为 realm_level 更新，修复 cultivation 表不存在问题
+  - 根因：routes/cultivation.js 第191行 UPDATE player SET exp=... 但 player 表无 exp 列
+  - 修复：改为 UPDATE player SET realm_level = realm_level + ? 或使用 player_game_data
+  - 同时：cultivation 表不存在，改用 player_game_data 或创建表
+  - 状态：待执行
+
+[P0-B-NEW2] 【B】【解决#195】player.js 重写 GET / — 使用实际 DB 列名并做字段映射
+  - 根因：player API 返回 lingshi/diamonds/hp/attack/defense/speed，但 DB 实际是 spirit_stones/vip_level/realm_level
+  - 修复：SELECT spirit_stones, level, realm_level, vip_level... 并映射为前端期望字段
+  - 同时：战斗属性 hp/attack/defense/speed 从 player_game_data 获取
+  - 状态：待执行
+
+[P1-B-NEW1] 【B】【解决#197】sect.js — 添加 GET /building 和 POST /join 端点
+  - 根因：sect/building 和 sect/join 返回 404
+  - 修复：GET /building 返回建筑列表；POST /join 处理加入宗门逻辑
+  - 状态：待执行
+
+[P1-B-NEW2] 【B】【解决#198】VIP路由 — 将 diamonds 列改为 spirit_stones
+  - 根因：routes/vip.js 第200行使用 player.diamonds 但 player 表无此列
+  - 修复：改为 player.spirit_stones（注意月卡是否应收灵石还是钻石）
+  - 状态：待执行
+
+[P2-B-NEW1] 【B】【解决#200】shop/buy — 添加扣灵石逻辑
+  - 根因：POST /shop/buy 返回成功但未扣除 spirit_stones
+  - 修复：购买后 db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(price, userId)
+  - 状态：待执行
+
+[P0-B-ALT] 【B】【解决#193/#194】tribulation 和 abyss 端点别名
+  - 方案A：在 tribulation.js 添加 router.post('/start', ...) 作为 /begin 别名
+  - 方案B：在 abyss.js 添加 router.post('/enter', ...) 作为 /battle 别名
+  - 状态：待执行（可选替代前端修改）
+
