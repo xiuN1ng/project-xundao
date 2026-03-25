@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { HeartDemonStorage } = require('../heart_demon_storage');
+const { playerStorage } = require('../../game/storage');
 
 const storage = new HeartDemonStorage();
 
@@ -530,6 +531,128 @@ router.post('/defeat', async (req, res) => {
     await storage.savePlayer(userId, player);
     setCachedPlayer(userId, player);
     res.json({ success: true, currentFloor: player.currentFloor, message: '已退出副本' });
+  } catch (err) {
+    res.json({ success: false, message: '服务器错误' });
+  }
+});
+
+// POST /clear - 清除心魔（消耗灵石或道具）
+router.post('/clear', async (req, res) => {
+  const { userId, method } = req.body;
+  // method: 'spirit_stones' (灵石清除) | 'purify_charm' (心魔净化符道具) | 'heart_pearl' (心魔珠道具)
+  if (!method) return res.json({ success: false, message: '请指定清除方式 method(spirit_stones/purify_charm/heart_pearl)' });
+
+  try {
+    const player = await storage.getOrCreatePlayer(userId);
+    const currentEnergy = player.heartDemonEnergy || 0;
+
+    if (currentEnergy <= 0) return res.json({ success: false, message: '当前无心魔可清除' });
+
+    // 灵石清除：每点心魔消耗 50 灵石，最低消耗 100
+    if (method === 'spirit_stones') {
+      const cost = Math.max(100, Math.floor(currentEnergy * 50));
+      // 使用 playerStorage 扣除灵石
+      try {
+        if (playerStorage && playerStorage.hasEnoughSpiritStones) {
+          const enough = await playerStorage.hasEnoughSpiritStones(userId, cost);
+          if (!enough) return res.json({ success: false, message: `灵石不足，需要${cost}灵石` });
+          await playerStorage.deductSpiritStones(userId, cost);
+        }
+      } catch (e) {
+        console.warn('heart_demon /clear: playerStorage 灵石扣除失败', e.message);
+      }
+      const cleared = Math.min(currentEnergy, Math.ceil(cost / 50));
+      player.heartDemonEnergy = Math.max(0, currentEnergy - cleared);
+      await storage.savePlayer(userId, player);
+      setCachedPlayer(userId, player);
+      return res.json({
+        success: true,
+        heartDemonEnergy: player.heartDemonEnergy,
+        cleared,
+        cost,
+        message: `消耗${cost}灵石，清除${cleared}点心魔能量，当前心魔能量：${player.heartDemonEnergy}`
+      });
+    }
+
+    // 心魔净化符道具清除：消耗1个道具，清除50点心魔
+    if (method === 'purify_charm') {
+      const materials = player.materials || {};
+      if ((materials.purify_charm || 0) < 1) return res.json({ success: false, message: '没有心魔净化符，可在心魔商店购买' });
+      materials.purify_charm = (materials.purify_charm || 0) - 1;
+      player.materials = materials;
+      player.heartDemonEnergy = Math.max(0, currentEnergy - 50);
+      await storage.savePlayer(userId, player);
+      setCachedPlayer(userId, player);
+      return res.json({
+        success: true,
+        heartDemonEnergy: player.heartDemonEnergy,
+        cleared: 50,
+        message: `使用心魔净化符，清除50点心魔能量，当前心魔能量：${player.heartDemonEnergy}`
+      });
+    }
+
+    // 心魔珠道具清除：消耗1个道具，清除全部心魔
+    if (method === 'heart_pearl') {
+      const materials = player.materials || {};
+      if ((materials.heart_pearl || 0) < 1) return res.json({ success: false, message: '没有心魔珠，可在心魔商店购买' });
+      materials.heart_pearl = (materials.heart_pearl || 0) - 1;
+      player.materials = materials;
+      player.heartDemonEnergy = 0;
+      await storage.savePlayer(userId, player);
+      setCachedPlayer(userId, player);
+      return res.json({
+        success: true,
+        heartDemonEnergy: 0,
+        cleared: currentEnergy,
+        message: `使用心魔珠，彻底清除全部${currentEnergy}点心魔能量！`
+      });
+    }
+
+    return res.json({ success: false, message: '无效的清除方式' });
+  } catch (err) {
+    console.error('heart_demon /clear error:', err);
+    res.json({ success: false, message: '服务器错误' });
+  }
+});
+
+// GET /clear - 获取清除心魔的选项和消耗
+router.get('/clear', async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const player = await storage.getOrCreatePlayer(userId);
+    const energy = player.heartDemonEnergy || 0;
+    const spiritStoneCost = Math.max(100, Math.floor(energy * 50));
+    const materials = player.materials || {};
+    res.json({
+      success: true,
+      heartDemonEnergy: energy,
+      options: [
+        {
+          method: 'spirit_stones',
+          name: '灵石净化',
+          icon: '💰',
+          desc: `消耗${spiritStoneCost}灵石清除${Math.ceil(spiritStoneCost / 50)}点心魔`,
+          hasEnough: true, // 灵石由前端检查
+          cost: spiritStoneCost
+        },
+        {
+          method: 'purify_charm',
+          name: '心魔净化符',
+          icon: '📜',
+          desc: '消耗1个净化符，清除50点心魔',
+          hasEnough: (materials.purify_charm || 0) >= 1,
+          count: materials.purify_charm || 0
+        },
+        {
+          method: 'heart_pearl',
+          name: '心魔珠',
+          icon: '🔮',
+          desc: `消耗1个心魔珠，清除全部${energy}点心魔`,
+          hasEnough: (materials.heart_pearl || 0) >= 1,
+          count: materials.heart_pearl || 0
+        }
+      ]
+    });
   } catch (err) {
     res.json({ success: false, message: '服务器错误' });
   }
