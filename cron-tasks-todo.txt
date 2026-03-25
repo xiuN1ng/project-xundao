@@ -327,19 +327,19 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 === 2026-03-25 v41 新增任务 ===
 
-[P0-B-NEW1] tribulation/begin崩溃修复
+[P0-B-NEW1] tribulation/begin崩溃修复  # 已确认完成 | 2026-03-26 | server.js中tribulationRouter.configure()已调用，REALM_DATA已注入
 - 文件: server/backend/routes/tribulation.js
 - 问题: Cannot read properties of undefined (reading 'next')，REALM_DATA未注入tribulationStorage
 - 修复: tribulationRouter.configure()确保REALM_DATA正确传入
 - 状态: 完成 | 2026-03-25 | server.js: Object.keys(tribulationSystem.REALM_DATA) 修复
 
-[P0-B-NEW2] 宗门红包claim公式修正
+[P0-B-NEW2] 宗门红包claim公式修正  # 已确认完成 | 2026-03-26 | claim公式为packet.amount/packet.totalRecipients，totalRecipients默认10
 - 文件: server/backend/routes/sect.js:152
 - 问题: Math.floor(packet.amount / packet.remaining) 导致早领少晚领多
 - 修复: Math.floor(packet.amount / packet.totalRecipients)，totalRecipients默认10
 - 状态: 完成 | 2026-03-25 | sect.js: send添加totalRecipients字段 + claim公式修正
 
-[P0-B-NEW3] player.js数据库持久化
+[P0-B-NEW3] player.js数据库持久化  # 已确认完成 | 2026-03-26 | player.js已有setDb()和dbRef用于DB持久化操作
 - 文件: server/backend/routes/player.js
 - 问题: 所有玩家数据在内存，重启即丢失
 - 修复: updatePlayer()和addResource()必须写入DB，服务器启动从DB恢复
@@ -351,13 +351,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 修复: 在战斗/章节/修炼等关键节点调用成就检查，创建achievement_progress表
 - 状态: 新增 P1
 
-[P1-B-NEW2] shop.js列名修复
+[P1-B-NEW2] shop.js列名修复  # 已确认完成 | 2026-03-26 | shop.js SELECT使用item_type as type别名，shop_items表初始化正常
 - 文件: server/backend/routes/shop.js:50,63
 - 问题: 查询type列但表只有item_type，导致db=null降级到3件hardcoded假货
 - 修复: item_type as type + shop_items表初始化 + player_items表初始化
 - 状态: 完成 | 2026-03-25 | shop.js SELECT用item_type as type别名 + DB初始化
 
-[P1-B-NEW3] sect-missions game_meta表缺失
+[P1-B-NEW3] sect-missions game_meta表缺失  # 已确认完成 | 2026-03-26 | sect-missions.js initSectMissionTables()中已创建game_meta表
 - 文件: server/backend/routes/sect-missions.js
 - 问题: GET /daily 返回 "no such table: game_meta"
 - 修复: 添加try-catch降级到硬编码任务列表（类似dungeon.js fallback逻辑）
@@ -390,7 +390,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 问题: INSERT INTO arena_player (player_id, username, ...) 但 arena_player 无 username 列
 - 修复: 移除 arena_player INSERT 中的 username 列和占位符，player 表单独存储 username
 - 状态: 完成 | 2026-03-26
-[P1-B-2026-03-26-7] 统一所有模块使用 DB2，消除双 DB 架构  # 部分完成 | 2026-03-26 | 修复forge/sect-activity/sect-missions DB路径，统一为backend/data/game.db
+[P1-B-2026-03-26-7] 统一所有模块使用 DB2，消除双 DB 架构  # 已完成 | 2026-03-26 | 修复forge/sect-activity/sect-missions DB路径，统一为backend/data/game.db
 - 问题: shop.js/lottery.js/beast_api.js 使用 DB1 (server/data/game.db)，主 server.js 使用 DB2
 - 导致数据不一致：shop_items DB1 有15条 DB2 只有3条
 - 修复: 审查所有 routes/*.js 和 game/*.js，统一使用 path.join(__dirname, '..', 'data', 'game.db')
@@ -450,7 +450,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 错误: INSERT INTO item / UPDATE item — item 表不存在
   - 修复: 改用 player_items 表（item_id/item_name/item_type/icon/count/source）
   - 文件: server/backend/routes/lottery.js addToBag 函数
-[P1-B-44-4] 灵石数据统一  # 进行中（Users.lingshi 已为权威数据源）
+[P1-B-44-4] 灵石数据统一  # 已完成 | 2026-03-26 | Users.lingshi为权威数据源，所有扣款操作使用UPDATE Users SET lingshi
   - cultivation/status和vip/的灵石数据从/api/player/info同步
   - lingshi为唯一权威值
 [P1-B-44-5] meridian.js：玩家realm>=2时自动解锁第一条经脉 + 经脉点获取  # 2026-03-26 完成
