@@ -330,3 +330,51 @@
     - 最多24小时，上限1440分钟
   数值: 每分钟10灵石+5经验，VIP倍率
   [B/F]
+
+# ========== 2026-03-26 v27 新增任务 ==========
+# P0 核心断裂
+
+- [ ] [P0-B-v27-1] player路由重构：GET /api/player 从DB读取
+  - 当前 routes/player.js 使用内存变量，cultivation读DB，sect读mock，三套数据矛盾
+  - 改为从 server/data/game.db 的 player 表读取
+  - 统一 spirit_stones → lingshi 输出格式
+  - 负责人: [B] - 截止: 2026-03-27
+
+- [ ] [P0-B-v27-2] player路由PUT写入DB
+  - 当前 PUT /api/player 只有日志，dbRef可能为null
+  - 确保spirit_stones等字段正确写入player表
+  - 负责人: [B] - 截止: 2026-03-27
+
+# P1 功能完善
+
+- [ ] [P1-B-v27-3] sect路由改为读DB
+  - 当前 routes/sect.js 全是内存mock数据
+  - 改为读取 sects/sect_members 表
+  - 负责人: [B] - 截止: 2026-03-28
+
+- [ ] [P1-B-v27-4] Forge副本奖励增加材料掉落
+  - 当前 available:0 导致无法锻造
+  - 副本掉落表增加 iron_ingot/fire_crystal 等锻造材料
+  - 负责人: [B] - 截止: 2026-03-28
+
+- [ ] [P1-B-v27-5] worldBoss.js 添加根路径 GET /
+  - 当前只有 /status 等子路径，客户端 GET /api/worldboss 404
+  - 添加 router.get('/') 返回BOSS状态
+  - 负责人: [B] - 截止: 2026-03-27
+
+- [ ] [P1-B-v27-6] Arena AI池初始化修复
+  - 后端日志: "table arena_player has no column named username"
+  - 检查实际arena_player schema，适配列名
+  - Seed 10个预设AI玩家
+  - 负责人: [B] - 截止: 2026-03-28
+
+- [ ] [P1-B-v27-7] lottery spirit_stones列名修复
+  - 连续5轮未修复！必须解决
+  - 检查DB player表列名，修复lottery.js查询
+  - 负责人: [B] - 截止: 2026-03-27
+
+- [ ] [P1-B-v27-8] sect-missions game_meta表修复
+  - 连续多轮未修复！
+  - 创建game_meta表或添加fallback返回硬编码任务
+  - 负责人: [B] - 截止: 2026-03-27
+

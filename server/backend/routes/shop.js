@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
-// 数据库路径
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+// 数据库路径 (统一使用 backend/data/game.db)
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 let db;
