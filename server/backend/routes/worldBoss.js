@@ -82,24 +82,27 @@ router.get('/status', (req, res) => {
 
 // 攻击BOSS
 router.post('/attack', (req, res) => {
-  const { userId, userName, damage } = req.body;
+  const { userId, userName, damage: rawDamage } = req.body;
   
   if (worldBoss.status !== 'alive' || !worldBoss.currentBoss) {
     return res.json({ success: false, message: 'BOSS未刷新' });
   }
   
-  // 扣除BOSS血量
-  worldBoss.hp = Math.max(0, worldBoss.hp - damage);
+  // 伤害值：至少1点，支持前端传入或使用默认值
+  const damage = Math.max(1, parseInt(rawDamage) || 1);
   
   // 记录伤害
   const existing = worldBoss.damageRecords.find(r => r.userId === userId);
+  const prevTotalDamage = existing ? existing.damage : 0;
+  const newTotalDamage = prevTotalDamage + damage;
+  
   if (existing) {
-    existing.damage += damage;
+    existing.damage = newTotalDamage;
   } else {
     worldBoss.damageRecords.push({
       userId,
       name: userName,
-      damage,
+      damage: newTotalDamage,
       time: Date.now()
     });
   }
@@ -112,9 +115,13 @@ router.post('/attack', (req, res) => {
     worldBoss.damageRecords = worldBoss.damageRecords.slice(0, bossConfig.maxDamageRecords);
   }
   
+  // 计算攻击后的剩余HP（确保非负数且为有效数字）
+  const remainingHp = Math.max(0, Number(worldBoss.hp) - damage);
+  worldBoss.hp = remainingHp;
+  
   // 检查是否击杀
   let killed = false;
-  if (worldBoss.hp <= 0) {
+  if (remainingHp <= 0) {
     worldBoss.status = 'dead';
     worldBoss.lastRefresh = Date.now();
     killed = true;
@@ -124,16 +131,17 @@ router.post('/attack', (req, res) => {
   const rank = worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1;
   
   // 魔晶奖励预览（根据本次伤害占总血量比例）
-  const damageRatio = damage / worldBoss.currentBoss.hp;
+  const bossMaxHp = worldBoss.currentBoss.hp || 1;
+  const damageRatio = damage / bossMaxHp;
   const mcReward = killed
     ? Math.floor(worldBoss.currentBoss.reward.magicCrystals || 0)
     : Math.floor((worldBoss.currentBoss.reward.magicCrystals || 0) * damageRatio * 0.5);
   
   res.json({
     success: true,
-    remainingHp: worldBoss.hp,
+    remainingHp,         // 始终返回有效数字
     rank,
-    totalDamage: existing ? existing.damage : damage,
+    totalDamage: newTotalDamage,
     killed,
     bossRewards: killed ? worldBoss.currentBoss.reward : null,
     magicCrystalPreview: Math.max(1, mcReward),

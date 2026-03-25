@@ -13,6 +13,9 @@ const Logger = {
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
+// ArenaSystem 单例（声明在前，避免 initAIBots() 中 TDZ）
+let ArenaSystem = null;
+
 // 初始化数据库连接
 let db;
 try {
@@ -84,7 +87,6 @@ function initAIBots() {
 initAIBots();
 
 // 加载竞技场系统（单例实例，不重新实例化）
-let ArenaSystem;
 try {
   const { arenaSystem } = require('../../services/arena_system');
   ArenaSystem = arenaSystem;

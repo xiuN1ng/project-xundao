@@ -128,25 +128,25 @@ function drawItem(userId) {
   return { ...item, quality, qualityLabel: cfg.label, qualityColor: cfg.color };
 }
 
-// 将物品写入背包（item 表）
+// 将物品写入背包（player_items 表）
 function addToBag(userId, item) {
   try {
     // 检查是否可叠加（灵石、丹药、材料）
     if ([ITEM_TYPES.LINGSHI, ITEM_TYPES.PILL, ITEM_TYPES.MATERIAL].includes(item.type)) {
       const existing = db.prepare(
-        'SELECT * FROM item WHERE user_id = ? AND name = ? AND quality = ?'
-      ).get(userId, item.name, item.quality);
+        'SELECT * FROM player_items WHERE user_id = ? AND item_name = ? AND item_type = ?'
+      ).get(String(userId), item.name, item.type);
 
       if (existing) {
-        db.prepare('UPDATE item SET count = count + ? WHERE id = ?').run(item.count, existing.id);
+        db.prepare('UPDATE player_items SET count = count + ? WHERE id = ?').run(item.count, existing.id);
         return { bagId: existing.id, stacked: true };
       }
     }
 
     // 不可叠加物品直接插入
     const result = db.prepare(
-      'INSERT INTO item (user_id, item_type, name, icon, quality, count) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(userId, item.type, item.name, item.icon, item.quality, item.count);
+      'INSERT INTO player_items (user_id, item_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(String(userId), item.id || 0, item.name, item.type, item.icon || '📦', item.count || 1, 'lottery');
 
     return { bagId: result.lastInsertRowid, stacked: false };
   } catch (err) {

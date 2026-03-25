@@ -120,7 +120,7 @@ function saveMonthlyCard(userId, state) {
   } catch (e) {}
 }
 
-// 获取VIP信息
+// 获取VIP信息（根路由）
 router.get('/', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
   try {
@@ -238,6 +238,63 @@ router.post('/buy-month-card', (req, res) => {
     playerData.diamonds = (playerData.diamonds || 0) - card.cost;
 
     res.json({ success: true, cardType, expireTime, message: `购买成功！月卡有效期至${new Date(expireTime).toLocaleDateString()}` });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// 获取指定玩家的VIP信息（/:userId 端点）
+router.get('/:userId', (req, res) => {
+  const userId = parseInt(req.params.userId);
+  if (!userId) return res.json({ success: false, error: '无效的玩家ID' });
+
+  try {
+    // 优先从 Users 表读取真实 VIP 数据
+    let vipLevel = 0;
+    let vipPoints = 0;
+    let nickname = '修仙者';
+    let diamonds = 0;
+    let lingshi = 0;
+
+    if (db) {
+      const user = db.prepare('SELECT vipLevel, vipPoints, nickname, diamonds, lingshi FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        vipLevel = user.vipLevel || 0;
+        vipPoints = user.vipPoints || 0;
+        nickname = user.nickname || '修仙者';
+        diamonds = user.diamonds || 0;
+        lingshi = Number(user.lingshi) || 0;
+      }
+    }
+
+    // 月卡状态
+    const card = loadMonthlyCard(userId);
+    const now = Date.now();
+    const hasActiveCard = card && card.expireTime > now;
+    const nextClaimTime = hasActiveCard
+      ? (card.lastClaimTime ? card.lastClaimTime + 86400000 : now)
+      : null;
+
+    res.json({
+      success: true,
+      vip: {
+        level: vipLevel,
+        points: vipPoints,
+        name: VIP_LEVELS[vipLevel]?.nameCn || '普通玩家',
+        benefits: VIP_LEVELS[vipLevel]?.benefits || [],
+        dailyBonus: VIP_LEVELS[vipLevel]?.dailyBonus || 0,
+        dropRate: VIP_LEVELS[vipLevel]?.dropRate || 0
+      },
+      monthlyCard: hasActiveCard ? {
+        type: card.cardType,
+        expireTime: card.expireTime,
+        nextClaimTime,
+        config: MONTHLY_CARDS[card.cardType]
+      } : null,
+      levels: VIP_LEVELS,
+      // 附加玩家信息
+      player: { nickname, diamonds, lingshi }
+    });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }

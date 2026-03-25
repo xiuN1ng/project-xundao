@@ -1,5 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// 数据库路径
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+} catch (e) {
+  db = null;
+}
 
 // 经脉分支
 const meridianBranches = [
@@ -81,14 +93,59 @@ const meridianPoints = {
   ]
 };
 
+// 经脉点系统：每分钟+1点（上限120点）
+// userMeridians[userId] = { branchProgress: {}, meridianPoints: 0, lastAccumulationTime: timestamp }
 let userMeridians = {};
-let userBranchProgress = {}; // 记录每个分支的进度
+let userBranchProgress = {}; // 兼容旧结构：userBranchProgress[userId][branchId] = count
 
-// 获取经脉分支
+// 初始化/获取玩家经脉数据（含自动解锁和点数累积）
+function getOrInitMeridian(userId, realm) {
+  if (!userMeridians[userId]) {
+    userMeridians[userId] = {
+      branchProgress: {},
+      meridianPoints: 0,
+      lastAccumulationTime: Date.now()
+    };
+    userBranchProgress[userId] = {};
+  }
+  
+  const data = userMeridians[userId];
+  const now = Date.now();
+  
+  // 累积经脉点：每分钟+1点（最多不超过120点）
+  const elapsedMs = now - data.lastAccumulationTime;
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  if (elapsedMinutes > 0) {
+    data.meridianPoints = Math.min(120, data.meridianPoints + elapsedMinutes);
+    data.lastAccumulationTime = now;
+  }
+  
+  // 自动解锁第一条经脉（任脉第1穴）：realm >= 2 且尚未解锁任何穴位
+  const totalUnlocked = Object.values(data.branchProgress).reduce((s, v) => s + v, 0);
+  if (realm >= 2 && totalUnlocked === 0) {
+    data.branchProgress[1] = 1; // 任脉解锁第1穴
+    userBranchProgress[userId] = userBranchProgress[userId] || {};
+    userBranchProgress[userId][1] = 1;
+  }
+  
+  return data;
+}
+
+// 获取经脉分支（支持 userId 查询参数，用于初始化经脉点）
 router.get('/branches', (req, res) => {
+  const userId = parseInt(req.query.userId) || 1;
+  let realm = 1;
+  if (db) {
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+  }
+  const meridianData = getOrInitMeridian(userId, realm);
+  
   const branches = meridianBranches.map(b => {
     const points = meridianPoints[b.id];
-    const userProgress = userBranchProgress[1]?.[b.id] || 0;
+    const userProgress = meridianData.branchProgress[b.id] || 0;
     const unlockedCount = points.filter((p, i) => i < userProgress).length;
     return {
       ...b,
@@ -97,17 +154,25 @@ router.get('/branches', (req, res) => {
       progress: Math.floor((unlockedCount / points.length) * 100)
     };
   });
-  res.json(branches);
+  res.json({ branches, meridianPoints: meridianData.meridianPoints });
 });
 
 // 获取特定分支的穴位
 router.get('/branch/:branchId', (req, res) => {
   const branchId = parseInt(req.params.branchId);
+  const userId = parseInt(req.query.userId) || 1;
   const points = meridianPoints[branchId];
   if (!points) return res.json({ success: false, message: '经脉分支不存在' });
   
-  const userProgress = userBranchProgress[1]?.[branchId] || 0;
-  const unlockedPoints = points.slice(0, userProgress);
+  let realm = 1;
+  if (db) {
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+  }
+  const meridianData = getOrInitMeridian(userId, realm);
+  const userProgress = meridianData.branchProgress[branchId] || 0;
   
   res.json({
     branch: meridianBranches.find(b => b.id === branchId),
@@ -115,7 +180,8 @@ router.get('/branch/:branchId', (req, res) => {
       ...p,
       unlocked: i < userProgress
     })),
-    currentProgress: userProgress
+    currentProgress: userProgress,
+    meridianPoints: meridianData.meridianPoints
   });
 });
 
@@ -128,8 +194,18 @@ router.post('/unlock', (req, res) => {
   const point = points[pointIndex];
   if (!point) return res.json({ success: false, message: '穴位不存在' });
   
-  userBranchProgress[userId] = userBranchProgress[userId] || {};
-  const current = userBranchProgress[userId][branchId] || 0;
+  // 获取玩家境界
+  let realm = 1;
+  if (db) {
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+  }
+  
+  // 初始化经脉数据（含自动解锁 + 点数累积）
+  const meridianData = getOrInitMeridian(userId, realm);
+  const current = meridianData.branchProgress[branchId] || 0;
   
   if (pointIndex !== current) {
     return res.json({ success: false, message: '请按顺序解锁穴位' });
@@ -139,20 +215,43 @@ router.post('/unlock', (req, res) => {
     return res.json({ success: false, message: '该分支已全部打通' });
   }
   
+  // 扣除经脉点（穴位 cost 代表所需点数，cost=100 表示需100点）
+  const cost = point.cost || 100;
+  if (meridianData.meridianPoints < cost) {
+    return res.json({ success: false, message: `经脉点不足，需要${cost}点，当前${meridianData.meridianPoints}点` });
+  }
+  
+  // 解锁穴位
+  meridianData.meridianPoints -= cost;
+  meridianData.branchProgress[branchId] = current + 1;
+  userBranchProgress[userId] = userBranchProgress[userId] || {};
   userBranchProgress[userId][branchId] = current + 1;
   
   res.json({ 
     success: true, 
     message: '成功开通 ' + point.name,
     effect: point.effect,
-    nextPoint: points[pointIndex + 1] || null
+    nextPoint: points[pointIndex + 1] || null,
+    meridianPoints: meridianData.meridianPoints
   });
 });
 
 // 获取所有已开通经脉效果
 router.get('/:userId', (req, res) => {
   const userId = parseInt(req.params.userId) || 1;
-  const progress = userBranchProgress[userId] || {};
+  
+  // 获取玩家境界（用于自动解锁判断）
+  let realm = 1;
+  if (db) {
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+  }
+  
+  // 初始化经脉数据（含自动解锁 + 点数累积）
+  const meridianData = getOrInitMeridian(userId, realm);
+  const progress = meridianData.branchProgress;
   
   let totalEffect = {
     hp: 0, attack: 0, defense: 0, speed: 0, dodge: 0, critRate: 0,
@@ -171,7 +270,7 @@ router.get('/:userId', (req, res) => {
       for (const [key, val] of Object.entries(p.effect)) {
         totalEffect[key] = (totalEffect[key] || 0) + val;
       }
-      unlockedDetails.push({ branch: branchId, point: p.name, effect: p.effect });
+      unlockedDetails.push({ branch: parseInt(branchId), point: p.name, effect: p.effect });
     }
   }
   
@@ -187,6 +286,7 @@ router.get('/:userId', (req, res) => {
   
   res.json({
     branches: progress,
+    meridianPoints: meridianData.meridianPoints,
     totalEffect: bonuses,
     details: unlockedDetails
   });

@@ -424,3 +424,31 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - /battle 和 /complete 端点：添加 chapter 存在性检查 + kills 默认值0 + enemyCount 局部变量防止 undefined  # 2026-03-26 完成
 [P1-B-NEW5] 创建 routes/equipment_dismantle.js：装备分解接口  # P1 新功能
 
+
+# ========== 从策划提案分发 — 2026-03-26 ==========
+# 分发时间: 2026-03-26 03:49
+
+# === P0 核心问题 ===
+[P0-B-44-1] worldboss.js attack端点：remainingHp=null问题
+  - 修复remainingHp计算，返回实际boss.hp - damageDealt
+  - 玩家伤害 = max(player.atk * 0.1, 1)，至少1点
+  - BOSS血量>50%时反击伤害=0，血量<50%时每次攻击=玩家HP的50%
+[P0-B-44-2] vip.js：添加router.get('/:userId')端点
+  - 返回 { level, points, name, benefits, dailyBonus, dropRate }
+  - 从Users表读取vipLevel/vipPoints而非模拟数据
+  - 确保路由注册在 '/' 之后
+
+# === P1 路由/数据问题 ===
+[P1-B-44-1] arena.js：修复ArenaSystem初始化顺序
+  - 错误: Cannot access 'ArenaSystem' before initialization
+  - 方案: 将ArenaSystem初始化移至所有依赖模块加载之后，或使用setTimeout延迟
+[P1-B-44-2] dungeon.js：修复建表语句PRIMARY KEY表达式问题
+  - 错误: expressions prohibited in PRIMARY KEY and UNIQUE constraints
+[P1-B-44-3] lottery.js：addToBag改写bag表而非item表
+  - 错误: no such table: item
+[P1-B-44-4] 灵石数据统一
+  - cultivation/status和vip/的灵石数据从/api/player/info同步
+  - lingshi为唯一权威值
+[P1-B-44-5] meridian.js：
+  - 玩家realm>=2时自动解锁第一条经脉
+  - 添加经脉点获取：每分钟+1经脉点
