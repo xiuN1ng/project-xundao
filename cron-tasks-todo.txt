@@ -417,7 +417,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P0-B-NEW5] 所有资源扣款操作必须 UPDATE Users SET lingshi  # 完成 | 2026-03-26
 
 # === P1 路由 + 持久化 ===
-[P1-B-NEW1] server.js worldBoss 小写别名路由  # /api/worldboss 404
+[P1-B-NEW1] server.js worldBoss 小写别名路由  # /api/worldboss 404  # 2026-03-26 完成
+  - 在 server.js 添加 app.use('/api/worldboss', require('./routes/worldBoss'))  # 2026-03-26 完成
 [P1-B-NEW2] routes/welfare.js 实现 GET /api/welfare/daily  # 每日福利接口缺失
 [P1-B-NEW3] database.js 初始化中创建 game_meta 表  # 连续多轮未修复
 [P1-B-NEW4] chapter.js 第260行 enemies undefined 修复  # 2026-03-26 完成
@@ -457,3 +458,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 境界>=2时自动解锁任脉第1穴（会阴穴）
   - unlock 端点改为消耗经脉点（cost字段），不再消耗灵石
   - 文件: server/backend/routes/meridian.js
+
+# === 2026-03-27-v4 策划报告任务（第49轮）===
+# P0-B-49-1: arena_player建表（arena_player表缺失导致竞技场完全不可用）
+# → 在routes/arena.js或server.js启动时CREATE TABLE IF NOT EXISTS arena_player
+# → 确保getOrCreateArenaPlayer()错误时不会静默失败
+# P0-B-49-2: welfare_sign_in和welfare_storage建表（签到系统无数据层）
+# P0-B-49-3: dungeon_records建表修复（次数限制失效，无持久化）
+# P1-B-49-1: player API GET / 优先从Users表读lingshi替代内存mock
+# P1-B-49-2: cultivation/start "no such column: lingshi"修复
+# P1-B-49-3: forge.js添加POST /make端点（目前只有/forge）
+# P1-B-49-4: sect.js ORDER BY member_count→members（sect/list返回假数据）
+# P1-B-NEW-A: 添加POST /api/dailyQuest/update-progress端点（14个任务progress全为0）
