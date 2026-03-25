@@ -44,7 +44,7 @@ const mockPlayer = {
   name: '修仙者',
   level: 5,
   realm: 1,
-  lingshi: 125680,
+  spirit_stones: 125680,
   diamonds: 520,
   hp: 1000,
   attack: 100,
@@ -79,7 +79,7 @@ function getOrCreateCultivation(userId) {
 // 辅助：获取玩家数据（数据库优先，降级到mock）
 function getPlayer(userId) {
   try {
-    const player = getPlayer(userId);
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
     return player || mockPlayer;
   } catch (e) {
     return mockPlayer;
@@ -113,7 +113,7 @@ router.get('/', (req, res) => {
       player: {
         level: player.level,
         realm: player.realm,
-        lingshi: player.lingshi
+        spirit_stones: player.spirit_stones
       }
     });
   } catch (err) {
@@ -149,7 +149,7 @@ router.get('/status', (req, res) => {
       player: {
         level: player.level,
         realm: player.realm,
-        lingshi: player.lingshi
+        spirit_stones: player.spirit_stones
       }
     });
   } catch (err) {
@@ -170,7 +170,7 @@ router.post('/start', (req, res) => {
 
     // 每次修炼消耗 50 灵石
     const LINGSHI_COST = 50;
-    if (parseInt(player.lingshi) < LINGSHI_COST) {
+    if (parseInt(player.spirit_stones) < LINGSHI_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
 
@@ -183,7 +183,7 @@ router.post('/start', (req, res) => {
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
 
     // 扣除灵石
-    db.prepare('UPDATE player SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
+    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(LINGSHI_COST, userId);
     // 同步修炼值
     db.prepare('UPDATE cultivation SET value = ? WHERE user_id = ?').run(newValue, userId);
     // 增加玩家经验（1次修炼 = 10 exp）

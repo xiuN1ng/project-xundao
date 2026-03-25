@@ -166,3 +166,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P0] 服务器重启 - PID 608782 运行于 Mar 24 17:38，需重启以加载更新后的路由文件
 [P0] 章节数值重做 - chapter.js 当前HP曲线完全崩坏，第100章HP=10^19，必须重做
 [P1] worldBoss小写路由 - 统一使用 /api/worldboss，修复 /api/worldBoss 驼峰问题
+
+## 2026-03-25-v16 新增任务
+[P0-B-NEW1] 【B】修复cultivation getPlayer()无限递归（cultivation.js:80）+ lingshi→spirit_stones列名 → 解决#184
+[P0-B-NEW2] 【B】server.js添加tribulationRouter.configure()调用 → 解决#185
+[P1-B-NEW1] 【B】VIP路由添加buy-month-card/claim-daily端点 → 解决#187
+[P1-B-NEW2] 【B】Achievement路由注册（app.use /api/achievement） → 解决#188

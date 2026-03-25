@@ -103,4 +103,30 @@ try { if (achievementRouter.setPlayerRef) achievementRouter.setPlayerRef(playerM
 const tribulationRouter = require('./routes/tribulation');
 try { if (tribulationRouter.setPlayerRef) tribulationRouter.setPlayerRef(playerModule._player); } catch(e) {}
 
+// 配置渡劫系统（解决 #185）
+const tribulationSystem = require('../game/tribulation_system');
+const DIFFICULTY_CONFIG = {
+  easy:      { name: '简单',     successBonus: 0.15, spiritCost: 1000 },
+  normal:    { name: '普通',     successBonus: 0,    spiritCost: 5000 },
+  hard:      { name: '困难',     successBonus: -0.1, spiritCost: 20000 },
+  nightmare: { name: '噩梦',     successBonus: -0.2, spiritCost: 50000 }
+};
+const PROTECTION_ITEMS = {
+  tiandiyu:    { id: 'tiandiyu',    name: '天地低昂符',   description: '失败时免除惩罚',      price: 1000 },
+  lingbao:     { id: 'lingbao',     name: '灵宝护体符',   description: '成功率+15%',          price: 2000 },
+  jiuzhuan:    { id: 'jiuzhuan',    name: '九转还魂丹',   description: '失败后保留50%灵气',    price: 3000 },
+  tianlu:      { id: 'tianlu',      name: '天禄补天符',   description: '成功率+25%',          price: 5000 }
+};
+try {
+  tribulationRouter.configure({
+    TRIBULATION_TYPES: tribulationSystem.TRIBULATION_TYPES,
+    DIFFICULTY_CONFIG,
+    PROTECTION_ITEMS,
+    REALMS: tribulationSystem.REALM_DATA,
+    db: null  // db 由 tribulationStorage 自己管理
+  });
+} catch(e) {
+  console.log('[tribulation configure]', e.message);
+}
+
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
