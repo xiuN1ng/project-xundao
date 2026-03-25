@@ -74,18 +74,24 @@ function initSignInTable() {
   try {
     database.exec(`
       CREATE TABLE IF NOT EXISTS welfare_sign_in (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        player_id VARCHAR(50) NOT NULL,
-        current_streak INT DEFAULT 0,
-        total_sign_days INT DEFAULT 0,
-        last_sign_date DATE,
-        sign_history JSON DEFAULT '[]',
-        repair_cards INT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_player_id (player_id)
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id TEXT NOT NULL,
+        current_streak INTEGER DEFAULT 0,
+        total_sign_days INTEGER DEFAULT 0,
+        last_sign_date TEXT,
+        sign_history TEXT DEFAULT '[]',
+        repair_cards INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // SQLite不支持UNIQUE KEY，用CREATE UNIQUE INDEX代替
+    try {
+      database.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_welfare_player ON welfare_sign_in(player_id)`);
+    } catch (e) {
+      // index may already exist
+    }
     console.log('✅ 签到表初始化完成');
     return true;
   } catch (e) {
