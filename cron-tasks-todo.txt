@@ -354,8 +354,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1-B-NEW2] shop.js列名修复
 - 文件: server/backend/routes/shop.js:50,63
 - 问题: 查询type列但表只有item_type，导致db=null降级到3件hardcoded假货
-- 修复: item_type as type
-- 状态: 新增 P1
+- 修复: item_type as type + shop_items表初始化 + player_items表初始化
+- 状态: 完成 | 2026-03-25 | shop.js SELECT用item_type as type别名 + DB初始化
 
 [P1-B-NEW3] sect-missions game_meta表缺失
 - 文件: server/backend/routes/sect-missions.js
