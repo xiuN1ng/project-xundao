@@ -210,3 +210,68 @@
   方案: 所有 require('./routes/xxx') 添加 try-catch 验证，失败时 process.exit(1)
   防止路由静默失败导致问题长期隐藏
   [B]
+
+# ==================== 2026-03-25 v34 新增任务 ====================
+
+## P0 【B】dungeon.js 添加 /battle 端点 → 解决P0-NEW-1
+  文件: server/routes/dungeon.js
+  问题: /dungeon/enter返回battleId但无/dungeon/battle端点
+  方案: 添加 router.post('/battle', ...) 接收 {player_id, battleId}，计算战斗结果，返回 {success, win, rewards}
+  测试: POST /api/dungeon/battle 应返回战斗结算
+  [B]
+
+## P0 【B】worldBoss.js 内部崩溃修复 → 解决P0-NEW-2
+  文件: server/routes/worldBoss.js
+  问题: GET /api/worldBoss/info 返回500 Internal Server Error
+  方案: 添加try-catch定位崩溃行，检查boss_damage_records/player_beasts表，修复数据库查询
+  测试: GET /api/worldBoss 应返回世界BOSS数据
+  [B]
+
+## P0 【B】abyss路由统一修复 → 解决P0-NEW-3
+  文件: server/server.js
+  问题: 后端注册/api/abyssDungeon，前端可能用/api/abyss，路由全404
+  方案: 添加 app.use('/api/abyss', require('./routes/abyss')) 别名路由
+  测试: GET /api/abyss 和 /api/abyssDungeon 都应返回深渊副本数据
+  [B]
+
+## P1 【B】lottery.js lingshi→spirit_stones 修复 → 连续22轮崩溃
+  文件: server/routes/lottery.js
+  问题: lingshi列名不存在，DB列名是spirit_stones
+  方案: 全局替换 lottery.js 中 lingshi → spirit_stones
+  测试: POST /api/lottery/draw 应返回抽奖结果
+  [B]
+
+## P1 【B】welfare_storage.js JSON_LENGTH修复 → 连续18轮崩溃
+  文件: server/game/welfare_storage.js
+  问题: JSON_LENGTH() SQLite不存在
+  方案: 改为 JSON.parse(sign_history).length
+  测试: POST /api/welfare/claim-sign-in 应返回 success:true
+  [B]
+
+## P1 【B】achievement.js 根路由注册
+  文件: server/routes/achievement.js
+  问题: GET /api/achievement 返回404
+  方案: node --check验证语法，修复router.get('/')端点
+  测试: GET /api/achievement 应返回玩家成就列表
+  [B]
+
+## P1 【B】mail.js 根路由注册
+  文件: server/routes/mail.js
+  问题: GET /api/mail 返回404
+  方案: 添加router.get('/')返回邮件列表，router.post('/read')标记已读
+  测试: GET /api/mail 应返回玩家邮件列表
+  [B]
+
+## P1 【B】Arena AI对手池生成
+  文件: server/services/arena_system.js
+  问题: totalPlayers=1，opponents=[]，无AI对手
+  方案: 实现generateOpponents()，每赛季生成10个AI对手（根据玩家realm匹配等级）
+  测试: GET /api/arena/opponents 应返回AI对手列表
+  [B]
+
+## P2 【B】标题系统扩展
+  文件: server/routes/title.js
+  问题: 只有2个标题无属性加成
+  方案: 每个标题激活后提供+ATK/HP/DEF属性，扩展到10+标题（凡人/修士/筑基/金丹...）
+  测试: 激活标题后属性面板应显示对应属性加成
+  [B]
