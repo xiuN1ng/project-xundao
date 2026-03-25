@@ -230,45 +230,45 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 
 # ========== 2026-03-25 下午批次（5:19 PM）==========
-## P0 #270: Dungeon battle 流程修复  # 2026-03-25
+## P0 #270: Dungeon battle 流程修复  # 2026-03-25 完成
 - 问题: POST /dungeon/enter 返回battleId，但 POST /dungeon/battle 404
 - 涉及: routes/dungeon.js
 - 修复: 添加 POST /battle/:battleId 端点 → 计算战斗结算 → 扣除灵石 → 掉落写入player_items
 - 数值: 新手副本0灵石/火山洞穴50灵石/掉落概率30%
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P0 #271: Chapter battle 路由修正  # 2026-03-25
+## P0 #271: Chapter battle 路由修正  # 2026-03-25 完成
 - 问题: POST /chapter/battle 连续17轮404，实际工作路由是 /chapter/complete
 - 涉及: routes/chapter.js
 - 修复: 添加 POST /battle 端点，映射到已有的 /complete 逻辑
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P0 #272: Shop buy 扣灵石修复  # 2026-03-25
+## P0 #272: Shop buy 扣灵石修复  # 2026-03-25 完成
 - 问题: POST /shop/buy 返回success但灵石未扣除
 - 涉及: game/shop.js 的 buyItem 函数
 - 修复: 添加 UPDATE player SET spirit_stones - price + INSERT player_items
 - 测试: 购买前999999999，购买后应减少
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P1 #273: Dungeon info 端点  # 2026-03-25
+## P1 #273: Dungeon info 端点  # 2026-03-25 完成
 - 问题: GET /dungeon/info/:id 404
 - 涉及: routes/dungeon.js
 - 修复: 添加 GET /info/:id，返回 {timesRemaining, cooldownEnd, bestRecord}
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P1 #274: Sect /list 端点  # 2026-03-25
+## P1 #274: Sect /list 端点  # 2026-03-25 完成
 - 问题: GET /sect/list 404
 - 涉及: routes/sect.js
 - 修复: 添加 GET /list，查询sect表返回宗门分页列表
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P1 #275: Arena /info 和 /match 端点  # 2026-03-25
+## P1 #275: Arena /info 和 /match 端点  # 2026-03-25 完成
 - 问题: GET /arena/info 404, POST /arena/match 404
 - 涉及: routes/arena.js
 - 修复: 添加 GET /info（当前排名/积分/赛季）+ POST /match（匹配对手）
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v27.md
 
-## P1 #A: 离线挂机奖励系统  # 2026-03-25
+## P1 #A: 离线挂机奖励系统  # 2026-03-25 完成
 - 问题: 玩家离线无收益，持续游玩动力不足
 - 涉及: game/offline.js, routes/player.js (login端点)
 - 实现: 下线记录时间戳 → 上线计算elapsed → 发放elapsed×50%×VIP加成的灵石
