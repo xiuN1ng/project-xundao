@@ -10,6 +10,10 @@ try {
   achievementTrigger = null;
 }
 
+// 数据库引用（由 server.js 注入）
+let dbRef = null;
+function setDb(db) { dbRef = db; }
+
 // 模拟数据库（测试用满级账号）
 let player = {
   id: 1,
@@ -40,6 +44,33 @@ router.get('/info', (req, res) => {
 router.put('/', (req, res) => {
   const oldLevel = player.level;
   player = { ...player, ...req.body };
+  
+  // ========== 数据库持久化 ==========
+  if (dbRef && player.id) {
+    try {
+      const fields = [];
+      const values = [];
+      // 支持持久化的字段映射
+      const fieldMap = {
+        name: 'username', level: 'level', realm: 'realm_level',
+        lingshi: 'spirit_stones', diamonds: 'diamonds',
+        hp: 'hp', attack: 'attack', defense: 'defense', speed: 'speed',
+        sectId: 'sect_id', level: 'level'
+      };
+      for (const [key, dbCol] of Object.entries(fieldMap)) {
+        if (req.body[key] !== undefined) {
+          fields.push(`${dbCol} = ?`);
+          values.push(req.body[key]);
+        }
+      }
+      if (fields.length > 0) {
+        values.push(player.id);
+        dbRef.prepare(`UPDATE player SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+      }
+    } catch (e) {
+      console.error('[player] DB持久化失败:', e.message);
+    }
+  }
   
   // ========== 成就触发：升级 ==========
   let achievementResults = [];
@@ -79,6 +110,23 @@ router.post('/resources', (req, res) => {
   const { lingshi, diamonds } = req.body;
   if (lingshi) player.lingshi += lingshi;
   if (diamonds) player.diamonds += diamonds;
+  
+  // 数据库持久化
+  if (dbRef && player.id) {
+    try {
+      const updates = [];
+      const values = [];
+      if (lingshi) { updates.push('spirit_stones = spirit_stones + ?'); values.push(lingshi); }
+      if (diamonds) { updates.push('diamonds = diamonds + ?'); values.push(diamonds); }
+      if (updates.length > 0) {
+        values.push(player.id);
+        dbRef.prepare(`UPDATE player SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      }
+    } catch (e) {
+      console.error('[player] resources DB持久化失败:', e.message);
+    }
+  }
+  
   res.json({ lingshi: player.lingshi, diamonds: player.diamonds });
 });
 
@@ -168,3 +216,4 @@ router.post('/login', (req, res) => {
 
 module.exports = router;
 module.exports._player = player;
+module.exports.setDb = setDb;

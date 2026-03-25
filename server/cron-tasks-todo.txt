@@ -275,3 +275,58 @@
   方案: 每个标题激活后提供+ATK/HP/DEF属性，扩展到10+标题（凡人/修士/筑基/金丹...）
   测试: 激活标题后属性面板应显示对应属性加成
   [B]
+
+# ======== 2026-03-25-v39 追加 ==========
+
+## P0 【B】achievement.js + mail.js 根路由缺失（连续多轮未修复）
+  文件: server/routes/achievement.js, server/routes/mail.js
+  问题: GET /api/achievement 和 GET /api/mail 返回404
+  方案: 
+    - achievement.js: 添加 router.get('/', ...) 返回玩家成就列表
+    - mail.js: 添加 router.get('/', ...) 返回邮件列表
+  测试: curl http://localhost:3001/api/achievement 和 /api/mail 应返回JSON数据
+  [B]
+
+## P0 【B】worldBoss大小写别名注册（连续3轮未修复）
+  文件: server/server.js
+  问题: client调用/api/worldboss(小写)，server挂载/api/worldBoss(驼峰)
+  方案: server.js添加 app.use('/api/worldboss', require('./routes/worldBoss'))
+  测试: curl http://localhost:3001/api/worldboss 应返回BOSS状态
+  [B]
+
+## P0 【B】Forge后端参数归一化（player_id/recipe_id）
+  文件: server/routes/forge.js
+  问题: 前端发送camelCase(userId/recipeId)，后端期望snake_case(player_id/recipe_id)
+  方案: forge.js的/forge端点增加参数兼容:
+    const player_id = req.body.player_id || req.body.userId;
+    const recipe_id = req.body.recipe_id || req.body.recipeId;
+  测试: POST /api/forge {userId:1, recipeId:"flying_sword"} 应返回制作结果
+  [B]
+
+## P1 【B】welfare JSON_LENGTH SQLite兼容修复（连续21轮❗）
+  文件: server/routes/welfare_api.js
+  问题: JSON_LENGTH() SQLite不支持，签到永远崩溃
+  方案: 改为 const claimed = JSON.parse(x || '[]'); count = claimed.length;
+  测试: POST /api/welfare/claim-sign-in 应返回success:true
+  [B]
+
+## P1 【B/F】Daily Quest进度追踪系统
+  文件: server/routes/dailyQuest.js + client/src/components/QuestPanel.vue
+  问题: 14个任务progress全为0，无实际追踪
+  方案:
+    - B: 新增POST /api/dailyQuest/progress {type, delta}更新进度
+    - B: 章节/战斗/修炼完成后自动触发进度更新
+    - F: QuestPanel.vue加载progress数据并展示
+  测试: 完成战斗后quest progress应>0
+  [B/F]
+
+## P1 【B/F】离线挂机奖励系统
+  文件: server/routes/player.js + server/routes/offline.js (新建)
+  问题: 玩家离线后无收益，免费玩家流失
+  方案:
+    - player表增加last_logout_at字段
+    - 玩家登录时计算(now - last_logout_at)，发放离线奖励
+    - 上线弹窗显示"离线X分钟，获得Y灵石/Z经验"
+    - 最多24小时，上限1440分钟
+  数值: 每分钟10灵石+5经验，VIP倍率
+  [B/F]

@@ -138,7 +138,7 @@ router.get('/redpackets', (req, res) => {
 // /redpacket/send - 发送红包
 router.post('/redpacket/send', (req, res) => {
   const { player_id, amount, type, message } = req.body;
-  const packet = { id: Date.now(), playerId: player_id, amount, type, message, remaining: amount, createdAt: new Date() };
+  const packet = { id: Date.now(), playerId: player_id, amount, type, message, totalRecipients: 10, remaining: 10, createdAt: new Date() };
   redPackets.push(packet);
   res.json({ success: true, packet });
 });
@@ -150,7 +150,7 @@ router.post('/redpacket/claim', (req, res) => {
   if (!packet) return res.json({ success: false, message: '红包不存在' });
   if (packet.remaining <= 0) return res.json({ success: false, message: '红包已领完' });
   
-  const claimAmount = Math.floor(packet.amount / packet.remaining);
+  const claimAmount = Math.floor(packet.amount / (packet.totalRecipients || 10));
   packet.remaining -= 1;
   res.json({ success: true, amount: claimAmount, message: `领取成功，获得 ${claimAmount} 灵石` });
 });

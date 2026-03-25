@@ -144,11 +144,14 @@ try {
     TRIBULATION_TYPES: tribulationSystem.TRIBULATION_TYPES,
     DIFFICULTY_CONFIG,
     PROTECTION_ITEMS,
-    REALMS: tribulationSystem.REALM_DATA,
+    REALMS: Object.keys(tribulationSystem.REALM_DATA),
     db: null  // db 由 tribulationStorage 自己管理
   });
 } catch(e) {
   console.log('[tribulation configure]', e.message);
 }
+
+// 注入DB引用到 player.js（解决 #P0-B-NEW3: player.js数据库持久化）
+try { if (playerModule.setDb) playerModule.setDb(db); } catch(e) { console.log('[player setDb]', e.message); }
 
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
