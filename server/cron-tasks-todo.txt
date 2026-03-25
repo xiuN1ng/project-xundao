@@ -128,3 +128,27 @@
   - 方案B：在 abyss.js 添加 router.post('/enter', ...) 作为 /battle 别名
   - 状态：待执行（可选替代前端修改）
 
+
+## 2026-03-25 v21 新增任务
+
+[P0-B-NEW1] 【B】welfare_storage.js JSON_LENGTH 修复 → 解决 #229
+  文件: server/game/welfare_storage.js:200
+  问题: SQLite 不存在 JSON_LENGTH() 函数
+  方案: 改为应用层 JSON.parse() 处理 sign_history 数组
+  测试: POST /api/welfare/claim-sign-in 应返回 success:true
+
+[P0-B-NEW2] 【B】lottery.js 列名统一 → 解决 #230
+  文件: server/routes/lottery.js
+  问题: 代码用 lingshi，DB 列为 spirit_stones
+  方案: 全局 lingshi → spirit_stones，同时 grep 全局其他路由
+  测试: POST /api/lottery/draw 应返回抽奖结果
+
+[P0-B-NEW3] 【B】worldBoss/abyss 等 10+ 路由 404 调试 → 解决 #231
+  问题路由: worldBoss, abyss, payment, forge POST, dailyQuest, beast, skill, achievement, mail, quest
+  方案: node --check 验证语法，curl 逐个测试，找根因并修复
+
+[P1-B-NEW1] 【B】worldBoss + abyss 功能激活
+  worldBoss: router.get('/') + router.post('/challenge')
+  abyss: router.get('/') + router.post('/battle')
+  boss_damage_records 写入
+
