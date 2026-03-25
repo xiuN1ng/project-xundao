@@ -18,7 +18,7 @@ try {
       icon TEXT DEFAULT '📦',
       price INTEGER NOT NULL DEFAULT 100,
       category TEXT NOT NULL DEFAULT 'misc',
-      type TEXT NOT NULL DEFAULT 'misc',
+      item_type TEXT NOT NULL DEFAULT 'misc',
       description TEXT DEFAULT '',
       stock INTEGER DEFAULT -1,
       vip_level_required INTEGER DEFAULT 0,
@@ -77,7 +77,7 @@ let goods = [
 function getShopItems() {
   if (!db) return fallbackGoods;
   try {
-    return db.prepare('SELECT id, name, icon, price, category, type, description, stock, vip_level_required, level_required FROM shop_items ORDER BY sort_order').all();
+    return db.prepare('SELECT id, name, icon, price, category, item_type as type, description, stock, vip_level_required, level_required FROM shop_items ORDER BY sort_order').all();
   } catch (e) {
     console.error('[shop] getShopItems错误:', e.message);
     return fallbackGoods;
