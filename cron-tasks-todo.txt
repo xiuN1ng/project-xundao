@@ -468,3 +468,20 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # P1-B-49-3: forge.js添加POST /make端点（目前只有/forge）# 完成 | 2026-03-26 | forge.js添加POST /make端点(/forge别名)
 # P1-B-49-4: sect.js ORDER BY member_count→members（sect/list返回假数据）# 完成 | 2026-03-26 | sect.js ORDER BY members DESC
 # P1-B-NEW-A: 添加POST /api/dailyQuest/update-progress端点（14个任务progress全为0）# 完成 | 2026-03-26 | dailyQuest.js添加POST /update-progress端点
+
+# ========== 从策划提案分发 — 2026-03-26 第50轮 ==========
+# 分发时间: 2026-03-26 07:11
+
+# === P0 紧急修复 ===
+[P0-B-50-1] dungeon.js：移除 dungeon_records 建表语句中的 UNIQUE(user_id,dungeon_id,enter_date) 约束，改用程序侧去重
+[P0-B-50-2] shop.js /buy：const userId = req.body.userId ?? req.body.player_id ?? 1; const itemId = req.body.itemId ?? req.body.item_id;
+[P0-B-50-3] cultivation.js 第129行：player: mockPlayer → player: getPlayer(userId)，读取真实 Users.lingshi
+
+# === P1 重要修复 ===
+[P1-B-50-1] arena.js initArenaTables()：增强错误日志（Logger.error），外层包 try-catch；如 db.exec() 失败则分步建表
+[P1-B-50-2] 创建 routes/gongfa.js：GET /api/gongfa/list（功法列表）、POST /api/gongfa/learn（学习功法）、POST /api/gongfa/equip（装备功法）
+[P1-B-50-3] worldBoss.js attack：damage = Math.floor(player.attack * 1.5)，添加狂暴机制（血量<30%时伤害×2）
+[P1-B-50-4] chapter.js complete：首通奖励 +200灵石（当前第1章通关无灵石奖励）
+
+# === P1 新功能 ===
+[P1-B-NEW-A] welfare/claim-sign-in：首日签到奖励从100灵石提升至300灵石  # 完成 | 2026-03-26
