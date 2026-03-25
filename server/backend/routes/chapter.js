@@ -312,3 +312,4 @@ router.post('/battle', (req, res) => {
 });
 
 module.exports = router;
+module.exports.__chapters = chapters;

@@ -67,6 +67,7 @@ app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/forge', require('./routes/forge'));
 app.use('/api/chapter', require('./routes/chapter'));
+app.use('/api/story', require('./routes/story'));
 app.use('/api/pill', require('./routes/pill'));
 
 // 运营
