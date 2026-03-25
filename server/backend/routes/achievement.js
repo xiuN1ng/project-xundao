@@ -1,5 +1,71 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// 数据库连接
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+  initAchievementTable();
+  loadAchievementsFromDB();
+} catch (e) {
+  console.log('[achievement] DB连接失败:', e.message);
+  db = null;
+}
+
+function initAchievementTable() {
+  if (!db) return;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS achievement_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        achievement_id INTEGER NOT NULL,
+        progress INTEGER DEFAULT 0,
+        completed INTEGER DEFAULT 0,
+        claimed INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, achievement_id)
+      );
+    `);
+    console.log('[achievement] achievement_progress 表初始化完成');
+  } catch (e) {
+    console.error('[achievement] 建表失败:', e.message);
+  }
+}
+
+function loadAchievementsFromDB() {
+  if (!db) return;
+  try {
+    const rows = db.prepare('SELECT * FROM achievement_progress').all();
+    rows.forEach(row => {
+      if (!userAchievements[row.user_id]) userAchievements[row.user_id] = {};
+      userAchievements[row.user_id][row.achievement_id] = {
+        progress: row.progress,
+        completed: !!row.completed,
+        claimed: !!row.claimed
+      };
+    });
+    console.log(`[achievement] 从DB加载了 ${rows.length} 条成就进度`);
+  } catch (e) {
+    console.error('[achievement] 加载成就进度失败:', e.message);
+  }
+}
+
+function saveAchievementToDB(userId, achievementId, progress, completed, claimed) {
+  if (!db) return;
+  try {
+    db.prepare(`
+      INSERT OR REPLACE INTO achievement_progress (user_id, achievement_id, progress, completed, claimed, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(userId, achievementId, progress, completed ? 1 : 0, claimed ? 1 : 0);
+  } catch (e) {
+    console.error('[achievement] 保存成就进度失败:', e.message);
+  }
+}
 
 // 共享玩家数据引用
 let playerRef = null;
@@ -130,9 +196,13 @@ router.post('/update', (req, res) => {
     const newProgress = Math.max(current, value);
     userAchievements[userId][ach.id].progress = newProgress;
     
+    const wasCompleted = userAchievements[userId][ach.id].completed;
     if (newProgress >= ach.target) {
       userAchievements[userId][ach.id].completed = true;
     }
+    
+    // 持久化到DB
+    saveAchievementToDB(userId, ach.id, newProgress, userAchievements[userId][ach.id].completed, userAchievements[userId][ach.id].claimed);
   });
   
   res.json({ success: true });
@@ -237,6 +307,7 @@ router.post('/claim', (req, res) => {
   }
   
   userAch.claimed = true;
+  saveAchievementToDB(userId, achievementId, userAch.progress, userAch.completed, true);
   
   if (playerRef) {
     if (achievement.reward.diamonds) playerRef.diamonds += achievement.reward.diamonds;

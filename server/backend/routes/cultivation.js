@@ -54,6 +54,15 @@ const mockPlayer = {
   createdAt: Date.now()
 };
 
+// 成就触发服务
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[cultivation] 成就触发服务未找到');
+  achievementTrigger = null;
+}
+
 // Mock修炼数据
 let mockCultivation = {
   value: 0,
@@ -240,6 +249,15 @@ router.post('/breakthrough', (req, res) => {
     // 同步更新 Users 表（权威源）和 player 表
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
+    
+    // 成就触发：境界突破
+    if (achievementTrigger) {
+      try {
+        achievementTrigger.triggerAchievement(userId, 'realm_breakthrough', nextRealm);
+      } catch (e) {
+        console.error('[cultivation] 成就触发失败:', e.message);
+      }
+    }
 
     res.json({
       success: true,

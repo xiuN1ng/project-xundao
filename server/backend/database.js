@@ -115,7 +115,15 @@ const Order = sequelize.define('Order', {
 async function initDatabase() {
   try {
     await sequelize.sync({ alter: true });
-    console.log('✅ 数据库初始化完成');
+    
+    // 创建 game_meta 表（key-value 存储，用于系统全局配置/重置时间等）
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS game_meta (
+        k TEXT PRIMARY KEY,
+        val TEXT
+      )
+    `);
+    console.log('✅ game_meta 表初始化完成');
     
     // 创建测试用户
     const testUser = await User.findOne({ where: { username: 'test' } });

@@ -2,6 +2,15 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 成就触发服务
+let achievementTrigger;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+} catch (e) {
+  console.log('[dungeon] 成就触发服务未找到');
+  achievementTrigger = null;
+}
+
 // 数据库路径
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
@@ -201,6 +210,15 @@ router.post('/battle/:battleId', (req, res) => {
         }
       } catch (e) {
         console.log('[dungeon] 记录更新:', e.message);
+      }
+    }
+    
+    // 成就触发：副本通关
+    if (won && achievementTrigger) {
+      try {
+        achievementTrigger.triggerAchievement(userId, 'dungeon_clear', dungeonId);
+      } catch (e) {
+        console.error('[dungeon] 成就触发失败:', e.message);
       }
     }
   }
