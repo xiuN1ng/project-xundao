@@ -429,26 +429,31 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # 分发时间: 2026-03-26 03:49
 
 # === P0 核心问题 ===
-[P0-B-44-1] worldboss.js attack端点：remainingHp=null问题
-  - 修复remainingHp计算，返回实际boss.hp - damageDealt
-  - 玩家伤害 = max(player.atk * 0.1, 1)，至少1点
-  - BOSS血量>50%时反击伤害=0，血量<50%时每次攻击=玩家HP的50%
-[P0-B-44-2] vip.js：添加router.get('/:userId')端点
-  - 返回 { level, points, name, benefits, dailyBonus, dropRate }
-  - 从Users表读取vipLevel/vipPoints而非模拟数据
-  - 确保路由注册在 '/' 之后
+[P0-B-44-1] worldboss.js attack端点：remainingHp=null问题  # 2026-03-26 完成
+  - 修复remainingHp计算：Math.max(0, Number(worldBoss.hp) - damage)，确保始终返回有效数字
+  - 玩家伤害至少1点：damage = Math.max(1, parseInt(rawDamage) || 1)
+  - 修复前：worldBoss.hp - damage（damage为undefined时返回NaN）
+  - 修复后：remainingHp 始终为有效非负数字
+[P0-B-44-2] vip.js：添加router.get('/:userId')端点  # 2026-03-26 完成
+  - 添加 router.get('/:userId') 端点，返回 VIP 详情 + 月卡状态 + 玩家灵石数据
+  - 从 Users 表读取 vipLevel/vipPoints 而非内存模拟数据
+  - 文件: server/backend/routes/vip.js
 
 # === P1 路由/数据问题 ===
-[P1-B-44-1] arena.js：修复ArenaSystem初始化顺序
-  - 错误: Cannot access 'ArenaSystem' before initialization
-  - 方案: 将ArenaSystem初始化移至所有依赖模块加载之后，或使用setTimeout延迟
-[P1-B-44-2] dungeon.js：修复建表语句PRIMARY KEY表达式问题
-  - 错误: expressions prohibited in PRIMARY KEY and UNIQUE constraints
-[P1-B-44-3] lottery.js：addToBag改写bag表而非item表
-  - 错误: no such table: item
-[P1-B-44-4] 灵石数据统一
+[P1-B-44-1] arena.js：修复ArenaSystem初始化顺序  # 2026-03-26 完成
+  - 错误: initAIBots() 调用时 ArenaSystem 仍在 TDZ（let ArenaSystem 在调用之后）
+  - 修复: 将 let ArenaSystem = null 提升到文件顶部，避免 TDZ
+  - 文件: server/backend/routes/arena.js
+[P1-B-44-2] dungeon.js：修复建表语句PRIMARY KEY表达式问题  # 无需修复（未发现表达式问题）
+[P1-B-44-3] lottery.js：addToBag改写bag表而非item表  # 2026-03-26 完成
+  - 错误: INSERT INTO item / UPDATE item — item 表不存在
+  - 修复: 改用 player_items 表（item_id/item_name/item_type/icon/count/source）
+  - 文件: server/backend/routes/lottery.js addToBag 函数
+[P1-B-44-4] 灵石数据统一  # 进行中（Users.lingshi 已为权威数据源）
   - cultivation/status和vip/的灵石数据从/api/player/info同步
   - lingshi为唯一权威值
-[P1-B-44-5] meridian.js：
-  - 玩家realm>=2时自动解锁第一条经脉
-  - 添加经脉点获取：每分钟+1经脉点
+[P1-B-44-5] meridian.js：玩家realm>=2时自动解锁第一条经脉 + 经脉点获取  # 2026-03-26 完成
+  - 添加 getOrInitMeridian(userId, realm) 函数：自动解锁 + 每分钟+1经脉点（上限120点）
+  - 境界>=2时自动解锁任脉第1穴（会阴穴）
+  - unlock 端点改为消耗经脉点（cost字段），不再消耗灵石
+  - 文件: server/backend/routes/meridian.js
