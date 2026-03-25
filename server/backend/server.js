@@ -65,6 +65,7 @@ app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/equipment', require('./routes/equipment'));
+app.use('/api/equipmentDismantle', require('./routes/equipment_dismantle'));
 app.use('/api/forge', require('./routes/forge'));
 app.use('/api/chapter', require('./routes/chapter'));
 app.use('/api/story', require('./routes/story'));

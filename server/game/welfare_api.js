@@ -262,6 +262,33 @@ router.get('/history', (req, res) => {
   }
 });
 
+/**
+ * GET /api/welfare/daily
+ * 每日福利 - 每日登录奖励（独立于7日签到循环的每日一次奖励）
+ */
+router.get('/daily', (req, res) => {
+  try {
+    const playerIdRaw = req.query.player_id || req.query.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 每日福利配置
+    const dailyReward = { type: 'lingshi', amount: 100, name: '每日登录礼' };
+    
+    res.json({
+      success: true,
+      data: {
+        date: today,
+        canClaim: true,
+        reward: dailyReward
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 初始化
 initWelfare();
 
