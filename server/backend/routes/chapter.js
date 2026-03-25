@@ -179,17 +179,23 @@ router.post('/enter', (req, res) => {
 
 // 章节战斗完成
 router.post('/complete', (req, res) => {
-  const { userId, chapterId, kills, time } = req.body;
+  const { userId, chapterId, kills = 0, time } = req.body;
   
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
   
   const chapter = chapters.find(c => c.id === chapterId);
   
+  // 安全检查
+  if (!chapter) {
+    return res.status(404).json({ success: false, error: '章节不存在' });
+  }
+  
   // 计算星级
+  const enemyCount = chapter.enemies || 1;
   let stars = 1;
-  if (kills >= chapter.enemies) stars = 3;
-  else if (kills >= chapter.enemies * 0.7) stars = 2;
+  if (kills >= enemyCount) stars = 3;
+  else if (kills >= enemyCount * 0.7) stars = 2;
   
   progress.stars = progress.stars || {};
   progress.stars[chapterId] = Math.max(progress.stars[chapterId] || 0, stars);
@@ -248,17 +254,23 @@ router.get('/story/:id', (req, res) => {
 // 章节战斗 (兼容前端 /chapter/battle 路由)
 router.post('/battle', (req, res) => {
   // 直接映射到 /complete 的逻辑
-  const { userId, chapterId, kills, time } = req.body;
+  const { userId, chapterId, kills = 0, time } = req.body;
   
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
   
   const chapter = chapters.find(c => c.id === chapterId);
   
+  // 安全检查
+  if (!chapter) {
+    return res.status(404).json({ success: false, error: '章节不存在' });
+  }
+  
   // 计算星级
+  const enemyCount = chapter.enemies || 1;
   let stars = 1;
-  if (kills >= chapter.enemies) stars = 3;
-  else if (kills >= chapter.enemies * 0.7) stars = 2;
+  if (kills >= enemyCount) stars = 3;
+  else if (kills >= enemyCount * 0.7) stars = 2;
   
   progress.stars = progress.stars || {};
   progress.stars[chapterId] = Math.max(progress.stars[chapterId] || 0, stars);
