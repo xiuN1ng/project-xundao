@@ -14,6 +14,7 @@ const packages = [
   {id:6,name:'钻石648',price:128,diamonds:648}
 ];
 
+router.get('/products',(req,res)=>res.json(packages));
 router.get('/packages',(req,res)=>res.json(packages));
 
 // 创建订单

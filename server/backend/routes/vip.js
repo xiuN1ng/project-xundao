@@ -11,7 +11,7 @@ try {
   playerModule = { _player: { id: 1, vipLevel: 1, vipPoints: 0, diamonds: 99999, spirit_stones: 999999999 } };
 }
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 let db;
