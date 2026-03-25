@@ -1,6 +1,27 @@
 const express = require('express');
 const router = express.Router();
 
+// 根路径
+router.get('/', (req, res) => {
+  res.json({
+    hasBoss: worldBoss.status === 'alive' && worldBoss.currentBoss !== null,
+    bossList: bossConfig.bosses.map(b => ({
+      id: b.id,
+      name: b.name,
+      level: b.level,
+      quality: b.quality
+    })),
+    currentBoss: worldBoss.currentBoss ? {
+      id: worldBoss.currentBoss.id,
+      name: worldBoss.currentBoss.name,
+      hp: worldBoss.hp,
+      maxHp: worldBoss.maxHp,
+      status: worldBoss.status
+    } : null,
+    totalParticipants: worldBoss.damageRecords.length
+  });
+});
+
 // 世界BOSS配置
 const bossConfig = {
   bosses: [

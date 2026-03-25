@@ -53,8 +53,8 @@ function initAIBots() {
       return;
     }
     const insert = db.prepare(`
-      INSERT OR IGNORE INTO arena_player (player_id, username, arena_points, rank_id, rank_name, current_season, win_count, lose_count, total_battles, daily_challenges_used, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT OR IGNORE INTO arena_player (player_id, arena_points, rank_id, rank_name, current_season, win_count, lose_count, total_battles, daily_challenges_used, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
     const insertPlayer = db.prepare(`
       INSERT OR IGNORE INTO player (id, username, level, realm_level, combat_power, vip_level, created_at)
@@ -72,7 +72,7 @@ function initAIBots() {
       const points = basePoints[bot.tier] || 500;
       try {
         insertPlayer.run(botId, bot.username, bot.level, bot.realm_level, bot.combat_power);
-        insert.run(botId, bot.username, points, rankId, rankName, season, Math.floor(points/50), Math.floor(points/80), Math.floor(points/30));
+        insert.run(botId, points, rankId, rankName, season, Math.floor(points/50), Math.floor(points/80), Math.floor(points/30));
       } catch(e) {}
     }
     Logger.info(`AI机器人池初始化完成 (${AI_BOTS.length}个: 低阶${AI_BOTS.filter(b=>b.tier===1).length}/中阶${AI_BOTS.filter(b=>b.tier===2).length}/高阶${AI_BOTS.filter(b=>b.tier===3).length})`);

@@ -41,6 +41,11 @@ function initSectMissionTables(db) {
       stock INTEGER DEFAULT -1,
       player_limit INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS game_meta (
+      k TEXT PRIMARY KEY,
+      val TEXT
+    );
   `);
 
   // 初始化商店商品（如果为空）
