@@ -198,12 +198,9 @@ router.post('/start', (req, res) => {
     // 扣除灵石（写入 Users.lingshi，权威数据源）
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
     // 同步修炼值
-    db.prepare('UPDATE Cultivations SET value = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, userId);</parameter>
-</</minimax:tool_call>>
-</minimax:tool_call>
+    db.prepare('UPDATE Cultivations SET value = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, userId);
     // 增加玩家经验（1次修炼 = 10 exp）
     const expGain = 10;
-    db.prepare('UPDATE player SET exp = exp + ? WHERE id = ?').run(expGain, userId);
 
     res.json({
       success: true,
