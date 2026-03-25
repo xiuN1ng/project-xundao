@@ -410,9 +410,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # 分发时间: 2026-03-26 02:51
 
 # === P0 核心断裂（付费入口 + 经济系统）===
-[P0-B-NEW1] shop.js DB路径修复 + buy接口商品存在性检查  # shop/buy 全局"商品不存在"
-[P0-B-NEW2] 创建 routes/vip.js：/api/vip/info + /api/vip/claim-daily  # VIP API 404
-[P0-B-NEW3] 创建 routes/payment.js：/api/payment/products + 订单生成  # 支付 API 404
+[P0-B-NEW1] shop.js DB路径修复 + buy接口商品存在性检查  # shop/buy 全局"商品不存在" # 已确认路径正确
+[P0-B-NEW2] 创建 routes/vip.js：/api/vip/info + /api/vip/claim-daily  # VIP API 404 # 已确认存在，DB路径修正 2026-03-26
+[P0-B-NEW3] 创建 routes/payment.js：/api/payment/products + 订单生成  # 支付 API 404 # 已完成：/products端点 2026-03-26
 [P0-B-NEW4] cultivation.js 统一lingshi字段名 + 从DB2 Users表读取  # 灵石三套口径
 [P0-B-NEW5] 所有资源扣款操作必须 UPDATE Users SET lingshi  # 经济系统数据分裂
 
