@@ -168,7 +168,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1] worldBoss小写路由 - 统一使用 /api/worldboss，修复 /api/worldBoss 驼峰问题
 
 ## 2026-03-25-v16 新增任务
-[P0-B-NEW1] 【B】修复cultivation getPlayer()无限递归（cultivation.js:80）+ lingshi→spirit_stones列名 → 解决#184
-[P0-B-NEW2] 【B】server.js添加tribulationRouter.configure()调用 → 解决#185
-[P1-B-NEW1] 【B】VIP路由添加buy-month-card/claim-daily端点 → 解决#187
-[P1-B-NEW2] 【B】Achievement路由注册（app.use /api/achievement） → 解决#188
+[P0-B-NEW1] 【B】修复cultivation getPlayer()无限递归（cultivation.js:80）+ lingshi→spirit_stones列名 → 解决#184  # 2026-03-25 完成
+  - cultivation.js getPlayer() 递归调用自身bug → 改为 db.prepare('SELECT * FROM player WHERE id = ?').get(userId)  # 2026-03-25 完成
+  - 所有 player.lingshi → player.spirit_stones，UPDATE SET lingshi → spirit_stones  # 2026-03-25 完成
+[P0-B-NEW2] 【B】server.js添加tribulationRouter.configure()调用 → 解决#185  # 2026-03-25 完成
+  - 添加 tribulationSystem.TRIBULATION_TYPES + DIFFICULTY_CONFIG + PROTECTION_ITEMS + REALMS 配置  # 2026-03-25 完成
+[P1-B-NEW1] 【B】VIP路由添加buy-month-card/claim-daily端点 → 解决#187  # 2026-03-25 完成
+  - 重写 routes/vip.js，增加完整VIP等级/月卡/日领体系  # 2026-03-25 完成
+  - POST /api/vip/buy-month-card: 购买月卡（灵石月卡/钻石月卡，30天有效）  # 2026-03-25 完成
+  - POST /api/vip/claim-daily: 领取每日月卡奖励（24小时冷却）  # 2026-03-25 完成
+  - vip_monthly_cards 表初始化（user_id/card_type/purchase_time/last_claim_time/expire_time）  # 2026-03-25 完成
+[P1-B-NEW2] 【B】Achievement路由注册（app.use /api/achievement） → 解决#188  # 已确认无需操作
+  - app.use('/api/achievement', require('./routes/achievement')) 已在 server.js 注册  # 确认
