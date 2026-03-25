@@ -291,13 +291,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # 文件: xundao-server/server/backend/routes/lottery.js
 # 问题: SELECT lingshi FROM player / UPDATE player SET lingshi — 列名不存在
 # 修复: 全部改为 spirit_stones
-# 状态: 新增 | 优先级: P0
+# 状态: 2026-03-25 完成 | 优先级: P0
 
 ## P0 #154: Welfare JSON_LENGTH修复
 # 文件: xundao-server/server/game/welfare_storage.js (或 services/welfare_storage.js)
 # 问题: claimSignIn() 用 JSON_LENGTH() — SQLite不支持
 # 修复: 改为 JSON.parse(history).length 或 json_array_length(..., '$')
-# 状态: 新增 | 优先级: P0 | 连续崩溃第19+轮
+# 状态: 2026-03-25 完成 | 优先级: P0
 
 ## P1 #156: Sect-missions路由新建
 # 端点需创建:
