@@ -287,10 +287,15 @@ router.post('/complete', (req, res) => {
       });
     }
     
-    // 获取玩家数据
+    // 获取玩家数据（同步读取 Users.lingshi 作为权威数据源）
     let player = null;
+    let userLingshi = 0;
     if (dbRef) {
       player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(session.playerId);
+      try {
+        const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(session.playerId);
+        if (userRow) userLingshi = userRow.lingshi || 0;
+      } catch (e) { userLingshi = player?.spirit_stones || 0; }
     }
     
     const currentRealm = REALMS[player?.realm_level || 0] || REALMS[0];
@@ -326,7 +331,9 @@ router.post('/complete', (req, res) => {
         const spiritStonesGain = rewards.spiritStones || 0;
         const realmLevelUp = player.realm_level + 1;
         
-        // 境界提升
+        // 境界提升 + 灵石奖励（写入 Users.lingshi，权威数据源）
+        dbRef.prepare('UPDATE Users SET realm = ?, lingshi = lingshi + ?, updatedAt = ? WHERE id = ?')
+          .run(realmLevelUp, spiritStonesGain, new Date().toISOString(), session.playerId);
         dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
           .run(realmLevelUp, spiritStonesGain, session.playerId);
         
@@ -352,13 +359,14 @@ router.post('/complete', (req, res) => {
       // 失败惩罚
       const penaltyRate = diffConfig.penalty === 'heavy' ? 0.5 : diffConfig.penalty === 'medium' ? 0.3 : 0.15;
       penalty = {
-        spirit_stones_loss: Math.floor((player?.spirit_stones || 0) * penaltyRate),
+        spirit_stones_loss: Math.floor((userLingshi || player?.spirit_stones || 0) * penaltyRate),
         realm_level_loss: 0,
         message: diffConfig.penalty === 'heavy' ? '殒落' : diffConfig.penalty === 'medium' ? '重伤' : '轻伤'
       };
       
       if (dbRef && player) {
-        dbRef.prepare('UPDATE player SET spirit_stones = MAX(0, spirit_stones - ?) WHERE id = ?')
+        // 扣除灵石（写入 Users.lingshi，权威数据源）
+        dbRef.prepare('UPDATE Users SET lingshi = MAX(0, lingshi - ?) WHERE id = ?')
           .run(penalty.spirit_stones_loss, session.playerId);
       }
     }
@@ -599,6 +607,9 @@ router.post('/attempt', (req, res) => {
         const spiritStonesGain = rewards.spiritStones || 0;
         const realmLevelUp = player.realm_level + 1;
         
+        // 境界提升 + 灵石奖励（写入 Users.lingshi，权威数据源）
+        dbRef.prepare('UPDATE Users SET realm = ?, lingshi = lingshi + ?, updatedAt = ? WHERE id = ?')
+          .run(realmLevelUp, spiritStonesGain, new Date().toISOString(), actualPlayerId);
         dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
           .run(realmLevelUp, spiritStonesGain, actualPlayerId);
         
@@ -619,12 +630,19 @@ router.post('/attempt', (req, res) => {
       }
     } else {
       const penaltyRate = diffConfig.penalty === 'heavy' ? 0.5 : diffConfig.penalty === 'medium' ? 0.3 : 0.15;
+      // 读取 Users.lingshi 计算惩罚（权威数据源）
+      let penaltyLingshi = player?.spirit_stones || 0;
+      try {
+        const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(actualPlayerId);
+        if (userRow) penaltyLingshi = userRow.lingshi || 0;
+      } catch (e) {}
       penalty = {
-        spirit_stones_loss: Math.floor((player?.spirit_stones || 0) * penaltyRate)
+        spirit_stones_loss: Math.floor(penaltyLingshi * penaltyRate)
       };
       
       if (dbRef && player) {
-        dbRef.prepare('UPDATE player SET spirit_stones = MAX(0, spirit_stones - ?) WHERE id = ?')
+        // 扣除灵石（写入 Users.lingshi，权威数据源）
+        dbRef.prepare('UPDATE Users SET lingshi = MAX(0, lingshi - ?) WHERE id = ?')
           .run(penalty.spirit_stones_loss, actualPlayerId);
       }
     }
@@ -720,12 +738,21 @@ router.post('/protect', (req, res) => {
     }
     
     if (action === 'buy') {
-      if (player && player.spirit_stones < item.price) {
+      // 读取 Users.lingshi（权威数据源）进行余额检查
+      let userLingshi = player?.spirit_stones || 0;
+      if (dbRef) {
+        try {
+          const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(actualPlayerId);
+          if (userRow) userLingshi = userRow.lingshi || 0;
+        } catch (e) {}
+      }
+      if (userLingshi < item.price) {
         return res.status(400).json({ success: false, error: '灵石不足' });
       }
       
       if (dbRef) {
-        dbRef.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?')
+        // 扣除灵石（写入 Users.lingshi，权威数据源）
+        dbRef.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?')
           .run(item.price, actualPlayerId);
         
         const existing = dbRef.prepare(
@@ -750,7 +777,7 @@ router.post('/protect', (req, res) => {
           item_id,
           item_name: item.name,
           price: item.price,
-          remaining_spirit_stones: (player?.spirit_stones || 0) - item.price
+          remaining_spirit_stones: userLingshi - item.price
         }
       });
     } else if (action === 'use') {

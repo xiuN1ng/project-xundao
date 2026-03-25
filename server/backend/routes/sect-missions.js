@@ -213,10 +213,10 @@ router.post('/daily/claim', (req, res) => {
 
     // 贡献值奖励
     db.prepare('UPDATE player SET sect_contribution=sect_contribution+? WHERE id=?').run(mission.reward_count, playerId);
-    // 灵石奖励（从配置中取）
+    // 灵石奖励（写入 Users.lingshi，权威数据源）
     const cfg = DAILY_MISSIONS.find(d => d.key === mission_key);
     if (cfg?.spirit_stones) {
-      db.prepare('UPDATE player SET spirit_stones=spirit_stones+? WHERE id=?').run(cfg.spirit_stones, playerId);
+      db.prepare('UPDATE Users SET lingshi=lingshi+? WHERE id=?').run(cfg.spirit_stones, playerId);
     }
 
     // 标记为已领取

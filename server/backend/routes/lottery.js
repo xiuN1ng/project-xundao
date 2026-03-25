@@ -151,9 +151,9 @@ function addToBag(userId, item) {
     return { bagId: result.lastInsertRowid, stacked: false };
   } catch (err) {
     Logger.error('addToBag error:', err.message);
-    // 降级：灵石直接加到玩家账户
+    // 降级：灵石直接加到玩家账户（写入 Users.lingshi，权威数据源）
     if (item.type === ITEM_TYPES.LINGSHI) {
-      db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(item.count, userId);
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(item.count, userId);
       return { bagId: null, stacked: true, spirit_stonesAdded: item.count };
     }
     return { bagId: null, stacked: false };
@@ -208,12 +208,12 @@ router.post('/draw', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;
 
   try {
-    const player = db.prepare('SELECT spirit_stones FROM player WHERE id = ?').get(userId);
-    if (!player || parseInt(player.spirit_stones) < SINGLE_COST) {
+    const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!user || parseInt(user.lingshi) < SINGLE_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
 
-    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(SINGLE_COST, userId);
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(SINGLE_COST, userId);
 
     const item = drawItem(userId);
     const bagResult = addToBag(userId, item);
@@ -246,12 +246,12 @@ router.post('/drawTen', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;
 
   try {
-    const player = db.prepare('SELECT spirit_stones FROM player WHERE id = ?').get(userId);
-    if (!player || parseInt(player.spirit_stones) < TEN_COST) {
+    const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!user || parseInt(user.lingshi) < TEN_COST) {
       return res.json({ success: false, message: '灵石不足（十连需要900灵石）' });
     }
 
-    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(TEN_COST, userId);
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(TEN_COST, userId);
 
     const items = [];
     const bagResults = [];

@@ -105,22 +105,20 @@ router.get('/resources', (req, res) => {
   });
 });
 
-// 增加资源
+// 增加资源（同步写入 Users.lingshi，权威数据源）
 router.post('/resources', (req, res) => {
   const { lingshi, diamonds } = req.body;
   if (lingshi) player.lingshi += lingshi;
   if (diamonds) player.diamonds += diamonds;
   
-  // 数据库持久化
   if (dbRef && player.id) {
     try {
-      const updates = [];
-      const values = [];
-      if (lingshi) { updates.push('spirit_stones = spirit_stones + ?'); values.push(lingshi); }
-      if (diamonds) { updates.push('diamonds = diamonds + ?'); values.push(diamonds); }
-      if (updates.length > 0) {
-        values.push(player.id);
-        dbRef.prepare(`UPDATE player SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      if (lingshi) {
+        dbRef.prepare('UPDATE Users SET lingshi = lingshi + ?, updatedAt = ? WHERE id = ?').run(lingshi, new Date().toISOString(), player.id);
+        dbRef.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(lingshi, player.id);
+      }
+      if (diamonds) {
+        dbRef.prepare('UPDATE player SET diamonds = diamonds + ? WHERE id = ?').run(diamonds, player.id);
       }
     } catch (e) {
       console.error('[player] resources DB持久化失败:', e.message);
@@ -177,8 +175,9 @@ router.post('/login', (req, res) => {
       const offlineReward = Math.floor(elapsedHours * OFFLINE_RATE * vipMultiplier);
       const isOnlineEligible = elapsedHours < 0.5; // 不到30分钟算在线
       
-      // 发放离线奖励
+      // 发放离线奖励（写入 Users.lingshi，权威数据源）
       if (offlineReward > 0) {
+        db.prepare('UPDATE Users SET lingshi = lingshi + ?, updatedAt = ? WHERE id = ?').run(offlineReward, new Date().toISOString(), userId);
         db.prepare('UPDATE player SET spirit_stones = spirit_stones + ?, last_login = CURRENT_TIMESTAMP WHERE id = ?').run(offlineReward, userId);
       } else {
         db.prepare('UPDATE player SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(userId);

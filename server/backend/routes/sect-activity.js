@@ -193,7 +193,8 @@ router.post('/claim', (req, res) => {
     if (reward.reward_type === 'contribution') {
       db.prepare('UPDATE player SET sect_contribution=sect_contribution+? WHERE id=?').run(reward.reward_count, playerId);
     } else if (reward.reward_type === 'spirit_stones') {
-      db.prepare('UPDATE player SET spirit_stones=spirit_stones+? WHERE id=?').run(reward.reward_count, playerId);
+      // 灵石奖励写入 Users.lingshi（权威数据源）
+      db.prepare('UPDATE Users SET lingshi=lingshi+? WHERE id=?').run(reward.reward_count, playerId);
     } else if (reward.reward_type === 'material') {
       const existing = db.prepare('SELECT * FROM player_items WHERE player_id=? AND item_id=? AND equipped=0').get(playerId, reward.reward_id);
       if (existing) {

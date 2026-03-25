@@ -107,19 +107,19 @@ router.post('/buy', (req, res) => {
   // 扣除灵石
   if (db) {
     try {
-      // 先查询当前灵石
-      const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
-      if (!player) {
+      // 先查询当前灵石（优先从 Users.lingshi 读取，权威数据源）
+      const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+      if (!user) {
         return res.status(404).json({ success: false, error: '玩家不存在' });
       }
       
-      const currentStones = player.spirit_stones || player.lingshi || 0;
+      const currentStones = user.lingshi || 0;
       if (currentStones < totalCost) {
         return res.status(400).json({ success: false, error: '灵石不足' });
       }
       
-      // 扣除灵石
-      db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(totalCost, userId);
+      // 扣除灵石（写入 Users.lingshi，权威数据源）
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalCost, userId);
       
       // 写入背包
       const itemName = good.name + (count > 1 ? ` x${count}` : '');

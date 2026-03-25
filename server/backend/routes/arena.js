@@ -653,7 +653,7 @@ router.post('/challenge', (req, res) => {
     // 发放灵石奖励（无论胜败都有）
     if (reward.spiritStones > 0) {
       try {
-        db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(reward.spiritStones, player_id);
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.spiritStones, player_id);
       } catch (e) {
         Logger.warn('灵石奖励发放失败:', e.message);
       }
@@ -759,9 +759,9 @@ router.post('/claim-reward', (req, res) => {
     const rankInfo = ArenaSystem.getRank(rank_id);
     const dailyReward = rankInfo.dailyReward || {};
     
-    // 发放奖励
+    // 发放奖励（写入 Users.lingshi，权威数据源）
     if (dailyReward.spiritStones) {
-      db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(dailyReward.spiritStones, player_id);
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(dailyReward.spiritStones, player_id);
     }
     
     // 记录领取

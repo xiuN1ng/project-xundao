@@ -117,15 +117,15 @@ router.post('/enter', (req, res) => {
     return res.status(403).json({ success: false, error: '副本未解锁' });
   }
   
-  // 检查灵石
+  // 检查灵石（从 Users.lingshi 读取，权威数据源）
   if (db && dungeon.cost > 0) {
     try {
-      const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
-      if (!player || (player.spirit_stones || player.lingshi || 0) < dungeon.cost) {
+      const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+      if (!user || (user.lingshi || 0) < dungeon.cost) {
         return res.status(400).json({ success: false, error: '灵石不足' });
       }
-      // 扣除灵石
-      db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(dungeon.cost, userId);
+      // 扣除灵石（写入 Users.lingshi，权威数据源）
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(dungeon.cost, userId);
     } catch (e) {
       console.log('[dungeon] 进入检查:', e.message);
     }

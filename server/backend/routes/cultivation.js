@@ -76,9 +76,22 @@ function getOrCreateCultivation(userId) {
   }
 }
 
-// 辅助：获取玩家数据（数据库优先，降级到mock）
+// 辅助：获取玩家数据（从 Users 表读取 lingshi，权威数据源）
 function getPlayer(userId) {
   try {
+    // 优先从 Users 表读取（lingshi 权威源）
+    const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+    if (user) {
+      return {
+        id: user.id,
+        name: user.nickname,
+        level: user.level,
+        realm: user.realm,
+        spirit_stones: user.lingshi,  // Users.lingshi → 统一字段名
+        lingshi: user.lingshi
+      };
+    }
+    // 回退到 player 表
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
     return player || mockPlayer;
   } catch (e) {
@@ -182,8 +195,8 @@ router.post('/start', (req, res) => {
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
 
-    // 扣除灵石
-    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(LINGSHI_COST, userId);
+    // 扣除灵石（写入 Users.lingshi，权威数据源）
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
     // 同步修炼值
     db.prepare('UPDATE cultivation SET value = ? WHERE user_id = ?').run(newValue, userId);
     // 增加玩家经验（1次修炼 = 10 exp）
@@ -225,7 +238,8 @@ router.post('/breakthrough', (req, res) => {
 
     // 重置修炼值，境界+1
     db.prepare('UPDATE cultivation SET value = 0, realm = ? WHERE user_id = ?').run(nextRealm, userId);
-    // 同步更新 player 表的 realm 和 level
+    // 同步更新 Users 表（权威源）和 player 表
+    db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
 
     res.json({
