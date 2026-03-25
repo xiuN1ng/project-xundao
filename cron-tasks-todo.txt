@@ -374,22 +374,22 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 文件: server/backend/routes/auth.js
 - auth.js 重写为DB持久化：注册/登录均写入 Users 表 + 初始化 player 表
 - loadUsersFromDB() 启动时从DB恢复用户到内存
-[P1-B-2026-03-26-4] worldBoss.js 添加根路径 router.get('/') 处理函数
+[P1-B-2026-03-26-4] worldBoss.js 添加根路径 router.get('/') 处理函数  # 2026-03-26 完成
 - 文件: server/backend/routes/worldBoss.js
-- 问题: server.js 注册了 /api/worldBoss，但 worldBoss.js 无根路径处理，/api/worldBoss 和 /api/worldboss 均 404
-- 修复: 添加 router.get('/', (req, res) => { /* 返回 {hasBoss, bossList} */ })
-- 状态: P1 新增
-[P1-B-2026-03-26-5] 确认 sect-missions 路由注册问题并修复
-- 文件: server/backend/server.js 第59行 + routes/sect-missions.js
-- 问题: server.js 注册 /api/sect-missions，但 curl 测试 404
-- 修复: 确认 sect-missions.js 导出正确 router 并正确处理
-- 状态: P1 新增
-[P1-B-2026-03-26-6] arena_player 表添加 username 列或修复 AI pool 初始化
-- 文件: server/backend/routes/arena.js 或 backend/data/game.db
-- 问题: log 显示 "AI机器人池初始化失败: table arena_player has no column named username"
-- 导致 Arena totalPlayers=1，无 AI 对手
-- 修复: 在 arena_player 表（DB1）添加 username 列，或修改 AI pool 逻辑使用已有列
-- 状态: P1 新增
+- 修复: 添加 router.get('/', 返回 {hasBoss, bossList, currentBoss, totalParticipants})
+- 状态: 完成 | 2026-03-26
+
+[P1-B-2026-03-26-5] 确认 sect-missions 路由注册问题并修复  # 2026-03-26 完成
+- 文件: server/backend/routes/sect-missions.js
+- 问题: game_meta 表不存在导致每日任务报错
+- 修复: 在 initSectMissionTables 中添加 CREATE TABLE IF NOT EXISTS game_meta
+- 状态: 完成 | 2026-03-26
+
+[P1-B-2026-03-26-6] arena_player 表添加 username 列或修复 AI pool 初始化  # 2026-03-26 完成
+- 文件: server/backend/routes/arena.js
+- 问题: INSERT INTO arena_player (player_id, username, ...) 但 arena_player 无 username 列
+- 修复: 移除 arena_player INSERT 中的 username 列和占位符，player 表单独存储 username
+- 状态: 完成 | 2026-03-26
 [P1-B-2026-03-26-7] 统一所有模块使用 DB2，消除双 DB 架构
 - 问题: shop.js/lottery.js/beast_api.js 使用 DB1 (server/data/game.db)，主 server.js 使用 DB2
 - 导致数据不一致：shop_items DB1 有15条 DB2 只有3条
