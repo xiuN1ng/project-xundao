@@ -87,6 +87,7 @@ app.use('/api/achievement', require('./routes/achievement'));
 app.use('/api/guild', require('./routes/guild'));
 app.use('/api/arena', require('./routes/arena'));
 app.use('/api/worldBoss', require('./routes/worldBoss'));
+app.use('/api/worldboss', require('./routes/worldBoss'));
 app.use('/api/rank', require('./routes/rank'));
 
 // 其他
