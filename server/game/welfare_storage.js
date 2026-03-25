@@ -70,7 +70,7 @@ function getDb() {
 function initSignInTable() {
   const database = getDb();
   if (!database) return false;
-  
+
   try {
     database.exec(`
       CREATE TABLE IF NOT EXISTS welfare_sign_in (
@@ -85,7 +85,7 @@ function initSignInTable() {
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
+
     // SQLite不支持UNIQUE KEY，用CREATE UNIQUE INDEX代替
     try {
       database.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_welfare_player ON welfare_sign_in(player_id)`);
@@ -106,58 +106,58 @@ const welfareStorage = {
   init() {
     return initSignInTable();
   },
-  
+
   // 获取或创建签到记录
   getOrCreateSignInRecord(playerId) {
     const database = getDb();
     if (!database) return null;
-    
+
     let record = database.prepare(
       'SELECT * FROM welfare_sign_in WHERE player_id = ?'
     ).get(playerId);
-    
+
     if (!record) {
       // 创建新记录
       const result = database.prepare(
         'INSERT INTO welfare_sign_in (player_id, current_streak, total_sign_days, repair_cards) VALUES (?, ?, ?, ?)'
       ).run(playerId, 0, 0, 0);
-      
+
       record = database.prepare(
         'SELECT * FROM welfare_sign_in WHERE id = ?'
       ).get(result.lastInsertRowid);
     }
-    
+
     return record;
   },
-  
+
   // 获取签到状态
   getSignInStatus(playerId) {
     const record = this.getOrCreateSignInRecord(playerId);
     if (!record) return null;
-    
+
     const today = new Date().toISOString().split('T')[0];
     const lastSignDate = record.last_sign_date;
-    
+
     // 检查今天是否已签到
     const signedToday = lastSignDate === today;
-    
+
     // 计算连续签到（如果昨天签到了，则连续；否则重置）
     let currentStreak = record.current_streak;
     if (lastSignDate) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
+
       if (lastSignDate !== yesterdayStr && lastSignDate !== today) {
         // 中断了，重新开始
         currentStreak = 0;
       }
     }
-    
+
     // 获取今天的奖励
     const nextDay = (currentStreak % 7) + 1;
     const todayReward = SIGN_IN_REWARDS[nextDay - 1];
-    
+
     return {
       playerId: playerId,
       currentStreak: currentStreak,
@@ -169,26 +169,36 @@ const welfareStorage = {
       repairCards: record.repair_cards || 0
     };
   },
-  
+
   // 执行签到
   signIn(playerId) {
     const database = getDb();
     if (!database) return { success: false, error: '数据库不可用' };
-    
+
     const status = this.getSignInStatus(playerId);
-    
+
     if (status.signedToday) {
       return { success: false, error: '今天已经签到过了' };
     }
-    
+
     // 计算新的连续签到天数
     let newStreak = status.currentStreak + 1;
     const today = new Date().toISOString().split('T')[0];
-    
+
     // 获取奖励
     const dayIndex = (newStreak - 1) % 7;
     const reward = SIGN_IN_REWARDS[dayIndex];
-    
+
+    // 获取当前签到历史长度（避免 JSON_LENGTH 兼容性问题）
+    const existing = database.prepare(
+      'SELECT sign_history FROM welfare_sign_in WHERE player_id = ?'
+    ).get(playerId);
+    let historyArr = [];
+    if (existing && existing.sign_history) {
+      try { historyArr = JSON.parse(existing.sign_history); } catch (e) { historyArr = []; }
+    }
+    const insertIndex = historyArr.length;
+
     // 更新数据库
     database.prepare(`
       UPDATE welfare_sign_in 
@@ -197,12 +207,12 @@ const welfareStorage = {
           last_sign_date = ?,
           sign_history = JSON_INSERT(
             COALESCE(sign_history, '[]'),
-            '$[' || JSON_LENGTH(COALESCE(sign_history, '[]')) || ']',
+            '$[${insertIndex}]',
             JSON_OBJECT('date', ?, 'day', ?, 'reward', ?)
           )
       WHERE player_id = ?
     `).run(newStreak, today, today, newStreak, JSON.stringify(reward), playerId);
-    
+
     return {
       success: true,
       streak: newStreak,
@@ -211,18 +221,18 @@ const welfareStorage = {
       message: `签到成功！连续签到第${newStreak}天`
     };
   },
-  
+
   // 获取签到历史
   getSignInHistory(playerId) {
     const database = getDb();
     if (!database) return [];
-    
+
     const record = database.prepare(
       'SELECT sign_history FROM welfare_sign_in WHERE player_id = ?'
     ).get(playerId);
-    
+
     if (!record || !record.sign_history) return [];
-    
+
     try {
       return JSON.parse(record.sign_history);
     } catch {

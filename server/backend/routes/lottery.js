@@ -33,7 +33,7 @@ const GUARANTEE_COUNT = 90;     // 保底 90 抽
 
 // 物品类型
 const ITEM_TYPES = {
-  LINGSHI: 'lingshi',     // 灵石
+  LINGSHI: 'spirit_stones',     // 灵石
   Pill: 'pill',           // 丹药
   FRAGMENT: 'fragment',   // 装备碎片
   MATERIAL: 'material',   // 材料
@@ -153,8 +153,8 @@ function addToBag(userId, item) {
     Logger.error('addToBag error:', err.message);
     // 降级：灵石直接加到玩家账户
     if (item.type === ITEM_TYPES.LINGSHI) {
-      db.prepare('UPDATE player SET lingshi = lingshi + ? WHERE id = ?').run(item.count, userId);
-      return { bagId: null, stacked: true, lingshiAdded: item.count };
+      db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(item.count, userId);
+      return { bagId: null, stacked: true, spirit_stonesAdded: item.count };
     }
     return { bagId: null, stacked: false };
   }
@@ -208,12 +208,12 @@ router.post('/draw', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;
 
   try {
-    const player = db.prepare('SELECT lingshi FROM player WHERE id = ?').get(userId);
-    if (!player || parseInt(player.lingshi) < SINGLE_COST) {
+    const player = db.prepare('SELECT spirit_stones FROM player WHERE id = ?').get(userId);
+    if (!player || parseInt(player.spirit_stones) < SINGLE_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
 
-    db.prepare('UPDATE player SET lingshi = lingshi - ? WHERE id = ?').run(SINGLE_COST, userId);
+    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(SINGLE_COST, userId);
 
     const item = drawItem(userId);
     const bagResult = addToBag(userId, item);
@@ -246,12 +246,12 @@ router.post('/drawTen', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;
 
   try {
-    const player = db.prepare('SELECT lingshi FROM player WHERE id = ?').get(userId);
-    if (!player || parseInt(player.lingshi) < TEN_COST) {
+    const player = db.prepare('SELECT spirit_stones FROM player WHERE id = ?').get(userId);
+    if (!player || parseInt(player.spirit_stones) < TEN_COST) {
       return res.json({ success: false, message: '灵石不足（十连需要900灵石）' });
     }
 
-    db.prepare('UPDATE player SET lingshi = lingshi - ? WHERE id = ?').run(TEN_COST, userId);
+    db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(TEN_COST, userId);
 
     const items = [];
     const bagResults = [];
