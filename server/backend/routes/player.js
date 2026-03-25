@@ -10,18 +10,18 @@ try {
   achievementTrigger = null;
 }
 
-// 模拟数据库
+// 模拟数据库（测试用满级账号）
 let player = {
   id: 1,
-  name: '修仙者',
-  level: 5,
-  realm: 1,
-  lingshi: 125680,
-  diamonds: 520,
-  hp: 1000,
-  attack: 100,
-  defense: 50,
-  speed: 10,
+  name: '云泽',
+  level: 100,
+  realm: 8,
+  lingshi: 999999999,
+  diamonds: 99999,
+  hp: 9999999,
+  attack: 999999,
+  defense: 999999,
+  speed: 99999,
   sectId: 1,
   createdAt: Date.now()
 };
