@@ -419,11 +419,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # === P1 路由 + 持久化 ===
 [P1-B-NEW1] server.js worldBoss 小写别名路由  # /api/worldboss 404  # 2026-03-26 完成
   - 在 server.js 添加 app.use('/api/worldboss', require('./routes/worldBoss'))  # 2026-03-26 完成
-[P1-B-NEW2] routes/welfare.js 实现 GET /api/welfare/daily  # 每日福利接口缺失
+[P1-B-NEW2] routes/welfare.js 实现 GET /api/welfare/daily  # 完成 | 2026-03-26 | 在 server/game/welfare_api.js 中实现（已注册路由）
 [P1-B-NEW3] database.js 初始化中创建 game_meta 表  # 连续多轮未修复
 [P1-B-NEW4] chapter.js 第260行 enemies undefined 修复  # 2026-03-26 完成
   - /battle 和 /complete 端点：添加 chapter 存在性检查 + kills 默认值0 + enemyCount 局部变量防止 undefined  # 2026-03-26 完成
-[P1-B-NEW5] 创建 routes/equipment_dismantle.js：装备分解接口  # P1 新功能
+[P1-B-NEW5] 创建 routes/equipment_dismantle.js：装备分解接口  # 完成 | 2026-03-26 | GET /info + POST /dismantle + GET /list，已在server.js注册
 
 
 # ========== 从策划提案分发 — 2026-03-26 ==========
