@@ -390,7 +390,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 问题: INSERT INTO arena_player (player_id, username, ...) 但 arena_player 无 username 列
 - 修复: 移除 arena_player INSERT 中的 username 列和占位符，player 表单独存储 username
 - 状态: 完成 | 2026-03-26
-[P1-B-2026-03-26-7] 统一所有模块使用 DB2，消除双 DB 架构
+[P1-B-2026-03-26-7] 统一所有模块使用 DB2，消除双 DB 架构  # 部分完成 | 2026-03-26 | 修复forge/sect-activity/sect-missions DB路径，统一为backend/data/game.db
 - 问题: shop.js/lottery.js/beast_api.js 使用 DB1 (server/data/game.db)，主 server.js 使用 DB2
 - 导致数据不一致：shop_items DB1 有15条 DB2 只有3条
 - 修复: 审查所有 routes/*.js 和 game/*.js，统一使用 path.join(__dirname, '..', 'data', 'game.db')
