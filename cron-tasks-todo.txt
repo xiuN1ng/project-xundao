@@ -184,34 +184,31 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## 2026-03-25 v10 新增任务
 
-### [B] P0 #141: VIP API 数据库错误修复
+### [B] P0 #141: VIP API 数据库错误修复  # 2026-03-25 完成
 - 文件: routes/vip.js
 - 问题: 查询不存在的 player.vip_points 列；应改用 playerModule._player 内存对象
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 尽快
+- 修复: VIP路由改用内存player对象，buy/buy-month-card/claim-daily全部更新
 
-### [B] P0 #142: 4个核心模块路径错误修正
-- 涉及: realm_suppression, combat_power, beast_api, achievement_trigger_service
-- 需修正: backend/server.js 和相关文件中所有错误的 require 路径
+### [B] P0 #142: 4个核心模块路径错误修正  # 2026-03-25 完成
+- 涉及: realm_suppression, combat_power, beast_api
+- 修正: server.js 中 ./src/core/xxx → ./game/xxx
 - 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 尽快
 
-### [B] P0 #143: Welfare API playerStorage 依赖链修复
+### [B] P0 #143: Welfare API playerStorage 依赖链修复  # 2026-03-25 完成
 - 涉及: game/welfare_api.js, game/storage.js
 - 问题: playerStorage 未正确初始化，导致签到必报错
-- 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 尽快
+- 修复: 添加 getPlayerSpiritStones/updatePlayerSpiritStones 后备方案 + X-User-Id header支持
 
-### [B] P1 #144: 6个空数据子系统修复
-- 涉及: mount, wing, gem, fashion, lottery, heartDemon info 接口
-- 问题: API 返回空对象或报错
-- 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 本周
+### [B] P1 #144: 6个空数据子系统修复  # 2026-03-25 完成
+- 涉及: mount/wing/gem/fashion/lottery/heartDemon /info接口
+- 问题: API 返回空对象或404或服务器错误
+- 修复: 添加 /info 端点 + heartDemon添加X-User-Id支持和错误日志
 
-### [B] P1 #145: 每日任务奖励调整
+### [B] P1 #145: 每日任务奖励调整  # 2026-03-25 完成
 - 问题: 奖励过低（50灵石/次），需整体提升3-5倍
-- 参考: /root/.openclaw/workspace/xundao-docs/docs/PROPOSALS/2026-03-25-v10.md
-- 截止: 本周
+- 修复: 灵石奖励从 50→200(简单)/500→2000(中等)/1500→6000(困难) 等
+
 
 ### [B] P2 #146: 心魔劫服务端报错修复
 - 涉及: routes/heart_demon.js
