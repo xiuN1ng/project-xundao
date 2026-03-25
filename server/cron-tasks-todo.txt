@@ -152,3 +152,61 @@
   abyss: router.get('/') + router.post('/battle')
   boss_damage_records 写入
 
+
+# ==================== 2026-03-25 v26 新增任务 ====================
+
+## P0 【B】lottery.js lingshi列名修复 → 解决连续第18轮崩溃
+  文件: server/routes/lottery.js
+  问题: lingshi 列不存在，DB 列名为 spirit_stones
+  方案: 全局替换 lottery.js 中 lingshi → spirit_stones
+  测试: POST /api/lottery/draw 应返回抽奖结果
+  [B]
+
+## P0 【B】welfare_storage.js JSON_LENGTH修复 → 解决连续第15轮崩溃
+  文件: server/game/welfare_storage.js
+  问题: JSON_LENGTH() SQLite不存在
+  方案: 改为 JSON.parse(sign_history).length
+  测试: POST /api/welfare/claim-sign-in 应返回 success:true
+  [B]
+
+## P0 【B】achievement.js 根路由404修复 → 解决成就系统断裂
+  文件: server/routes/achievement.js
+  问题: GET /api/achievement 返回 404
+  方案: node --check 验证语法，修复 router.get('/') 端点
+  测试: GET /api/achievement 应返回玩家成就列表
+  [B]
+
+## P1 【B】mail.js 根路由404修复 → 解决邮件系统断裂
+  文件: server/routes/mail.js
+  问题: GET /api/mail 返回 404
+  方案: 添加 router.get('/') 返回邮件列表，router.post('/read') 标记已读
+  测试: GET /api/mail 应返回玩家邮件列表
+  [B]
+
+## P1 【B】shop.js 从DB读取商品列表 → 解决商店硬编码问题
+  文件: server/routes/shop.js
+  问题: GET /api/shop 只返回3件硬编码物品，忽略 shop_items DB表
+  方案: 查询 shop_items 表，根据玩家等级过滤可购商品
+  测试: GET /api/shop 应返回15+件来自DB的商品
+  [B]
+
+## P1 【B】sect.js 添加 /list 路由
+  文件: server/routes/sect.js
+  问题: /api/sect/list 返回 404
+  方案: 添加 router.get('/list', ...) 返回宗门列表
+  [B]
+
+## P1 【B】实现离线挂机奖励系统
+  新文件: server/routes/offline.js
+  方案:
+    - player_daily_login.offline_at 记录下线时间
+    - /api/offline/reward GET 返回离线收益
+    - /api/offline/claim POST 领取收益
+    - 收益公式: min(离线分钟,1440) × level × 10 灵石 × (1+修炼效率)
+  [B]
+
+## P2 【B】server.js 启动时路由注册自检
+  文件: server/server.js
+  方案: 所有 require('./routes/xxx') 添加 try-catch 验证，失败时 process.exit(1)
+  防止路由静默失败导致问题长期隐藏
+  [B]

@@ -182,6 +182,11 @@ router.post('/create', (req, res) => {
   res.json(sect);
 });
 
+// /building - 查询宗门建筑
+router.get('/building', (req, res) => {
+  res.json({ success: true, buildings: sect.buildings });
+});
+
 // 升级建筑
 router.post('/building/upgrade', (req, res) => {
   const { buildingId } = req.body;

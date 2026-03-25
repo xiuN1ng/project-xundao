@@ -31,6 +31,57 @@ try {
   };
 }
 
+// 初始化AI机器人池（10个AI玩家）
+const AI_BOTS = [
+  { username: '剑痴', level: 95, realm_level: 8, combat_power: 85000 },
+  { username: '刀狂', level: 90, realm_level: 7, combat_power: 72000 },
+  { username: '枪神', level: 88, realm_level: 7, combat_power: 68000 },
+  { username: '拳霸', level: 85, realm_level: 7, combat_power: 60000 },
+  { username: '掌尊', level: 82, realm_level: 6, combat_power: 52000 },
+  { username: '指仙', level: 78, realm_level: 6, combat_power: 45000 },
+  { username: '暗影刺客', level: 75, realm_level: 6, combat_power: 40000 },
+  { username: '天师道', level: 70, realm_level: 5, combat_power: 35000 },
+  { username: '丹王', level: 65, realm_level: 5, combat_power: 28000 },
+  { username: '符箓师', level: 60, realm_level: 4, combat_power: 20000 }
+];
+
+function initAIBots() {
+  if (!db) return;
+  try {
+    const existing = db.prepare('SELECT COUNT(*) as c FROM arena_player WHERE player_id < 0').get().c || 0;
+    if (existing > 0) {
+      Logger.info(`AI机器人池已初始化 (${existing}个)`);
+      return;
+    }
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO arena_player (player_id, username, arena_points, rank_id, rank_name, current_season, win_count, lose_count, total_battles, daily_challenges_used, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+    const insertPlayer = db.prepare(`
+      INSERT OR IGNORE INTO player (id, username, level, realm_level, combat_power, vip_level, created_at)
+      VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+    `);
+    const basePoints = [5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000, 500];
+    const rankIds = [5, 5, 4, 4, 4, 3, 3, 3, 2, 2];
+    const rankNames = ['钻石', '钻石', '铂金', '铂金', '铂金', '黄金', '黄金', '黄金', '白银', '白银'];
+    const season = ArenaSystem ? ArenaSystem.getCurrentSeasonId() : 'default';
+    
+    for (let i = 0; i < AI_BOTS.length; i++) {
+      const botId = -(i + 1);
+      const bot = AI_BOTS[i];
+      try {
+        insertPlayer.run(botId, bot.username, bot.level, bot.realm_level, bot.combat_power);
+        insert.run(botId, bot.username, basePoints[i], rankIds[i], rankNames[i], season, Math.floor(basePoints[i]/50), Math.floor(basePoints[i]/80), Math.floor(basePoints[i]/30));
+      } catch(e) {}
+    }
+    Logger.info(`AI机器人池初始化完成 (${AI_BOTS.length}个)`);
+  } catch (err) {
+    Logger.warn('AI机器人池初始化失败:', err.message);
+  }
+}
+
+initAIBots();
+
 // 加载竞技场系统（单例实例，不重新实例化）
 let ArenaSystem;
 try {
@@ -438,13 +489,16 @@ router.get('/records/:userId', (req, res) => {
 // ============================================
 router.post('/challenge', (req, res) => {
   try {
-    const { player_id, target_id, use_items } = req.body;
+    // 支持 player_id / userId 双别名
+    const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId);
+    const target_id = parseInt(req.body.target_id) || parseInt(req.body.targetId);
+    const use_items = req.body.use_items;
     
     if (!player_id || !target_id) {
-      return res.status(400).json({ success: false, error: '缺少必要参数 (player_id, target_id)' });
+      return res.status(400).json({ success: false, error: '缺少必要参数 (player_id/userId, target_id/targetId)' });
     }
     
-    if (parseInt(player_id) === parseInt(target_id)) {
+    if (player_id === target_id) {
       return res.status(400).json({ success: false, error: '不能挑战自己' });
     }
     

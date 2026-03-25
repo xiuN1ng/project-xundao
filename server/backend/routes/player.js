@@ -16,12 +16,12 @@ let player = {
   name: '云泽',
   level: 100,
   realm: 8,
-  lingshi: 999999999,
-  diamonds: 99999,
-  hp: 9999999,
-  attack: 999999,
-  defense: 999999,
-  speed: 99999,
+  lingshi: 500,
+  diamonds: 0,
+  hp: 1000,
+  attack: 50,
+  defense: 50,
+  speed: 30,
   sectId: 1,
   createdAt: Date.now()
 };
