@@ -31,6 +31,11 @@ router.get('/', (req, res) => {
   res.json(player);
 });
 
+// 获取玩家信息 (兼容 /info 路径)
+router.get('/info', (req, res) => {
+  res.json(player);
+});
+
 // 更新玩家信息
 router.put('/', (req, res) => {
   const oldLevel = player.level;

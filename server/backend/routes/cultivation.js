@@ -84,6 +84,42 @@ router.get('/', (req, res) => {
   }
 });
 
+// 获取修炼状态 (兼容 /status 路径)
+router.get('/status', (req, res) => {
+  const userId = parseInt(req.query.userId) || 1;
+  try {
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    const cult = getOrCreateCultivation(userId);
+    const config = realmConfig[cult.realm] || realmConfig[1];
+    const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
+
+    res.json({
+      success: true,
+      userId,
+      cultivation: {
+        value: parseInt(cult.value),
+        realm: cult.realm,
+        realmName: config.name,
+        realmIcon: config.icon,
+        realmLevel: config.realm_level,
+        progress,
+        cost: config.cost,
+        cultivationPower: cult.cultivation_power || 0
+      },
+      player: {
+        level: player.level,
+        realm: player.realm,
+        lingshi: player.lingshi
+      }
+    });
+  } catch (err) {
+    Logger.error('GET /status cultivation error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 // 开始修炼
 router.post('/start', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;

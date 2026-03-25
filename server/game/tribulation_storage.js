@@ -3,7 +3,8 @@
  * 支持前端天劫动画的阶段数据
  */
 
-const db = require('../server.storage').getDB();
+// DB not available in this module
+const db = null;
 
 // 渡劫会话状态
 const SESSION_STATUS = {

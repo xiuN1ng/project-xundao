@@ -97,10 +97,10 @@ app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}
 // 注入玩家数据引用到成就系统 (成就奖励需要更新玩家资源)
 const achievementRouter = require('./routes/achievement');
 const playerModule = require('./routes/player');
-achievementRouter.setPlayerRef(playerModule._player);
+try { if (achievementRouter.setPlayerRef) achievementRouter.setPlayerRef(playerModule._player); } catch(e) {}
 
 // 注入玩家数据引用到渡劫系统
 const tribulationRouter = require('./routes/tribulation');
-tribulationRouter.setPlayerRef(playerModule._player);
+try { if (tribulationRouter.setPlayerRef) tribulationRouter.setPlayerRef(playerModule._player); } catch(e) {}
 
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
