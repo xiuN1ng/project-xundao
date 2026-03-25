@@ -278,14 +278,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # === v33 新增任务 (2026-03-25 19:28) ===
 # P0 #NEW-B: Arena challenge参数修正（支持camelCase别名）
-P0-B-v33-1 | arena challenge参数兼容 | routes/arena.js | 支持player_id/userId双别名
-# P0 #NEW-C: sect/list连接废弃DB问题
-P0-B-v33-2 | sect list/building DB路径修正 | routes/sect.js | 修正DB_PATH到主数据库
-# P1 #NEW-D: 玩家数值重调
-P1-B-v33-3 | 玩家初始属性重调 | routes/player.js | HP 9.9M→1000, ATK 999K→50
-# P1 #NEW-E: Shop使用DB数据
-P1-B-v33-4 | shop items从DB读取 | routes/shop.js | 15件商品从shop_items表
-# P2 #NEW-G: sect/building GET端点
-P2-B-v33-5 | sect building查询端点 | routes/sect.js | 添加GET /building
-# P2 #NEW-H: Arena AI对手池
-P2-B-v33-6 | arena AI机器人池 | 初始化SQL或arena路由 | 插入10个AI玩家
+[B] P0-B-v33-1 | arena challenge参数兼容 | routes/arena.js | 支持player_id/userId双别名  # 2026-03-25 完成
+[B] P0-B-v33-2 | sect list DB连接 | routes/sect.js | 已验证DB_PATH正确无需修正  # 2026-03-25 完成
+[B] P1-B-v33-3 | 玩家初始属性重调 | routes/player.js | HP 9.9M→1000, ATK 999K→50  # 2026-03-25 完成
+[B] P1-B-v33-4 | shop items从DB读取 | routes/shop.js | 15件商品从shop_items表  # 2026-03-25 完成
+[B] P2-B-v33-5 | sect building查询端点 | routes/sect.js | 添加GET /building  # 2026-03-25 完成
+[B] P2-B-v33-6 | arena AI机器人池 | routes/arena.js | 插入10个AI玩家  # 2026-03-25 完成
