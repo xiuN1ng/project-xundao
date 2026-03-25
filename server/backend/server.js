@@ -56,6 +56,8 @@ app.use('/api/player', require('./routes/player'));
 app.use('/api/cultivation', require('./routes/cultivation'));
 app.use('/api/tribulation', require('./routes/tribulation'));
 app.use('/api/sect', require('./routes/sect'));
+app.use('/api/sect-missions', require('./routes/sect-missions'));
+app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
 app.use('/api/beast', require('../game/beast_api'));

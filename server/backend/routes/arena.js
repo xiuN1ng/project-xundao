@@ -31,25 +31,24 @@ try {
   };
 }
 
-// 初始化AI机器人池（10个AI玩家）
+// AI机器人池（8个，分低/中/高三层）
+// tier: 1=低阶, 2=中阶, 3=高阶
 const AI_BOTS = [
-  { username: '剑痴', level: 95, realm_level: 8, combat_power: 85000 },
-  { username: '刀狂', level: 90, realm_level: 7, combat_power: 72000 },
-  { username: '枪神', level: 88, realm_level: 7, combat_power: 68000 },
-  { username: '拳霸', level: 85, realm_level: 7, combat_power: 60000 },
-  { username: '掌尊', level: 82, realm_level: 6, combat_power: 52000 },
-  { username: '指仙', level: 78, realm_level: 6, combat_power: 45000 },
-  { username: '暗影刺客', level: 75, realm_level: 6, combat_power: 40000 },
-  { username: '天师道', level: 70, realm_level: 5, combat_power: 35000 },
-  { username: '丹王', level: 65, realm_level: 5, combat_power: 28000 },
-  { username: '符箓师', level: 60, realm_level: 4, combat_power: 20000 }
+  { username: '小修士',  level: 30, realm_level: 2, combat_power: 5000,  tier: 1 },
+  { username: '练气士',  level: 40, realm_level: 3, combat_power: 12000, tier: 1 },
+  { username: '筑基散修', level: 50, realm_level: 4, combat_power: 25000, tier: 1 },
+  { username: '内门弟子', level: 60, realm_level: 5, combat_power: 45000, tier: 2 },
+  { username: '核心真传', level: 70, realm_level: 6, combat_power: 70000, tier: 2 },
+  { username: '长老级',  level: 80, realm_level: 7, combat_power: 100000, tier: 2 },
+  { username: '宗主级',  level: 88, realm_level: 8, combat_power: 150000, tier: 3 },
+  { username: '飞升大能', level: 95, realm_level: 9, combat_power: 200000, tier: 3 },
 ];
 
 function initAIBots() {
   if (!db) return;
   try {
     const existing = db.prepare('SELECT COUNT(*) as c FROM arena_player WHERE player_id < 0').get().c || 0;
-    if (existing > 0) {
+    if (existing >= AI_BOTS.length) {
       Logger.info(`AI机器人池已初始化 (${existing}个)`);
       return;
     }
@@ -61,20 +60,22 @@ function initAIBots() {
       INSERT OR IGNORE INTO player (id, username, level, realm_level, combat_power, vip_level, created_at)
       VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
     `);
-    const basePoints = [5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000, 500];
-    const rankIds = [5, 5, 4, 4, 4, 3, 3, 3, 2, 2];
-    const rankNames = ['钻石', '钻石', '铂金', '铂金', '铂金', '黄金', '黄金', '黄金', '白银', '白银'];
+    // tier1=白银(2), tier2=黄金(3), tier3=钻石(5)
+    const tierRank = { 1: [2, '白银'], 2: [3, '黄金'], 3: [5, '钻石'] };
+    const basePoints = { 1: 500, 2: 2000, 3: 4500 };  // 按层初始积分
     const season = ArenaSystem ? ArenaSystem.getCurrentSeasonId() : 'default';
-    
+
     for (let i = 0; i < AI_BOTS.length; i++) {
       const botId = -(i + 1);
       const bot = AI_BOTS[i];
+      const [rankId, rankName] = tierRank[bot.tier] || [1, '青铜'];
+      const points = basePoints[bot.tier] || 500;
       try {
         insertPlayer.run(botId, bot.username, bot.level, bot.realm_level, bot.combat_power);
-        insert.run(botId, bot.username, basePoints[i], rankIds[i], rankNames[i], season, Math.floor(basePoints[i]/50), Math.floor(basePoints[i]/80), Math.floor(basePoints[i]/30));
+        insert.run(botId, bot.username, points, rankId, rankName, season, Math.floor(points/50), Math.floor(points/80), Math.floor(points/30));
       } catch(e) {}
     }
-    Logger.info(`AI机器人池初始化完成 (${AI_BOTS.length}个)`);
+    Logger.info(`AI机器人池初始化完成 (${AI_BOTS.length}个: 低阶${AI_BOTS.filter(b=>b.tier===1).length}/中阶${AI_BOTS.filter(b=>b.tier===2).length}/高阶${AI_BOTS.filter(b=>b.tier===3).length})`);
   } catch (err) {
     Logger.warn('AI机器人池初始化失败:', err.message);
   }
@@ -644,15 +645,15 @@ router.post('/challenge', (req, res) => {
       defenderPower
     );
     
-    // 计算奖励
+    // 计算奖励（胜利：积分+灵石；失败：战败安慰奖）
     const reward = attackerWin
-      ? { arenaPoints: attackerRank.winPoints, lingshi: 100, dailyPoints: 10 }
-      : { arenaPoints: 0, lingshi: 20, dailyPoints: 2 };
-    
-    // 发放灵石奖励
-    if (attackerWin && reward.lingshi > 0) {
+      ? { arenaPoints: attackerRank.winPoints, spiritStones: 100, dailyPoints: 10 }
+      : { arenaPoints: 0, spiritStones: 30, dailyPoints: 5, consolation: true };
+
+    // 发放灵石奖励（无论胜败都有）
+    if (reward.spiritStones > 0) {
       try {
-        db.prepare('UPDATE player SET lingshi = lingshi + ? WHERE id = ?').run(reward.lingshi, player_id);
+        db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(reward.spiritStones, player_id);
       } catch (e) {
         Logger.warn('灵石奖励发放失败:', e.message);
       }
@@ -665,7 +666,11 @@ router.post('/challenge', (req, res) => {
         win: attackerWin,
         result: attackerWin ? '胜利' : '失败',
         battleReport,
-        reward,
+        reward: {
+        ...reward,
+        spiritStones: reward.spiritStones,
+        consolation: reward.consolation || false
+      },
         ranking: {
           newPoints: newAttackerPoints,
           newRankId: newAttackerRank.id,
@@ -756,7 +761,7 @@ router.post('/claim-reward', (req, res) => {
     
     // 发放奖励
     if (dailyReward.spiritStones) {
-      db.prepare('UPDATE player SET lingshi = lingshi + ? WHERE id = ?').run(dailyReward.spiritStones, player_id);
+      db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(dailyReward.spiritStones, player_id);
     }
     
     // 记录领取

@@ -208,10 +208,13 @@ function calcSweepReward(floor) {
 // =====================
 // 路由接口
 // =====================
+function getPlayerId(req) {
+  return parseInt(req.headers['x-player-id'] || req.query.userId || req.query.player_id || req.body?.player_id || 1);
+}
 
 // GET /config - 获取封魔渊完整配置（兼容前端 loadConfig）
 router.get('/config', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   if (!userId) return res.json({ success: false, message: 'userId 不能为空' });
   
   try {
@@ -256,7 +259,7 @@ router.get('/config', async (req, res) => {
 
 // GET /list - 获取封魔渊副本列表
 router.get('/list', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
     const dungeons = FLOOR_CONFIG.map(f => {
@@ -280,7 +283,7 @@ router.get('/list', async (req, res) => {
 });
 
 router.get('/info', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -308,7 +311,7 @@ router.get('/info', async (req, res) => {
 });
 
 router.get('/floors', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
     const floors = FLOOR_CONFIG.map(f => ({
@@ -336,7 +339,8 @@ router.get('/bestiary', (req, res) => {
 });
 
 router.post('/enter', async (req, res) => {
-  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy, dungeonId } = req.body;
+  const userId = getPlayerId(req);
+  const { floor, playerLevel, playerAtk, playerDef, playerHp, energy, dungeonId } = req.body;
   
   let targetFloor = floor;
   if (!targetFloor && dungeonId && dungeonId.startsWith('abyss_floor_')) {
@@ -383,7 +387,8 @@ router.post('/enter', async (req, res) => {
 });
 
 router.post('/battle', async (req, res) => {
-  const { userId, demonId, playerAtk, playerDef, playerHp, playerLevel,
+  const userId = getPlayerId(req);
+  const { demonId, playerAtk, playerDef, playerHp, playerLevel,
           playerDamage, playerDefense, sessionId, encounterIndex } = req.body;
   
   const demon = DEMON_BESTIARY[demonId];
@@ -442,7 +447,8 @@ router.post('/battle', async (req, res) => {
 });
 
 router.post('/explore', async (req, res) => {
-  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  const userId = getPlayerId(req);
+  const { floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
   
   try {
     const player = await storage.getOrCreatePlayer(userId);
@@ -525,7 +531,7 @@ router.post('/explore', async (req, res) => {
 });
 
 router.get('/shop', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -551,7 +557,8 @@ router.get('/shop', async (req, res) => {
 });
 
 router.post('/shop/buy', async (req, res) => {
-  const { userId, itemId } = req.body;
+  const userId = getPlayerId(req);
+  const { itemId } = req.body;
   const item = CRYSTAL_SHOP.find(i => i.id === itemId);
   if (!item) return res.json({ success: false, message: '商品不存在' });
   
@@ -615,7 +622,7 @@ router.post('/shop/buy', async (req, res) => {
 });
 
 router.get('/artifacts', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -629,7 +636,7 @@ router.get('/artifacts', async (req, res) => {
 });
 
 router.get('/materials', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -671,7 +678,7 @@ router.get('/rankings', async (req, res) => {
 });
 
 router.get('/weekly-reward', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -703,7 +710,8 @@ router.get('/weekly-reward', async (req, res) => {
 });
 
 router.post('/weekly-reward/claim', async (req, res) => {
-  const { userId, rewardLevel } = req.body;
+  const userId = getPlayerId(req);
+  const { rewardLevel } = req.body;
   try {
     const player = await storage.getOrCreatePlayer(userId);
     const rewards = [
@@ -743,7 +751,8 @@ router.post('/weekly-reward/claim', async (req, res) => {
 
 // POST /nextLayer - 进入下一层
 router.post('/nextLayer', async (req, res) => {
-  const { userId, currentLayer, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  const userId = getPlayerId(req);
+  const { currentLayer, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
   const nextFloor = currentLayer + 1;
   const floorConfig = FLOOR_CONFIG[nextFloor - 1];
   
@@ -786,7 +795,8 @@ router.post('/nextLayer', async (req, res) => {
 
 // POST /claim - 领取层通关奖励
 router.post('/claim', async (req, res) => {
-  const { userId, layer, playerLevel } = req.body;
+  const userId = getPlayerId(req);
+  const { layer, playerLevel } = req.body;
   try {
     const player = await storage.getOrCreatePlayer(userId);
     
@@ -837,7 +847,8 @@ router.post('/claim', async (req, res) => {
 
 // POST /defeat - 放弃当前层
 router.post('/defeat', async (req, res) => {
-  const { userId, defeatLayer } = req.body;
+  const userId = getPlayerId(req);
+  const { defeatLayer } = req.body;
   try {
     const player = await storage.getOrCreatePlayer(userId);
     const resetFloor = Math.min(player.currentFloor, player.maxFloor);
@@ -852,7 +863,7 @@ router.post('/defeat', async (req, res) => {
 
 // 星渊裂缝
 router.get('/starRift', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
     const floors = FLOOR_CONFIG.map(f => ({
@@ -870,7 +881,8 @@ router.get('/starRift', async (req, res) => {
 });
 
 router.post('/starRift/enter', async (req, res) => {
-  const { userId, floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
+  const userId = getPlayerId(req);
+  const { floor, playerLevel, playerAtk, playerDef, playerHp, energy } = req.body;
   try {
     const player = await storage.getOrCreatePlayer(userId);
     const floorConfig = FLOOR_CONFIG[floor - 1];
@@ -916,7 +928,7 @@ router.post('/starRift/enter', async (req, res) => {
 
 // GET /sweep - 获取扫荡信息（可扫荡层、已扫荡层）
 router.get('/sweep', async (req, res) => {
-  const { userId } = req.query;
+  const userId = getPlayerId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -958,7 +970,8 @@ router.get('/sweep', async (req, res) => {
 
 // POST /sweep - 单层扫荡
 router.post('/sweep', async (req, res) => {
-  const { userId, floor } = req.body;
+  const userId = getPlayerId(req);
+  const { floor } = req.body;
   if (!floor || floor < 1) return res.json({ success: false, message: '无效层数' });
   
   try {
@@ -1009,7 +1022,8 @@ router.post('/sweep', async (req, res) => {
 
 // POST /sweep/batch - 批量扫荡（扫荡到指定最高层）
 router.post('/sweep/batch', async (req, res) => {
-  const { userId, maxFloor } = req.body;
+  const userId = getPlayerId(req);
+  const { maxFloor } = req.body;
   if (!maxFloor || maxFloor < 1) return res.json({ success: false, message: '无效层数' });
   
   try {

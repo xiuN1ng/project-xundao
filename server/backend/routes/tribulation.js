@@ -59,6 +59,24 @@ router.get('/types', (req, res) => {
   }
 });
 
+// GET /api/tribulation/rate - 查询成功率（不开始渡劫）
+router.get('/rate', (req, res) => {
+  try {
+    const { player_id, tribulation_type, difficulty } = req.query;
+    const realmLevel = parseInt(req.query.realm_level) || 0;
+    if (!player_id || !dbRef) {
+      const rateInfo = tribulationStorage.calculateSuccessRateDetailed(realmLevel, tribulation_type || 'golden_trib', difficulty || 'normal');
+      return res.json({ success: true, realm_level: realmLevel, success_rate: rateInfo });
+    }
+    const player = dbRef.prepare('SELECT realm_level FROM player WHERE id=?').get(player_id);
+    const actualRealm = player?.realm_level || 0;
+    const rateInfo = tribulationStorage.calculateSuccessRateDetailed(actualRealm, tribulation_type || 'golden_trib', difficulty || 'normal');
+    res.json({ success: true, player_id: parseInt(player_id), realm_level: actualRealm, success_rate: rateInfo });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // POST /api/tribulation/begin - 开始渡劫（创建动画会话）
 router.post('/begin', (req, res) => {
   try {
