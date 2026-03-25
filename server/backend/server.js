@@ -115,6 +115,7 @@ app.use('/api/tower', require('./routes/tower'));
 app.use('/api/heartDemon', require('./routes/heart_demon'));
 app.use('/api/lingdao', require('./routes/lingdao'));
 app.use('/api/welfare', require('../game/welfare_api'));
+app.use('/api/gongfa', require('./routes/gongfa'));
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 

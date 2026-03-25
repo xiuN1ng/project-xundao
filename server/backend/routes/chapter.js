@@ -1,5 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// 数据库连接
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+} catch (e) {
+  console.log('[chapter] DB连接失败:', e.message);
+  db = null;
+}
 
 // 成就触发服务
 let achievementTrigger;
@@ -198,7 +211,23 @@ router.post('/complete', (req, res) => {
   else if (kills >= enemyCount * 0.7) stars = 2;
   
   progress.stars = progress.stars || {};
-  progress.stars[chapterId] = Math.max(progress.stars[chapterId] || 0, stars);
+  
+  // 首通检查（记录更新前的星级）
+  const previousStars = progress.stars[chapterId] || 0;
+  const isFirstClear = previousStars === 0;
+  progress.stars[chapterId] = Math.max(previousStars, stars);
+  
+  // 首通奖励：+200灵石
+  let spiritStonesGained = 0;
+  if (isFirstClear && db) {
+    try {
+      spiritStonesGained = 200;
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(200, userId);
+    } catch (e) {
+      console.error('[chapter] 首通奖励发放失败:', e.message);
+      spiritStonesGained = 0;
+    }
+  }
   
   // 开启下一章
   if (chapterId === progress.currentChapter && chapterId < 100) {
@@ -231,6 +260,7 @@ router.post('/complete', (req, res) => {
     reward: chapter.reward, 
     exp: chapter.exp,
     stars,
+    spiritStonesGained,
     evaluation,
     nextChapter: chapterId < 100 ? chapterId + 1 : null,
     achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
@@ -273,7 +303,23 @@ router.post('/battle', (req, res) => {
   else if (kills >= enemyCount * 0.7) stars = 2;
   
   progress.stars = progress.stars || {};
-  progress.stars[chapterId] = Math.max(progress.stars[chapterId] || 0, stars);
+  
+  // 首通检查
+  const previousStars = progress.stars[chapterId] || 0;
+  const isFirstClear = previousStars === 0;
+  progress.stars[chapterId] = Math.max(previousStars, stars);
+  
+  // 首通奖励：+200灵石
+  let spiritStonesGained = 0;
+  if (isFirstClear && db) {
+    try {
+      spiritStonesGained = 200;
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(200, userId);
+    } catch (e) {
+      console.error('[chapter] 首通奖励发放失败:', e.message);
+      spiritStonesGained = 0;
+    }
+  }
   
   // 开启下一章
   if (chapterId === progress.currentChapter && chapterId < 100) {
@@ -300,6 +346,7 @@ router.post('/battle', (req, res) => {
     reward: chapter.reward, 
     exp: chapter.exp,
     stars,
+    spiritStonesGained,
     evaluation,
     nextChapter: chapterId < 100 ? chapterId + 1 : null,
     achievements: achievementResults.length > 0 ? achievementResults.map(a => ({

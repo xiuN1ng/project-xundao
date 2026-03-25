@@ -94,7 +94,8 @@ router.get('/list', (req, res) => {
 });
 
 router.post('/buy', (req, res) => {
-  const { userId, itemId, count = 1 } = req.body;
+  const userId = req.body.userId ?? req.body.player_id ?? 1;
+  const itemId = req.body.itemId ?? req.body.item_id;
   
   const items = getShopItems();
   const good = items.find(g => g.id === itemId);

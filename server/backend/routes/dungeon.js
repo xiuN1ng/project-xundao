@@ -21,8 +21,7 @@ try {
       best_time INTEGER,
       enter_date TEXT,
       enter_time TEXT,
-      cooldown_end TEXT,
-      UNIQUE(user_id, dungeon_id, enter_date)
+      cooldown_end TEXT
     );
   `);
 } catch (err) {

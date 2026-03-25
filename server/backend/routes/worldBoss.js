@@ -1,5 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// 数据库连接
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+} catch (e) {
+  console.log('[worldBoss] DB连接失败:', e.message);
+  db = null;
+}
 
 // 根路径
 router.get('/', (req, res) => {
@@ -88,8 +101,25 @@ router.post('/attack', (req, res) => {
     return res.json({ success: false, message: 'BOSS未刷新' });
   }
   
-  // 伤害值：至少1点，支持前端传入或使用默认值
-  const damage = Math.max(1, parseInt(rawDamage) || 1);
+  // 从DB读取玩家攻击力，计算基础伤害
+  let playerAttack = 100;
+  if (db) {
+    try {
+      const player = db.prepare('SELECT attack FROM Users WHERE id = ?').get(userId);
+      if (player) playerAttack = player.attack || 100;
+    } catch (e) {
+      console.log('[worldBoss] 读取玩家攻击失败:', e.message);
+    }
+  }
+  
+  // 基础伤害 = 玩家攻击 * 1.5
+  let damage = Math.max(1, Math.floor(playerAttack * 1.5));
+  
+  // 狂暴机制：BOSS血量<30%时，伤害翻倍
+  const maxHp = worldBoss.currentBoss.hp || 1;
+  const hpPercent = worldBoss.hp / maxHp;
+  const furyMultiplier = hpPercent < 0.3 ? 2 : 1;
+  damage = Math.floor(damage * furyMultiplier);
   
   // 记录伤害
   const existing = worldBoss.damageRecords.find(r => r.userId === userId);
@@ -139,10 +169,11 @@ router.post('/attack', (req, res) => {
   
   res.json({
     success: true,
-    remainingHp,         // 始终返回有效数字
+    remainingHp,
     rank,
     totalDamage: newTotalDamage,
     killed,
+    furyMultiplier,
     bossRewards: killed ? worldBoss.currentBoss.reward : null,
     magicCrystalPreview: Math.max(1, mcReward),
   });
