@@ -316,11 +316,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # 状态: 新增 | 优先级: P2
 
 # ======== 2026-03-25-v37 追加 ==========
-[P0-NEW-1] 【B】新建 routes/sect-missions.js，实现宗门每日/每周任务和商店兑换API + 在server.js注册
-[P0-NEW-2] 【B】arena.js实现AI机器人对手池（8个AI，分低/中/高三层）+ 战败奖励
-[P0-NEW-3] 【B】forge.js改造为DB持久化（创建forge_materials和forge_equipment表）
-[P0-NEW-4] 【B】arena.js第655行和759行：lingshi → spirit_stones
-[P1-NEW-5] 【B】abyssDungeon.js优先从x-player-id header读取userId（或【F】确认apiRequest自动附加）
-[P1-NEW-6] 【B】sect.js添加/api/sect/shop端点（或在sect-missions.js中实现）
-[P1-NEW-7] 【B】tribulation.js添加成功率计算；【F】检查TribulationPanel.vue参数传递
-[P1-NEW-F1] 【B】创建sect_activity表 + 活跃积分API + 奖励发放
+[P0-NEW-1] 【B】新建 routes/sect-missions.js，实现宗门每日/每周任务和商店兑换API + 在server.js注册  # 2026-03-25 完成
+[P0-NEW-2] 【B】arena.js实现AI机器人对手池（8个AI，分低/中/高三层）+ 战败奖励  # 2026-03-25 完成
+[P0-NEW-3] 【B】forge.js改造为DB持久化（创建forge_materials和forge_equipment表）  # 2026-03-25 完成
+[P0-NEW-4] 【B】arena.js第655行和759行：lingshi → spirit_stones  # 2026-03-25 完成
+[P1-NEW-5] 【B】abyssDungeon.js优先从x-player-id header读取userId（或【F】确认apiRequest自动附加）  # 2026-03-25 完成
+[P1-NEW-6] 【B】sect.js添加/api/sect/shop端点（或在sect-missions.js中实现）  # 2026-03-25 完成（已含于sect-missions.js）
+[P1-NEW-7] 【B】tribulation.js添加成功率计算；【F】检查TribulationPanel.vue参数传递  # 2026-03-25 完成（GET /rate端点）
+[P1-NEW-F1] 【B】创建sect_activity表 + 活跃积分API + 奖励发放  # 2026-03-25 完成
