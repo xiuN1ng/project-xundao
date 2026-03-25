@@ -175,6 +175,21 @@ router.get('/', (req, res) => {
   });
 });
 
+// GET /info - 兼容客户端调用
+router.get('/info', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      config: {
+        singleCost: SINGLE_COST,
+        tenCost: TEN_COST,
+        guaranteeCount: GUARANTEE_COUNT,
+        qualityConfig: QUALITY_CONFIG
+      }
+    }
+  });
+});
+
 // GET /history - 抽奖历史
 router.get('/history', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;

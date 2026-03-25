@@ -242,24 +242,27 @@ router.get('/list', async (req, res) => {
 
 // GET /info - 玩家进度详情
 router.get('/info', async (req, res) => {
-  const { userId } = req.query;
+  const userIdRaw = req.query.userId || req.headers['x-user-id'] || 1;
+  const userId = parseInt(userIdRaw) || 1;
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
     const floorConfig = FLOOR_CONFIG[player.currentFloor - 1] || FLOOR_CONFIG[0];
     res.json({
+      success: true,
       currentFloor: player.currentFloor, maxFloor: player.maxFloor,
-      soulCrystals: player.soulCrystals, totalSoulCrystals: player.totalSoulCrystals,
-      materials: player.materials,
-      todayEnterCount: player.todayEnterCount, todaySweepCount: player.todaySweepCount,
-      sweptFloorsToday: player.sweptFloorsToday,
-      weeklyKillCount: player.weeklyKillCount, weeklySoulCrystals: Number(player.weeklySoulCrystals),
-      weeklyRewardClaimed: player.weeklyRewardClaimed,
-      heartDemonEnergy: player.heartDemonEnergy,
-      floorName: floorConfig.name, energyCost: floorConfig.energy
+      soulCrystals: Number(player.soulCrystals) || 0, totalSoulCrystals: Number(player.totalSoulCrystals) || 0,
+      materials: player.materials || {},
+      todayEnterCount: player.todayEnterCount || 0, todaySweepCount: player.todaySweepCount || 0,
+      sweptFloorsToday: player.sweptFloorsToday || [],
+      weeklyKillCount: player.weeklyKillCount || 0, weeklySoulCrystals: Number(player.weeklySoulCrystals) || 0,
+      weeklyRewardClaimed: player.weeklyRewardClaimed || false,
+      heartDemonEnergy: player.heartDemonEnergy || 0,
+      floorName: floorConfig?.name || '初心之境', energyCost: floorConfig?.energy || 8
     });
   } catch (err) {
-    res.json({ success: false, message: '服务器错误' });
+    console.error('heartDemon/info error:', err.message);
+    res.json({ success: false, message: '服务器错误: ' + err.message });
   }
 });
 
