@@ -25,6 +25,11 @@ const gemTypes = [
   { id: 'crit_gem', name: '暴击宝石', effect: 'crit+5%' }
 ];
 
+// GET /gems - 获取宝石列表（必须在 /:userId 之前，否则会被匹配）
+router.get('/gems', (req, res) => {
+  res.json({ success: true, gems: gemTypes });
+});
+
 // GET /:userId - 获取用户装备列表
 router.get('/:userId', (req, res) => {
   const userId = parseInt(req.params.userId) || 1;
@@ -145,11 +150,6 @@ router.get('/augment/history/:equipId', (req, res) => {
   const equipId = parseInt(req.params.equipId);
   const history = augmentHistory.filter(h => h.equipId === equipId);
   res.json({ success: true, history });
-});
-
-// GET /gems - 获取宝石类型
-router.get('/gems', (req, res) => {
-  res.json({ success: true, gems: gemTypes });
 });
 
 module.exports = router;
