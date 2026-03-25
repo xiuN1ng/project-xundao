@@ -57,7 +57,7 @@ function getDb() {
     try {
       const Database = require('better-sqlite3');
       const path = require('path');
-      const dbPath = path.join(__dirname, '..', 'data', 'game.db');
+      const dbPath = path.join(__dirname, '..', '..', 'backend', 'data', 'game.db');
       db = new Database(dbPath);
     } catch (e) {
       console.error('数据库连接失败:', e.message);

@@ -191,6 +191,53 @@ router.post('/forge', (req, res) => {
   }
 });
 
+// POST /api/forge/make - 锻造装备 (/forge 别名)
+router.post('/make', (req, res) => {
+  const playerId = parseInt(req.body.player_id || req.body.userId || 1);
+  const { recipeId } = req.body;
+  const db = getDb();
+  try {
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) return res.json({ success: false, message: '配方不存在' });
+
+    const materials = getPlayerMaterials(db, playerId);
+    for (const [matId, count] of Object.entries(recipe.materials)) {
+      if ((materials[matId] || 0) < count) {
+        return res.json({ success: false, message: `材料不足: ${materialNames[matId]||matId} 需要${count}个，现有${materials[matId]||0}个` });
+      }
+    }
+
+    const upsert = db.prepare('INSERT INTO forge_materials (player_id, material_key, quantity) VALUES (?,?,?) ON CONFLICT(player_id,material_key) DO UPDATE SET quantity=quantity-?');
+    for (const [matId, count] of Object.entries(recipe.materials)) {
+      upsert.run(playerId, matId, -count, count);
+    }
+
+    const equipId = getNextEquipId(db);
+    db.prepare('INSERT INTO forge_equipment (id, player_id, recipe_id, name, type, quality, color, stats, strengthen_level, bonus_stats) VALUES (?,?,?,?,?,?,?,?,0,?)').run(
+      equipId, playerId, recipe.id, recipe.name, recipe.type, recipe.quality, recipe.color, JSON.stringify(recipe.stats), '{}'
+    );
+
+    const equipment = { id: equipId, name: recipe.name, type: recipe.type, quality: recipe.quality, color: recipe.color, stats: recipe.stats, strengthenLevel: 0, bonusStats: {} };
+
+    let achievementResults = [];
+    if (achievementTrigger) {
+      try {
+        achievementResults = achievementTrigger.onEquipmentObtain(playerId, equipId, recipe.quality);
+        const notifications = achievementTrigger.popNotifications(playerId);
+        if (notifications.length > 0) {
+          console.log(`[成就通知] 用户${playerId}达成成就:`, notifications.map(n => n.achievementName).join(', '));
+        }
+      } catch(e) {}
+    }
+
+    res.json({ success: true, equipment, achievements: achievementResults.length > 0 ? achievementResults : undefined });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  } finally {
+    db.close();
+  }
+});
+
 // GET /api/forge/equipment - 获取已锻装的装备列表
 router.get('/equipment', (req, res) => {
   const playerId = parseInt(req.query.player_id || req.query.userId || 1);

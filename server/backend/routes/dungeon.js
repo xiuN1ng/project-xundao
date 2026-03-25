@@ -19,9 +19,10 @@ try {
       enter_count INTEGER DEFAULT 0,
       cleared INTEGER DEFAULT 0,
       best_time INTEGER,
+      enter_date TEXT,
       enter_time TEXT,
       cooldown_end TEXT,
-      UNIQUE(user_id, dungeon_id, date(enter_time))
+      UNIQUE(user_id, dungeon_id, enter_date)
     );
   `);
 } catch (err) {
@@ -63,7 +64,7 @@ router.get('/info/:id', (req, res) => {
       // 获取当日进入次数
       const today = new Date().toISOString().split('T')[0];
       const record = db.prepare(
-        'SELECT * FROM dungeon_records WHERE user_id = ? AND dungeon_id = ? AND date(enter_time) = ?'
+        'SELECT * FROM dungeon_records WHERE user_id = ? AND dungeon_id = ? AND enter_date = ?'
       ).get(userId, dungeonId, today);
       
       const maxDaily = 3;
@@ -187,7 +188,7 @@ router.post('/battle/:battleId', (req, res) => {
       try {
         const today = new Date().toISOString().split('T')[0];
         const existing = db.prepare(
-          'SELECT * FROM dungeon_records WHERE user_id = ? AND dungeon_id = ? AND date(enter_time) = ?'
+          'SELECT * FROM dungeon_records WHERE user_id = ? AND dungeon_id = ? AND enter_date = ?'
         ).get(userId, dungeonId, today);
         
         if (existing) {
@@ -196,8 +197,8 @@ router.post('/battle/:battleId', (req, res) => {
           ).run(time || 0, time || 0, existing.id);
         } else {
           db.prepare(
-            'INSERT INTO dungeon_records (user_id, dungeon_id, enter_count, cleared, best_time, enter_time) VALUES (?, ?, 1, 1, ?, CURRENT_TIMESTAMP)'
-          ).run(userId, dungeonId, time || 0);
+            'INSERT INTO dungeon_records (user_id, dungeon_id, enter_count, cleared, best_time, enter_date, enter_time) VALUES (?, ?, 1, 1, ?, ?, CURRENT_TIMESTAMP)'
+          ).run(userId, dungeonId, time || 0, today);
         }
       } catch (e) {
         console.log('[dungeon] 记录更新:', e.message);

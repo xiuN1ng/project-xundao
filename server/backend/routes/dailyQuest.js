@@ -140,6 +140,26 @@ router.post('/update', (req, res) => {
   res.json({ success: true, quests: data.quests });
 });
 
+// 更新任务进度 (update-progress 别名)
+router.post('/update-progress', (req, res) => {
+  const { userId, type, amount } = req.body;
+  const data = initDailyQuests(userId);
+  
+  const relatedQuests = questTemplates.filter(q => q.type === type);
+  
+  relatedQuests.forEach(quest => {
+    if (data.quests[quest.id] && !data.quests[quest.id].claimed) {
+      data.quests[quest.id].progress += amount;
+      
+      if (data.quests[quest.id].progress >= quest.target) {
+        data.quests[quest.id].completed = true;
+      }
+    }
+  });
+  
+  res.json({ success: true, quests: data.quests });
+});
+
 // 领取任务奖励
 router.post('/claim', (req, res) => {
   const { userId, questId } = req.body;

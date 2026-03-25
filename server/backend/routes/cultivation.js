@@ -64,10 +64,10 @@ let mockCultivation = {
 // 辅助：获取或初始化玩家修炼数据
 function getOrCreateCultivation(userId) {
   try {
-    let cult = db.prepare('SELECT * FROM cultivation WHERE user_id = ?').get(userId);
+    let cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     if (!cult) {
-      db.prepare('INSERT INTO cultivation (user_id, value, realm, cultivation_power) VALUES (?, 0, 1, 0)').run(userId);
-      cult = db.prepare('SELECT * FROM cultivation WHERE user_id = ?').get(userId);
+      db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower) VALUES (?, 0, 1, 0)').run(userId);
+      cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     }
     return cult;
   } catch (e) {
@@ -121,7 +121,7 @@ router.get('/', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: cult.cultivation_power || 0
+        cultivationPower: cult.cultivationPower || 0
       },
       player: {
         level: player.level,
@@ -157,7 +157,7 @@ router.get('/status', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: cult.cultivation_power || 0
+        cultivationPower: cult.cultivationPower || 0
       },
       player: {
         level: player.level,
@@ -189,7 +189,7 @@ router.post('/start', (req, res) => {
 
     // 修炼获得灵气值（基础 + 效率加成）
     const baseGain = Math.floor(Math.random() * 100) + 50;
-    const powerBonus = cult.cultivation_power ? Math.floor(baseGain * cult.cultivation_power / 100) : 0;
+    const powerBonus = cult.cultivationPower ? Math.floor(baseGain * cult.cultivationPower / 100) : 0;
     const gain = baseGain + powerBonus;
 
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
@@ -198,7 +198,9 @@ router.post('/start', (req, res) => {
     // 扣除灵石（写入 Users.lingshi，权威数据源）
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
     // 同步修炼值
-    db.prepare('UPDATE cultivation SET value = ? WHERE user_id = ?').run(newValue, userId);
+    db.prepare('UPDATE Cultivations SET value = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, userId);</parameter>
+</</minimax:tool_call>>
+</minimax:tool_call>
     // 增加玩家经验（1次修炼 = 10 exp）
     const expGain = 10;
     db.prepare('UPDATE player SET exp = exp + ? WHERE id = ?').run(expGain, userId);
@@ -237,7 +239,7 @@ router.post('/breakthrough', (req, res) => {
     const nextConfig = realmConfig[nextRealm];
 
     // 重置修炼值，境界+1
-    db.prepare('UPDATE cultivation SET value = 0, realm = ? WHERE user_id = ?').run(nextRealm, userId);
+    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, userId);
     // 同步更新 Users 表（权威源）和 player 表
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
@@ -263,7 +265,7 @@ router.post('/setPower', (req, res) => {
 
   try {
     getOrCreateCultivation(userId);
-    db.prepare('UPDATE cultivation SET cultivation_power = ? WHERE user_id = ?').run(cultivationPower || 0, userId);
+    db.prepare('UPDATE Cultivations SET cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(cultivationPower || 0, userId);
     res.json({ success: true, cultivationPower });
   } catch (err) {
     Logger.error('POST /setPower error:', err.message);

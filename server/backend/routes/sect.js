@@ -219,7 +219,7 @@ router.get('/list', (req, res) => {
   if (db) {
     try {
       const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
-      const sects = db.prepare('SELECT * FROM sects ORDER BY level DESC, member_count DESC LIMIT ? OFFSET ?').all(parseInt(limit), offset);
+      const sects = db.prepare('SELECT * FROM sects ORDER BY level DESC, members DESC LIMIT ? OFFSET ?').all(parseInt(limit), offset);
       
       return res.json({
         success: true,

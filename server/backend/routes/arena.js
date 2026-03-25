@@ -34,6 +34,35 @@ try {
   };
 }
 
+// 初始化 arena_player 表
+function initArenaTables() {
+  if (!db) return;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS arena_player (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL UNIQUE,
+        arena_points INTEGER DEFAULT 0,
+        rank_id INTEGER DEFAULT 0,
+        rank_name TEXT DEFAULT '凡人',
+        current_season TEXT DEFAULT 'default',
+        win_count INTEGER DEFAULT 0,
+        lose_count INTEGER DEFAULT 0,
+        total_battles INTEGER DEFAULT 0,
+        daily_challenges_used INTEGER DEFAULT 0,
+        last_challenge_reset TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    Logger.info('arena_player表初始化完成');
+  } catch (err) {
+    Logger.warn('arena_player表初始化失败:', err.message);
+  }
+}
+
+initArenaTables();
+
 // AI机器人池（8个，分低/中/高三层）
 // tier: 1=低阶, 2=中阶, 3=高阶
 const AI_BOTS = [
