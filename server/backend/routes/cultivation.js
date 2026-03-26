@@ -14,6 +14,8 @@ let db;
 try {
   const Database = require('better-sqlite3');
   db = new Database(DB_PATH);
+  // 确保 last_logout 列存在
+  try { db.exec('ALTER TABLE Users ADD COLUMN last_logout DATETIME'); } catch (e) { /* 列已存在 */ }
   Logger.info('数据库连接成功');
 } catch (err) {
   Logger.error('数据库连接失败:', err.message);
@@ -284,6 +286,83 @@ router.post('/setPower', (req, res) => {
     res.json({ success: true, cultivationPower });
   } catch (err) {
     Logger.error('POST /setPower error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 离线挂机收益
+// 逻辑：计算 now - last_logout，上限8小时，返回离线修炼收益
+// 收益公式：realm基础收益 × 离线时间（分钟）× 50%效率
+router.get('/offline-rewards', (req, res) => {
+  const userId = parseInt(req.query.userId) || 1;
+  const MAX_OFFLINE_MINUTES = 480; // 上限8小时
+
+  try {
+    const player = getPlayer(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    // 获取上次离线时间
+    const user = db.prepare('SELECT last_logout FROM Users WHERE id = ?').get(userId);
+    const lastLogout = user ? user.last_logout : null;
+
+    if (!lastLogout) {
+      return res.json({
+        success: true,
+        hasOfflineRewards: false,
+        message: '无离线记录',
+        rewards: { spiritStones: 0, cultivationValue: 0, exp: 0 },
+        offlineMinutes: 0
+      });
+    }
+
+    const lastLogoutTime = new Date(lastLogout).getTime();
+    const now = Date.now();
+    const elapsedMs = now - lastLogoutTime;
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+    const cappedMinutes = Math.min(elapsedMinutes, MAX_OFFLINE_MINUTES);
+
+    // 境界基础收益：每分钟基础灵气
+    const realm = player.realm || 1;
+    const realmBaseGain = [0, 10, 25, 60, 150, 400, 1000, 2500, 6000][realm] || 10;
+    // 离线效率50%，VIP加成
+    const vipBonus = 1 + (player.vipLevel || 0) * 0.1;
+    const efficiency = 0.5 * vipBonus;
+    const cultivationGain = Math.floor(realmBaseGain * cappedMinutes * efficiency);
+    // 离线经验：每分钟5exp × 境界加成
+    const expGain = Math.floor(5 * realm * cappedMinutes * efficiency);
+    // 离线灵石：每分钟 1-3灵石 × 境界加成
+    const lingshiGain = Math.floor((1 + Math.floor(Math.random() * 3)) * realm * cappedMinutes * 0.5);
+
+    res.json({
+      success: true,
+      hasOfflineRewards: cappedMinutes > 0,
+      offlineMinutes: cappedMinutes,
+      capped: elapsedMinutes > MAX_OFFLINE_MINUTES,
+      lastLogout,
+      rewards: {
+        cultivationValue: cultivationGain,
+        exp: expGain,
+        spiritStones: lingshiGain
+      },
+      efficiency: `${Math.round(efficiency * 100)}%`,
+      message: cappedMinutes > 0
+        ? `离线${cappedMinutes}分钟，获得灵气+${cultivationGain}，经验+${expGain}，灵石+${lingshiGain}`
+        : '离线时间太短，无收益'
+    });
+  } catch (err) {
+    Logger.error('GET /offline-rewards error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 记录离线（玩家下线时调用）
+router.post('/record-logout', (req, res) => {
+  const userId = parseInt(req.body.userId) || 1;
+  try {
+    db.prepare('UPDATE Users SET last_logout = datetime("now") WHERE id = ?').run(userId);
+    res.json({ success: true, message: '离线时间已记录' });
+  } catch (err) {
+    Logger.error('POST /record-logout error:', err.message);
     res.json({ success: false, message: err.message });
   }
 });
