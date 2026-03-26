@@ -134,7 +134,7 @@ router.post('/login', (req, res) => {
   const now = Date.now();
   
   const path = require('path');
-  const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+  const DATA_DIR = path.join(__dirname, '..', 'data');
   const DB_PATH = path.join(DATA_DIR, 'game.db');
   
   let db;

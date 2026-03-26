@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 function getDb() { return new Database(DB_PATH); }

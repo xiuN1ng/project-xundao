@@ -9,7 +9,7 @@ const path = require('path');
 const router = express.Router();
 
 // 数据库路径
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 // 日志记录器

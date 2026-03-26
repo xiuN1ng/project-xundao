@@ -10,7 +10,7 @@ const Logger = {
 };
 
 // 数据库路径
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 // ArenaSystem 单例（声明在前，避免 initAIBots() 中 TDZ）
