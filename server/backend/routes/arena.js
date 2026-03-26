@@ -89,8 +89,8 @@ function initAIBots() {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
     const insertPlayer = db.prepare(`
-      INSERT OR IGNORE INTO player (id, username, level, realm_level, combat_power, vip_level, created_at)
-      VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+      INSERT OR IGNORE INTO player (id, user_id, level, realm, attack, defense, hp, vip_level, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))
     `);
     // tier1=白银(2), tier2=黄金(3), tier3=钻石(5)
     const tierRank = { 1: [2, '白银'], 2: [3, '黄金'], 3: [5, '钻石'] };
@@ -103,7 +103,12 @@ function initAIBots() {
       const [rankId, rankName] = tierRank[bot.tier] || [1, '青铜'];
       const points = basePoints[bot.tier] || 500;
       try {
-        insertPlayer.run(botId, bot.username, bot.level, bot.realm_level, bot.combat_power);
+        // combat_power = ATK*10 + DEF*5 + HP/10，用 combat_power 反推合理属性
+        const cp = bot.combat_power || 5000;
+        const atk = Math.floor(cp * 0.05);
+        const def = Math.floor(cp * 0.025);
+        const hp  = Math.floor(cp * 1.0);
+        insertPlayer.run(botId, botId, bot.level, bot.realm_level || bot.level, atk, def, hp);
         insert.run(botId, points, rankId, rankName, season, Math.floor(points/50), Math.floor(points/80), Math.floor(points/30));
       } catch(e) {}
     }
@@ -133,10 +138,10 @@ function getDateString() {
 // 工具函数：获取或创建玩家竞技场数据
 function getOrCreateArenaPlayer(playerId) {
   if (!db) return null;
-  
+
   try {
     let arenaPlayer = db.prepare('SELECT * FROM arena_player WHERE player_id = ?').get(playerId);
-    
+
     if (!arenaPlayer) {
       const currentSeason = ArenaSystem ? ArenaSystem.getCurrentSeasonId() : 'default';
       db.prepare(`
@@ -145,7 +150,7 @@ function getOrCreateArenaPlayer(playerId) {
       `).run(playerId, currentSeason);
       arenaPlayer = db.prepare('SELECT * FROM arena_player WHERE player_id = ?').get(playerId);
     }
-    
+
     return arenaPlayer;
   } catch (err) {
     Logger.error('getOrCreateArenaPlayer错误:', err.message);
@@ -156,17 +161,17 @@ function getOrCreateArenaPlayer(playerId) {
 // 工具函数：检查并重置每日挑战次数
 function checkAndResetDailyChallenges(playerId) {
   if (!db) return { challengesUsed: 0, dailyRewardClaimed: false };
-  
+
   try {
     const arenaPlayer = db.prepare('SELECT * FROM arena_player WHERE player_id = ?').get(playerId);
     const today = getDateString();
-    
+
     if (!arenaPlayer || arenaPlayer.last_challenge_date !== today) {
       // 重置每日挑战次数
       if (arenaPlayer) {
         db.prepare(`
-          UPDATE arena_player 
-          SET daily_challenges_used = 0, 
+          UPDATE arena_player
+          SET daily_challenges_used = 0,
               last_challenge_date = ?,
               daily_reward_claimed = 0
           WHERE player_id = ?
@@ -174,7 +179,7 @@ function checkAndResetDailyChallenges(playerId) {
       }
       return { challengesUsed: 0, dailyRewardClaimed: false };
     }
-    
+
     return {
       challengesUsed: arenaPlayer.daily_challenges_used || 0,
       dailyRewardClaimed: !!arenaPlayer.daily_reward_claimed
@@ -199,12 +204,12 @@ router.get('/', (req, res) => {
         }
       });
     }
-    
+
     const totalPlayers = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 0;
     const seasonInfo = ArenaSystem.getSeasonRemainingTime();
     const currentSeasonId = ArenaSystem.getCurrentSeasonId();
     const rewards = ArenaSystem.getRankRewards();
-    
+
     res.json({
       success: true,
       data: {
@@ -230,23 +235,25 @@ router.get('/', (req, res) => {
 router.get('/ranks', (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
-    
+
     if (!db) {
       return res.json({ success: true, data: { ranking: [], total: 0 } });
     }
-    
+
     const players = db.prepare(`
-      SELECT p.id, COALESCE(u.nickname, p.username, 'AI_' || ap.player_id) as username, p.level, p.realm_level, p.combat_power,
+      SELECT p.id,
+             COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+             p.level, p.realm as realm_level,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count, ap.total_battles
       FROM arena_player ap
-      LEFT JOIN player p ON p.id = ap.player_id
+      LEFT JOIN player p ON p.user_id = ap.player_id
       LEFT JOIN Users u ON u.id = ap.player_id
       ORDER BY ap.arena_points DESC
       LIMIT ? OFFSET ?
     `).all(parseInt(limit), parseInt(offset));
-    
+
     const total = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 0;
-    
+
     const ranking = players.map((p, index) => {
       const rank = ArenaSystem ? ArenaSystem.getRank(p.rank_id) : { icon: '👤' };
       return {
@@ -255,7 +262,7 @@ router.get('/ranks', (req, res) => {
         username: p.username,
         level: p.level,
         realmLevel: p.realm_level,
-        combatPower: p.combat_power || 0,
+        combatPower: Math.floor(p.level * 500 + (p.realm_level || 1) * 2000),
         arenaPoints: p.arena_points,
         rankId: p.rank_id,
         rankName: p.rank_name,
@@ -266,7 +273,7 @@ router.get('/ranks', (req, res) => {
         winRate: p.total_battles > 0 ? Math.round((p.win_count / p.total_battles) * 100) : 0
       };
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -289,39 +296,39 @@ router.get('/ranks', (req, res) => {
 router.get('/rank/:userId', (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     if (!db) {
       return res.json({ success: false, error: '数据库不可用' });
     }
-    
+
     // 确保玩家存在
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
-    
+
     // 获取竞技场数据
     const arenaPlayer = getOrCreateArenaPlayer(userId);
     if (!arenaPlayer) {
       return res.status(500).json({ success: false, error: '竞技场数据获取失败' });
     }
-    
+
     // 获取段位信息
     const currentRank = ArenaSystem ? ArenaSystem.getRank(arenaPlayer.rank_id) : { name: '凡人', icon: '👤' };
     const seasonInfo = ArenaSystem ? ArenaSystem.getSeasonRemainingTime() : { remainingDays: 7 };
-    
+
     // 计算排名
     const totalPlayers = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 1;
     const higherRanked = db.prepare('SELECT COUNT(*) as count FROM arena_player WHERE arena_points > ?').get(arenaPlayer.arena_points).count || 0;
     const ranking = higherRanked + 1;
-    
+
     // 获取VIP等级
     const vipLevel = player.vip_level || 0;
     const dailyChallengeCount = ArenaSystem ? ArenaSystem.getDailyChallengeCount(vipLevel) : 5;
-    
+
     // 检查每日数据
     const dailyInfo = checkAndResetDailyChallenges(userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -371,44 +378,50 @@ router.get('/opponents/:userId', (req, res) => {
   try {
     const { userId } = req.params;
     const { refresh } = req.query;
-    
+
     if (!db) {
       return res.json({ success: false, error: '数据库不可用' });
     }
-    
+
     // 获取玩家竞技场数据
     const arenaPlayer = getOrCreateArenaPlayer(userId);
     if (!arenaPlayer) {
       return res.status(500).json({ success: false, error: '竞技场数据获取失败' });
     }
-    
+
     const currentPoints = arenaPlayer.arena_points;
     const range = 2000;
-    
+
     // 查找附近的对手
     const opponents = db.prepare(`
-      SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+      SELECT p.id,
+             COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+             p.level, p.realm as realm_level,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
       FROM player p
-      JOIN arena_player ap ON p.id = ap.player_id
+      JOIN arena_player ap ON p.user_id = ap.player_id
+      LEFT JOIN Users u ON u.id = ap.player_id
       WHERE ap.player_id != ?
         AND ap.arena_points BETWEEN ? AND ?
       ORDER BY ap.arena_points DESC
       LIMIT ?
     `).all(userId, Math.max(0, currentPoints - range), currentPoints + range, 5);
-    
+
     // 补充高排名玩家
     if (opponents.length < 5) {
       const topOpponents = db.prepare(`
-        SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+        SELECT p.id,
+               COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+               p.level, p.realm as realm_level,
                ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
         FROM player p
-        JOIN arena_player ap ON p.id = ap.player_id
+        JOIN arena_player ap ON p.user_id = ap.player_id
+        LEFT JOIN Users u ON u.id = ap.player_id
         WHERE ap.player_id != ?
         ORDER BY ap.arena_points DESC
         LIMIT ?
       `).all(userId, 5 - opponents.length);
-      
+
       const existingIds = new Set(opponents.map(o => o.id));
       for (const top of topOpponents) {
         if (!existingIds.has(top.id)) {
@@ -417,10 +430,10 @@ router.get('/opponents/:userId', (req, res) => {
         if (opponents.length >= 5) break;
       }
     }
-    
+
     const currentRank = ArenaSystem ? ArenaSystem.getRank(arenaPlayer.rank_id) : { icon: '👤' };
     const refreshCost = ArenaSystem ? ArenaSystem.challengeConfig.refreshCost : 50;
-    
+
     const opponentList = opponents.map(op => {
       const opRank = ArenaSystem ? ArenaSystem.getRank(op.rank_id) : { icon: '👤' };
       return {
@@ -428,7 +441,7 @@ router.get('/opponents/:userId', (req, res) => {
         username: op.username,
         level: op.level,
         realmLevel: op.realm_level,
-        combatPower: op.combat_power || 0,
+        combatPower: Math.floor(op.level * 500 + (op.realm_level || 1) * 2000),
         arenaPoints: op.arena_points,
         rankId: op.rank_id,
         rankName: op.rank_name,
@@ -441,7 +454,7 @@ router.get('/opponents/:userId', (req, res) => {
         isRecommend: Math.abs(op.arena_points - currentPoints) < 500
       };
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -464,23 +477,23 @@ router.get('/records/:userId', (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 20 } = req.query;
-    
+
     if (!db) {
       return res.json({ success: true, data: { records: [] } });
     }
-    
+
     const records = db.prepare(`
       SELECT ab.*,
-             ap1.username as attacker_name,
-             ap2.username as defender_name
+             COALESCE(u1.nickname, u1.username, 'AI_' || ab.attacker_id) as attacker_name,
+             COALESCE(u2.nickname, u2.username, 'AI_' || ab.defender_id) as defender_name
       FROM arena_battles ab
-      LEFT JOIN player ap1 ON ab.attacker_id = ap1.id
-      LEFT JOIN player ap2 ON ab.defender_id = ap2.id
+      LEFT JOIN Users u1 ON u1.id = ab.attacker_id
+      LEFT JOIN Users u2 ON u2.id = ab.defender_id
       WHERE ab.attacker_id = ? OR ab.defender_id = ?
       ORDER BY ab.battle_time DESC
       LIMIT ?
     `).all(userId, userId, parseInt(limit));
-    
+
     const formattedRecords = records.map(r => ({
       battleId: r.id,
       season: r.season,
@@ -502,7 +515,7 @@ router.get('/records/:userId', (req, res) => {
       battleTime: r.battle_time,
       formattedTime: new Date(r.battle_time).toLocaleString('zh-CN')
     }));
-    
+
     res.json({
       success: true,
       data: {
@@ -526,30 +539,30 @@ router.post('/challenge', (req, res) => {
     const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId);
     const target_id = parseInt(req.body.target_id) || parseInt(req.body.targetId);
     const use_items = req.body.use_items;
-    
+
     if (!player_id || !target_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数 (player_id/userId, target_id/targetId)' });
     }
-    
+
     if (player_id === target_id) {
       return res.status(400).json({ success: false, error: '不能挑战自己' });
     }
-    
+
     if (!db || !ArenaSystem) {
       return res.status(500).json({ success: false, error: '系统不可用' });
     }
-    
+
     // 确保玩家存在
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
-    
+
     // 检查每日挑战次数
     const dailyInfo = checkAndResetDailyChallenges(player_id);
     const vipLevel = player.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
-    
+
     if (dailyInfo.challengesUsed >= dailyChallengeCount) {
       return res.status(400).json({
         success: false,
@@ -558,46 +571,49 @@ router.post('/challenge', (req, res) => {
         maxChallenges: dailyChallengeCount
       });
     }
-    
+
     // 获取对手信息
     const targetPlayer = db.prepare(`
-      SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+      SELECT p.id, p.user_id,
+             COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+             p.level, p.realm as realm_level, p.attack, p.defense, p.hp,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
       FROM player p
-      JOIN arena_player ap ON p.id = ap.player_id
-      WHERE p.id = ?
+      JOIN arena_player ap ON p.user_id = ap.player_id
+      LEFT JOIN Users u ON u.id = ap.player_id
+      WHERE p.user_id = ?
     `).get(target_id);
-    
+
     if (!targetPlayer) {
       return res.status(404).json({ success: false, error: '对手不存在或未参加竞技场' });
     }
-    
+
     // 获取双方竞技场数据
     const attackerArena = getOrCreateArenaPlayer(player_id);
     const defenderArena = getOrCreateArenaPlayer(target_id);
-    
-    // 模拟战斗
-    const attackerPower = player.combat_power || 1000;
-    const defenderPower = targetPlayer.combat_power || 1000;
+
+    // 模拟战斗（combat_power = ATK*10 + DEF*5 + HP/10）
+    const attackerPower = (player.attack || 100) * 10 + (player.defense || 50) * 5 + Math.floor((player.hp || 1000) / 10);
+    const defenderPower = (targetPlayer.attack || 100) * 10 + (targetPlayer.defense || 50) * 5 + Math.floor((targetPlayer.hp || 1000) / 10);
     const attackerWin = ArenaSystem.simulateBattle(attackerPower, defenderPower);
-    
+
     // 计算积分变化
     const attackerRank = ArenaSystem.getRank(attackerArena.rank_id);
     const defenderRank = ArenaSystem.getRank(defenderArena.rank_id);
-    
+
     const attackerPointsGain = attackerWin ? attackerRank.winPoints : 0;
     const attackerPointsLoss = !attackerWin ? attackerRank.losePoints : 0;
     const defenderPointsGain = !attackerWin ? defenderRank.winPoints : 0;
     const defenderPointsLoss = attackerWin ? defenderRank.losePoints : 0;
-    
+
     // 更新数据
     const today = getDateString();
     const newAttackerPoints = Math.max(0, attackerArena.arena_points + attackerPointsGain - attackerPointsLoss);
     const newDefenderPoints = Math.max(0, defenderArena.arena_points + defenderPointsGain - defenderPointsLoss);
-    
+
     const newAttackerRank = ArenaSystem.getRankByPoints(newAttackerPoints);
     const newDefenderRank = ArenaSystem.getRankByPoints(newDefenderPoints);
-    
+
     // 更新攻击者数据
     db.prepare(`
       UPDATE arena_player
@@ -624,7 +640,7 @@ router.post('/challenge', (req, res) => {
       newAttackerRank.id, newAttackerRank.id,
       player_id
     );
-    
+
     // 更新防守者数据
     db.prepare(`
       UPDATE arena_player
@@ -639,11 +655,11 @@ router.post('/challenge', (req, res) => {
       newDefenderRank.name,
       target_id
     );
-    
+
     // 记录战斗
     const currentSeason = ArenaSystem.getCurrentSeasonId();
     const winnerId = attackerWin ? player_id : target_id;
-    
+
     try {
       db.prepare(`
         INSERT INTO arena_battles (season, attacker_id, defender_id, attacker_points_before, attacker_points_after,
@@ -668,7 +684,7 @@ router.post('/challenge', (req, res) => {
     } catch (battleErr) {
       Logger.warn('战斗记录插入失败（表可能不存在）:', battleErr.message);
     }
-    
+
     // 生成战斗报告
     const battleReport = ArenaSystem.generateBattleReport(
       { playerId: player_id, username: player.username, arenaPoints: newAttackerPoints },
@@ -676,7 +692,7 @@ router.post('/challenge', (req, res) => {
       attackerPower,
       defenderPower
     );
-    
+
     // 计算奖励（胜利：积分+灵石；失败：战败安慰奖）
     const reward = attackerWin
       ? { arenaPoints: attackerRank.winPoints, spiritStones: 100, dailyPoints: 10 }
@@ -690,7 +706,7 @@ router.post('/challenge', (req, res) => {
         Logger.warn('灵石奖励发放失败:', e.message);
       }
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -725,13 +741,13 @@ router.post('/challenge', (req, res) => {
 router.get('/rewards', (req, res) => {
   try {
     const { player_id } = req.query;
-    
+
     if (!ArenaSystem) {
       return res.json({ success: true, data: { rewards: [] } });
     }
-    
+
     const rewards = ArenaSystem.getRankRewards();
-    
+
     // 如果有玩家ID，附加领取状态
     let claimStatus = {};
     if (player_id && db) {
@@ -745,7 +761,7 @@ router.get('/rewards', (req, res) => {
         // 表可能不存在
       }
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -765,37 +781,37 @@ router.get('/rewards', (req, res) => {
 router.post('/claim-reward', (req, res) => {
   try {
     const { player_id, season_id, rank_id } = req.body;
-    
+
     if (!player_id || !season_id || rank_id === undefined) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     if (!db) {
       return res.status(500).json({ success: false, error: '数据库不可用' });
     }
-    
+
     // 检查是否已领取
     const existing = db.prepare(
       'SELECT * FROM arena_season_rewards WHERE player_id = ? AND season_id = ? AND rank_id = ?'
     ).get(player_id, season_id, rank_id);
-    
+
     if (existing && existing.claimed) {
       return res.status(400).json({ success: false, error: '该奖励已领取' });
     }
-    
+
     // 获取奖励配置
     if (!ArenaSystem) {
       return res.status(500).json({ success: false, error: '竞技场系统不可用' });
     }
-    
+
     const rankInfo = ArenaSystem.getRank(rank_id);
     const dailyReward = rankInfo.dailyReward || {};
-    
+
     // 发放奖励（写入 Users.lingshi，权威数据源）
     if (dailyReward.spiritStones) {
       db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(dailyReward.spiritStones, player_id);
     }
-    
+
     // 记录领取
     if (existing) {
       db.prepare(
@@ -806,7 +822,7 @@ router.post('/claim-reward', (req, res) => {
         'INSERT INTO arena_season_rewards (player_id, season_id, rank_id, claimed, claimed_at) VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)'
       ).run(player_id, season_id, rank_id);
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -826,30 +842,30 @@ router.post('/claim-reward', (req, res) => {
 router.get('/info', (req, res) => {
   try {
     const userId = parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
-    
+
     if (!db || !ArenaSystem) {
       return res.json({
         success: true,
         data: { arenaPoints: 0, rankId: 0, rankName: '凡人', seasonDaysLeft: 7 }
       });
     }
-    
+
     const arenaPlayer = getOrCreateArenaPlayer(userId);
     if (!arenaPlayer) {
       return res.status(404).json({ success: false, error: '竞技场数据不存在' });
     }
-    
+
     const currentRank = ArenaSystem.getRank(arenaPlayer.rank_id);
     const seasonInfo = ArenaSystem.getSeasonRemainingTime();
     const dailyInfo = checkAndResetDailyChallenges(userId);
     const vipLevel = db.prepare('SELECT vip_level FROM player WHERE id = ?').get(userId)?.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
-    
+
     // 计算排名
     const totalPlayers = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 1;
     const higherRanked = db.prepare('SELECT COUNT(*) as count FROM arena_player WHERE arena_points > ?').get(arenaPlayer.arena_points).count || 0;
     const ranking = higherRanked + 1;
-    
+
     res.json({
       success: true,
       data: {
@@ -890,21 +906,21 @@ router.get('/info', (req, res) => {
 router.post('/match', (req, res) => {
   try {
     const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
-    
+
     if (!db || !ArenaSystem) {
       return res.status(500).json({ success: false, error: '系统不可用' });
     }
-    
+
     // 检查每日挑战次数
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
-    
+
     const dailyInfo = checkAndResetDailyChallenges(userId);
     const vipLevel = player.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
-    
+
     if (dailyInfo.challengesUsed >= dailyChallengeCount) {
       return res.status(400).json({
         success: false,
@@ -913,40 +929,46 @@ router.post('/match', (req, res) => {
         maxChallenges: dailyChallengeCount
       });
     }
-    
+
     // 获取当前积分
     const arenaPlayer = getOrCreateArenaPlayer(userId);
     if (!arenaPlayer) {
       return res.status(500).json({ success: false, error: '竞技场数据不存在' });
     }
-    
+
     const currentPoints = arenaPlayer.arena_points;
     const range = 2000;
-    
+
     // 查找附近对手
     let opponents = db.prepare(`
-      SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+      SELECT p.id,
+             COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+             p.level, p.realm as realm_level,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
       FROM player p
-      JOIN arena_player ap ON p.id = ap.player_id
+      JOIN arena_player ap ON p.user_id = ap.player_id
+      LEFT JOIN Users u ON u.id = ap.player_id
       WHERE ap.player_id != ?
         AND ap.arena_points BETWEEN ? AND ?
       ORDER BY ABS(ap.arena_points - ?) ASC
       LIMIT 5
     `).all(userId, Math.max(0, currentPoints - range), currentPoints + range, currentPoints);
-    
+
     // 补充高排名玩家
     if (opponents.length < 3) {
       const topOpponents = db.prepare(`
-        SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+        SELECT p.id,
+               COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+               p.level, p.realm as realm_level,
                ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
         FROM player p
-        JOIN arena_player ap ON p.id = ap.player_id
+        JOIN arena_player ap ON p.user_id = ap.player_id
+        LEFT JOIN Users u ON u.id = ap.player_id
         WHERE ap.player_id != ?
         ORDER BY ap.arena_points DESC
         LIMIT ?
       `).all(userId, 3 - opponents.length);
-      
+
       const existingIds = new Set(opponents.map(o => o.id));
       for (const top of topOpponents) {
         if (!existingIds.has(top.id)) {
@@ -956,15 +978,15 @@ router.post('/match', (req, res) => {
         if (opponents.length >= 3) break;
       }
     }
-    
+
     if (opponents.length === 0) {
       return res.json({ success: false, error: '暂无可用对手' });
     }
-    
+
     // 随机选择一个对手
     const target = opponents[Math.floor(Math.random() * opponents.length)];
     const targetRank = ArenaSystem.getRank(target.rank_id);
-    
+
     res.json({
       success: true,
       data: {
@@ -974,7 +996,7 @@ router.post('/match', (req, res) => {
           username: target.username,
           level: target.level,
           realmLevel: target.realm_level,
-          combatPower: target.combat_power || 0,
+          combatPower: Math.floor(target.level * 500 + (target.realm_level || 1) * 2000),
           arenaPoints: target.arena_points,
           rankId: target.rank_id,
           rankName: target.rank_name,

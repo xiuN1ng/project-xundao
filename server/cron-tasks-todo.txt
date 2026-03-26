@@ -547,3 +547,56 @@
 #   问题: boss HP=500万，150伤害/次，需9小时连续攻击
 #   方案: HP改为playerAttack*500（约75万），或改为限时挑战
 #   截止: 2026-03-27
+
+## 2026-03-26 晚间版 — P0×3 + P1×5 + P2×2 + NF×1
+
+### P0 [B]
+- P0-26-1: sect/create 成功但 player.sectId=null + list 空 → 创建宗门时同步更新 player.sectId，统一DB路径，list加mock兜底
+- P0-26-2: Arena /opponents p.username 列不存在 → 修正 arena_player 表或查询（p.username → p.name）
+- P0-26-3: cultivation value 每次重置为0 → 写入 Cultivations 表，start()累加不重置
+
+### P1 [B]
+- P1-26-1: welfare /status 端点缺失 → 创建 GET /api/welfare/status 返回 {signedInToday, consecutiveDays, totalDays, canClaim}
+- P1-26-3: Forge 所有材料 available:0 → 章节战斗掉落/商店出售/每日任务奖励
+- P1-26-4: tribulation/begin 误判"已达最高境界"(玩家realm=1) → 修复境界检测逻辑
+- P1-26-5: /api/beast, /api/gongfa, /api/meridian 全404 → 创建对应端点
+
+### P2 [B]
+- P2-26-2: WorldBoss bossList 全空永不刷新 → 添加每日/手动召唤机制
+
+### NF [B]
+- NF-26-1: 离线挂机奖励系统 → POST /offline-income/collect，后端存储 lastLoginTime，奖励=章节进度×在线时长，上限8h
+
+## 2026-03-30 夜场版 — P0×3 + P1×4 + P2×2 + NF×1
+
+### P0 [B]
+- P0-30-1: Arena p.username SQL错误（5+轮❗）→ player表无username列，改用 p.id 或 COALESCE(p.nickname, '玩家_'||p.id)
+- P0-30-2: Ladder API 完全未挂载 → server.js 添加 app.use('/api/ladder', require('../game/ladder_api'))
+- P0-30-3: welfare/status 路由缺失（22+轮❗）→ welfare_api.js 添加 router.get('/status/:userId')
+
+### P1 [B]
+- P1-30-1: Achievement 全31个progress=0 → 各行为事件中调用 achievementStorage.checkAchievements()
+- P1-30-2: Forge 所有材料 available:0 → 从bag表读玩家实际拥有量，chapter战斗掉落材料
+- P1-30-3: tribulation 参数名 player_id vs playerId（22+轮❗）→ 统一用 req.query.player_id
+- P1-30-4: cultivation/status progress=0 cultivationPower=0 → start()累加不重置，写入cultivations表
+
+### P2 [B]
+- P2-30-1: WorldBoss 每击1点伤害 → 改用 player.attack 而非固定1
+- P2-30-2: chapter/battle 战斗成功但不扣灵石 → 扫荡/入场需消耗资源
+
+### NF [B]
+- NF-30-1: 天梯赛季+匹配系统 → 挂载ladder_api.js，实现8段位列，赛季积分制
+
+## 2026-03-26-late (23:47) — 策划 Agent
+
+[P0-36] sect-activity.js DB路径 → path.join(__dirname,'..','..','data') (routes/data目录不存在)
+[P0-37] tower.js + dungeon.js + abyss.js → 创建最小可用路由(三个文件0字节)
+[P0-38] arena.js → 添加 /ranking 和 /player 路由，修复 p.username SQL错误
+[P0-39] cultivation.js → 修复 Cultivations 表写入失败(cultivation/start返回gain但不落地)
+[P1-36] welfare_api.js → 添加 /status/:userId + /daily/claim，修复 updatePlayerSpiritStones写DB
+[P1-37] server.js → 添加 app.use('/api/ladder', ladderApi) 挂载
+[P1-38] sect-war.js → 添加 /signup 别名转发到 /join
+[P1-39] sect.js → 统一DB数据源，sect/create后正确写入Users.sectId
+[P2-35] welfare_sign_in表 → 添加daily_claimed_at防重复领取
+[NF-36] welfare/daily claim完整实现(灵石写DB)
+[NF-37] 宗门活跃积分系统对接真实任务数据

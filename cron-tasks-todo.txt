@@ -630,3 +630,50 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 [B-NF-6-1] WorldBoss分级挑战系统 - 完整实现: 难度选择+动态BOSS匹配+奖励倍率+刷新时间+伤害排行榜 # 新增 | 2026-03-26
 文件: backend/routes/worldBoss.js
+
+## 2026-03-26-late (23:47) — 策划 Agent
+
+[P0-36] sect-activity.js DB路径 → path.join(__dirname,'..','..','data') (routes/data不存在)
+[P0-37] tower.js + dungeon.js + abyss.js → 创建最小可用路由(三个文件0字节)
+[P0-38] arena.js → 添加 /ranking 和 /player 路由，修复 p.username SQL错误
+[P0-39] cultivation.js → 修复 Cultivations 表写入失败(cultivation/start无效)
+[P1-36] welfare_api.js → 添加 /status/:userId + /daily/claim，修复 updatePlayerSpiritStones写DB
+[P1-37] server.js → 添加 app.use('/api/ladder', ladderApi) 挂载
+[P1-38] sect-war.js → 添加 /signup 别名转发到 /join
+[P1-39] sect.js → 统一DB数据源，sect/create后正确写入Users.sectId
+[P2-35] welfare_sign_in表 → 添加daily_claimed_at防重复领取
+[NF-36] welfare/daily claim完整实现(灵石写DB)
+[NF-37] 宗门活跃积分系统对接真实任务数据
+
+
+## 2026-03-27 晚间批次 — 策划 Agent
+
+### P0 (3个)
+[B-P0-01] Arena opponents SQL引用不存在列 — 修复 arena.js 第370行：p.username→p.user_id，移除realm_level/combat_power，JOIN条件改为p.user_id=ap.player_id  # 新增 | 2026-03-27
+文件: server/backend/routes/arena.js
+
+[B-P0-02] Sect/join端点缺失 — game/sect_api.js无/join路由，请求落入backend DB(空) → 在game/sect_api.js添加POST /join完整实现(joinSect方法)  # 新增 | 2026-03-27
+文件: server/game/sect_api.js
+
+[B-P0-03] Sect/list返回空+列名断裂 — routes/sect.js列名member_count→members，leader_name→leaderName；同时DB不统一(monolith用server/data/game.db，backend用server/backend/data/game.db)  # 新增 | 2026-03-27
+文件: server/backend/routes/sect.js
+
+### P1 (5个)
+[B-P1-01] Achievement 31个成就progress全为0 — 实现triggerAchievement(userId,category,delta)事件驱动  # 新增 | 2026-03-27
+文件: server/backend/routes/achievement.js
+
+[B-P1-02] DailyQuest 14个任务progress全为0 — 实现updateDailyQuestProgress(userId,type,delta)事件驱动  # 新增 | 2026-03-27
+文件: server/backend/routes/dailyQuest.js
+
+[B-P1-03] Forge所有材料available=0 — chapter/battle胜利后按dropTable概率掉落iron_ingot等材料到forge_materials表  # 新增 | 2026-03-27
+文件: server/backend/routes/chapter.js
+
+[B-P1-04] VIP API "无效的玩家ID" — GET请求读取body导致userId=undefined，改为GET /api/vip/info/:userId或正确读取req.query  # 新增 | 2026-03-27
+文件: server/backend/routes/vip.js
+
+[B-P1-05] cultivation/status返回双字段 — spirit_stones和lingshi同时存在(值相同)，统一为lingshi删除spirit_stones  # 新增 | 2026-03-27
+文件: server/backend/routes/cultivation.js
+
+### 新功能
+[B-NF-01] WorldBoss伤害排行榜 — 每攻击更新world_boss_damage表，查询SUM(damage)排名，结算按排名分发额外奖励  # 新增 | 2026-03-27
+文件: server/backend/routes/worldBoss.js
