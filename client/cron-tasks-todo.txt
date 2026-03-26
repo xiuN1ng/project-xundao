@@ -1,0 +1,31 @@
+
+# ========== 2026-03-27 v6 新增任务（前端）==========
+# 客户端代码: /root/.openclaw/workspace/xundao-server/client/
+
+## [F] P0 紧急 — 2026-03-27
+
+[P0-F-27-1] 【F】VipPanel.vue — 接入VIP API真实数据
+  问题: 34行stub，硬编码VIP等级=1，无任何API调用
+  修复: 调用 vipApi.get() 加载VIP等级/积分/权益
+  文件: client/src/components/VipPanel.vue
+  验证: VIP面板显示真实VIP数据
+
+[P0-F-27-2] 【F】WorldBossPanel.vue — 接入worldboss API
+  问题: 28行stub，硬编码boss数据
+  修复: 调用 worldbossApi.get() 加载BOSS血条/排名/攻击
+  文件: client/src/components/WorldBossPanel.vue
+
+## [F] P1 重要 — 2026-03-27
+
+[P1-F-27-1] 【F】目标追踪+主线引导UI
+  问题: 新玩家注册后无任何引导，不知该做什么
+  方案: 添加"今日目标"悬浮图标+自动任务高亮+奖励弹窗
+  文件: client/src/components/NewbieGuidePanel.vue (新建)
+  负责人: [F]
+
+## [F] P2 — 2026-03-27
+
+[P2-F-27-1] 【F】Forge前端对接
+  问题: 客户端forge API是独立stub，完全不连接后端
+  修复: 对接 /api/forge/recipes 和 /api/forge/make
+  文件: client/src/api/index.js 的 forge 相关 + ForgePanel.vue

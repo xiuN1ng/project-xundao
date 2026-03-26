@@ -244,6 +244,30 @@ router.post('/buy-month-card', (req, res) => {
   }
 });
 
+// GET /api/vip/info - 获取VIP详情（必须在 /:userId 之前，否则 /info 被当作 userId 解析为 NaN）
+router.get('/info', (req, res) => {
+  const userId = parseInt(req.query.userId || req.query.player_id || req.query.user_id) || 1;
+  const playerData = getPlayerData(userId);
+  const vipLevel = playerData?.vipLevel || playerData?.vip_level || 1;
+  const vipPoints = playerData?.vipPoints || playerData?.vip_points || 0;
+  const card = loadMonthlyCard(userId);
+  const now = Date.now();
+  const hasActiveCard = card && card.expireTime > now;
+  res.json({
+    success: true,
+    vip: {
+      level: vipLevel,
+      points: vipPoints,
+      name: VIP_LEVELS[vipLevel]?.nameCn || '普通玩家',
+      benefits: VIP_LEVELS[vipLevel]?.benefits || [],
+      dailyBonus: VIP_LEVELS[vipLevel]?.dailyBonus || 0,
+      nextClaimTime: hasActiveCard ? (card.lastClaimTime ? card.lastClaimTime + 86400000 : now) : null,
+    },
+    monthlyCard: hasActiveCard ? { type: card.cardType, expireTime: card.expireTime } : null,
+    spiritStones: playerData?.spirit_stones || 0,
+  });
+});
+
 // 获取指定玩家的VIP信息（/:userId 端点）
 router.get('/:userId', (req, res) => {
   // 兼容 player_id / userId path 参数

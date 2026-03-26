@@ -248,6 +248,24 @@ function deductCost(userId, amount) {
 // 初始化数据库
 initGachaTables();
 
+// GET /api/gacha/ - 根路径，返回奖池概览
+router.get('/', (req, res) => {
+  if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
+  try {
+    const pools = db.prepare('SELECT pool_key, name, description, cost_single, cost_ten, is_premium FROM gacha_pools').all();
+    res.json({ success: true, pools: pools.map(p => ({
+      poolKey: p.pool_key,
+      name: p.name,
+      description: p.description,
+      costSingle: p.cost_single,
+      costTen: p.cost_ten,
+      isPremium: p.is_premium === 1,
+    })) });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // GET /api/gacha/pools - 获取所有奖池配置
 router.get('/pools', (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
