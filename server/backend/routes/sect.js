@@ -207,17 +207,58 @@ router.post('/donate', (req, res) => {
 
 // 创建宗门
 router.post('/create', (req, res) => {
-  const { name } = req.body;
-  sect = {
-    id: Date.now(),
-    name: name || '新宗门',
-    level: 1,
-    icon: '🏯',
-    members: 1,
-    rank: 999,
-    contribution: 0
-  };
-  res.json(sect);
+  const { player_id, name } = req.body;
+  const creatorId = parseInt(player_id) || 1;
+  const sectName = name || '新宗门';
+  const now = new Date().toISOString();
+
+  if (!db) {
+    return res.json({ success: false, message: '数据库未连接' });
+  }
+
+  try {
+    // 检查玩家是否存在
+    const player = db.prepare('SELECT id, sectId FROM Users WHERE id = ?').get(creatorId);
+    if (!player) {
+      return res.json({ success: false, message: '玩家不存在' });
+    }
+
+    // 检查是否已有宗门
+    if (player.sectId) {
+      return res.json({ success: false, message: '已有宗门，无法创建' });
+    }
+
+    // 插入 Sects 表
+    const stmt = db.prepare(`
+      INSERT INTO Sects (name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
+      VALUES (?, ?, 1, 1, 0, 999, ?, ?)
+    `);
+    const result = stmt.run(sectName, creatorId, now, now);
+    const newSectId = result.lastInsertRowid;
+
+    // 更新玩家的 sectId
+    db.prepare('UPDATE Users SET sectId = ? WHERE id = ?').run(newSectId, creatorId);
+
+    const newSect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(newSectId);
+
+    return res.json({
+      success: true,
+      sect: {
+        id: newSect.id,
+        name: newSect.name,
+        level: newSect.level,
+        icon: '🏯',
+        memberCount: newSect.members,
+        leaderId: newSect.leaderId,
+        rank: newSect.rank,
+        contribution: newSect.contribution,
+        createdAt: newSect.createdAt
+      }
+    });
+  } catch (e) {
+    console.log('[sect] create错误:', e.message);
+    return res.json({ success: false, message: '创建宗门失败: ' + e.message });
+  }
 });
 
 // /building - 查询宗门建筑
