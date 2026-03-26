@@ -594,10 +594,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 文件: xundao-server/server/backend/routes/sect-war.js
 
 ### P1
-[B-P1-6-3] daily_dungeon.js存在但未挂载 - server.js添加app.use('/api/daily-dungeon', require('../game/daily_dungeon'))
+[B-P1-6-3] daily_dungeon.js存在但未挂载 - server.js添加app.use('/api/daily-dungeon', require('../game/daily_dungeon'))  # 完成 | 2026-03-26 17:55 | server.js注册daily-dungeon路由
 文件: xundao-server/server/backend/server.js
 
-[B-P1-6-4] welfare数据库不可用 - 检查welfare_storage.js的Database连接，修复sign_in_records表
+[B-P1-6-4] welfare数据库不可用 - 检查welfare_storage.js的Database连接，修复sign_in_records表  # 完成 | 2026-03-26 17:55 | welfare_storage.js DB路径修正(移除错误的server/段) + welfare签到API验证正常
 文件: xundao-server/server/game/welfare_storage.js
 
 ### P2
