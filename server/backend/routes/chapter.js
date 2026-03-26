@@ -31,6 +31,45 @@ try {
   console.log('[chapter] 每日任务模块未找到:', e.message);
 }
 
+// ========== 锻造材料掉落表 ==========
+// 格式: material_key -> { baseChance, chapterBonus, minQuantity, maxQuantity }
+const MATERIAL_DROP_TABLE = {
+  iron_ingot:    { baseChance: 0.50, chapterBonus: 0.005, minQty: 1, maxQty: 3 },
+  fire_essence:  { baseChance: 0.30, chapterBonus: 0.003, minQty: 1, maxQty: 2 },
+  ice_crystal:   { baseChance: 0.20, chapterBonus: 0.002, minQty: 1, maxQty: 1 },
+  thunder_orb:   { baseChance: 0.15, chapterBonus: 0.002, minQty: 1, maxQty: 1 },
+  earth_diamond: { baseChance: 0.08, chapterBonus: 0.001, minQty: 1, maxQty: 1 },
+  wood_essence:  { baseChance: 0.25, chapterBonus: 0.003, minQty: 1, maxQty: 2 },
+  water_stone:   { baseChance: 0.20, chapterBonus: 0.002, minQty: 1, maxQty: 1 },
+  spirit_jade:   { baseChance: 0.05, chapterBonus: 0.001, minQty: 1, maxQty: 1 },
+};
+
+function rollMaterialDrops(userId, chapterId, chapterDb) {
+  const drops = [];
+  for (const [matKey, cfg] of Object.entries(MATERIAL_DROP_TABLE)) {
+    const chance = Math.min(cfg.baseChance + chapterId * cfg.chapterBonus, 0.95);
+    if (Math.random() < chance) {
+      const qty = cfg.minQty + Math.floor(Math.random() * (cfg.maxQty - cfg.minQty + 1));
+      drops.push({ key: matKey, quantity: qty });
+    }
+  }
+  if (drops.length === 0) return [];
+  try {
+    const stmt = chapterDb.prepare(`
+      INSERT INTO forge_materials (player_id, material_key, quantity)
+      VALUES (?, ?, ?)
+      ON CONFLICT(player_id, material_key) DO UPDATE SET quantity = quantity + excluded.quantity
+    `);
+    for (const d of drops) {
+      stmt.run(userId, d.key, d.quantity);
+    }
+    console.log(`[chapter] 玩家${userId} 第${chapterId}章获得材料:`, drops.map(d => `${d.key}×${d.quantity}`).join(', '));
+  } catch (e) {
+    console.error('[chapter] 材料掉落写入失败:', e.message);
+  }
+  return drops;
+}
+
 // 100个章节数据
 const chapters = [
 
@@ -303,6 +342,16 @@ router.post('/complete', (req, res) => {
     }
   }
 
+  // ========== 锻造材料掉落 ==========
+  let materialDrops = [];
+  if (db) {
+    try {
+      materialDrops = rollMaterialDrops(userId, chapterId, db);
+    } catch (e) {
+      console.error('[chapter] 材料掉落失败:', e.message);
+    }
+  }
+
   res.json({
     success: true,
     reward: chapter.reward,
@@ -317,7 +366,8 @@ router.post('/complete', (req, res) => {
       name: a.name,
       desc: a.desc,
       reward: a.reward
-    })) : undefined
+    })) : undefined,
+    materialDrops: materialDrops.length > 0 ? materialDrops : undefined
   });
 });
 
@@ -414,6 +464,16 @@ router.post('/battle', (req, res) => {
     }
   }
 
+  // 锻造材料掉落
+  let materialDrops = [];
+  if (db) {
+    try {
+      materialDrops = rollMaterialDrops(userId, chapterId, db);
+    } catch (e) {
+      console.error('[chapter] 材料掉落失败:', e.message);
+    }
+  }
+
   res.json({
     success: true,
     reward: chapter.reward,
@@ -428,7 +488,8 @@ router.post('/battle', (req, res) => {
       name: a.name,
       desc: a.desc,
       reward: a.reward
-    })) : undefined
+    })) : undefined,
+    materialDrops: materialDrops.length > 0 ? materialDrops : undefined
   });
 });
 
