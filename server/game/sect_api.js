@@ -293,6 +293,27 @@ router.post('/create', async (req, res) => {
   }
 });
 
+// 加入宗门
+router.post('/join', async (req, res) => {
+  try {
+    const { player_id, sect_id } = req.body;
+
+    if (!player_id || !sect_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID或宗门ID' });
+    }
+
+    const result = await sectStorage.joinSect(player_id, parseInt(sect_id));
+
+    res.json({
+      success: true,
+      message: `成功加入宗门「${result.sect.name}」！`,
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 // 升级宗门
 router.post('/upgrade', async (req, res) => {
   try {

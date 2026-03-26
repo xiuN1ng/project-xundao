@@ -436,6 +436,65 @@ const sectStorage = {
     return rows.map(row => row.tech_id);
   },
 
+  // 加入宗门
+  async joinSect(playerId, sectId) {
+    // 检查玩家是否已在宗门
+    const [existing] = await pool.execute(
+      'SELECT sect_id FROM sect_members WHERE player_id = ?',
+      [playerId]
+    );
+    if (existing.length > 0) {
+      throw new Error('已在宗门中');
+    }
+
+    // 检查宗门是否存在
+    const [sects] = await pool.execute(
+      'SELECT * FROM sects WHERE id = ?',
+      [sectId]
+    );
+    if (sects.length === 0) {
+      throw new Error('宗门不存在');
+    }
+    const sect = sects[0];
+
+    // 检查宗门是否满员
+    const [members] = await pool.execute(
+      'SELECT COUNT(*) as count FROM sect_members WHERE sect_id = ?',
+      [sectId]
+    );
+    const currentCount = members[0]?.count || 0;
+    if (currentCount >= sect.max_members) {
+      throw new Error('宗门人数已满');
+    }
+
+    // 插入成员记录
+    await pool.execute(
+      'INSERT INTO sect_members (sect_id, player_id, role, contribution) VALUES (?, ?, ?, ?)',
+      [sectId, playerId, 'member', 0]
+    );
+
+    // 返回更新后的宗门信息
+    const [updatedMembers] = await pool.execute(
+      'SELECT COUNT(*) as count FROM sect_members WHERE sect_id = ?',
+      [sectId]
+    );
+    const newCount = updatedMembers[0]?.count || currentCount + 1;
+
+    return {
+      success: true,
+      sect: {
+        id: sect.id,
+        name: sect.name,
+        leader_id: sect.leader_id,
+        level: sect.level,
+        current_members: newCount,
+        max_members: sect.max_members
+      },
+      role: 'member',
+      joined_at: new Date().toISOString()
+    };
+  },
+
   // 创建宗门
   async createSect(playerId, sectType) {
     const sectData = SECT_DATA[sectType];
