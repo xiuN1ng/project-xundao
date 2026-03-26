@@ -511,10 +511,10 @@ router.post('/join', (req, res) => {
     }
 
     // 更新玩家宗门
-    db.prepare('UPDATE Users SET sectId = ?, updatedAt = datetime("now") WHERE id = ?').run(sectId, player_id);
+    db.prepare("UPDATE Users SET sectId = ?, updatedAt = datetime('now') WHERE id = ?").run(sectId, player_id);
 
     // 宗门成员+1
-    db.prepare('UPDATE Sects SET members = members + 1, updatedAt = datetime("now") WHERE id = ?').run(sectId);
+    db.prepare("UPDATE Sects SET members = members + 1, updatedAt = datetime('now') WHERE id = ?").run(sectId);
 
     return res.json({
       success: true,

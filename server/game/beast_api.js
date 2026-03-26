@@ -574,9 +574,9 @@ router.post('/capture', (req, res) => {
       // 捕捉失败：如果是神话兽逃走，仍重置保底（因为已经见过神话了）
       const isMythical = beastTemplate.quality === 'mythical';
       if (isMythical) {
-        db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+        db.prepare(`UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime('now') WHERE player_id = ?`).run(actualPlayerId);
       } else {
-        db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = consecutive_non_mythical + 1, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+        db.prepare(`UPDATE beast_pity_counter SET consecutive_non_mythical = consecutive_non_mythical + 1, updated_at = datetime('now') WHERE player_id = ?`).run(actualPlayerId);
       }
       
       return res.json({
@@ -609,7 +609,7 @@ router.post('/capture', (req, res) => {
     }
     
     // 保底重置（成功捕捉神话 → 重置计数器）
-    db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+    db.prepare(`UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime('now') WHERE player_id = ?`).run(actualPlayerId);
     
     const isMythicalCaught = finalBeastTemplate.quality === 'mythical';
     res.json({

@@ -777,7 +777,7 @@ router.post('/claim', (req, res) => {
     db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(totalReward, userId);
 
     if (existing) {
-      db.prepare('UPDATE sect_war_rewards SET claimed = 1, claimed_at = datetime("now"), reward_amount = ? WHERE id = ?')
+      db.prepare("UPDATE sect_war_rewards SET claimed = 1, claimed_at = datetime('now'), reward_amount = ? WHERE id = ?")
         .run(totalReward, existing.id);
     } else {
       db.prepare(`

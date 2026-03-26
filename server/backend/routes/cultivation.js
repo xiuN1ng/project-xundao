@@ -78,7 +78,7 @@ function getOrCreateCultivation(userId) {
     let cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     if (!cult) {
       try {
-        db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime("now"), datetime("now"))').run(userId);
+        db.prepare("INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime('now'), datetime('now'))").run(userId);
       } catch (insertErr) {
         Logger.error('INSERT Cultivations 失败:', insertErr.message, 'userId:', userId);
       }
@@ -366,7 +366,7 @@ router.get('/offline-rewards', (req, res) => {
 router.post('/record-logout', (req, res) => {
   const userId = parseInt(req.body.userId) || 1;
   try {
-    db.prepare('UPDATE Users SET last_logout = datetime("now") WHERE id = ?').run(userId);
+    db.prepare("UPDATE Users SET last_logout = datetime('now') WHERE id = ?").run(userId);
     res.json({ success: true, message: '离线时间已记录' });
   } catch (err) {
     Logger.error('POST /record-logout error:', err.message);
