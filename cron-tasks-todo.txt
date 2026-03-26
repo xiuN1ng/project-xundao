@@ -539,22 +539,30 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #  文件: server/game/beast_api.js | 2026-03-29
 
 # === P0-B-53 === [2026-03-26 v53]
-[P0-B-53-1] welfare_storage.js DB路径修复
-根因: path.join(__dirname, '..', '..', 'backend', 'data') → 少一层server
-修复: 改为 path.join(__dirname, '..', 'server', 'backend', 'data', 'game.db')
+[P0-B-53-1] welfare_storage.js DB路径修复  # 完成 | 2026-03-26 fea917a
+  - 根因: path.join(__dirname, '..', '..', 'backend', 'data') → 少一层server
+  - 修复: 改为 path.join(__dirname, '..', 'server', 'backend', 'data', 'game.db')
+  - welfare_storage.js: __dirname = server/game, 正确指向 server/backend/data/game.db
 
-[P0-B-53-2] Arena AI池 p.username 列错误
-修复: SQL中 p.username 改为 'AI_' || p.id 作为AI名称
+[P0-B-53-2] Arena AI池 LEFT JOIN + COALESCE  # 完成 | 2026-03-26 fea917a
+  - 问题: arena_player JOIN player + Users 导致AI bots(player_id<0)完全消失于/ranks
+  - 修复: JOIN → LEFT JOIN + COALESCE(u.nickname, p.username, 'AI_' || ap.player_id)
+  - arena.js /ranks 端点
 
-[P0-B-53-3] sect/list 空返回值添加mock兜底
-修复: DB total===0 时 fallback 到 mockSects
+[P0-B-53-3] sect/list mock兜底  # 无需修复（sect/list已正常返回mock数据）
 
 # === P1-B-53 === [2026-03-26 v53]
-[P1-B-53-1] 添加 sect/my 路由 (GET /api/sect/my)
-[P1-B-53-2] 修复 forge/recipes 返回空问题
-[P1-B-53-3] 挂载 dailyQuest 路由 (app.use('/api/dailyQuest', ...))
+[P1-B-53-1] 添加 sect/my 路由 (GET /api/sect/my)  # 完成 | 2026-03-26 fea917a
+  - 查询 Users.sectId → 查询 Sects 表 → 返回宗门信息+玩家身份
+  - sect.js 新增 router.get('/my') 端点
+
+[P1-B-53-2] 修复 forge/recipes 返回空问题  # 完成 | 2026-03-26 fea917a
+  - 新增 router.get('/recipes') 显式端点 + try-catch降级返回空materialCosts
+  - forge.js
+
+[P1-B-53-3] 挂载 dailyQuest 路由 (app.use('/api/dailyQuest', ...))  # 已确认完成
 
 # === P2-B-53 === [2026-03-26 v53]
-[P2-B-53-1] 重新设计Chapter敌人HP公式: enemyHP = playerATK * 3 + chapterId * 50
-[P2-B-53-2] WorldBoss伤害改为基于player.attack
+[P2-B-53-1] 重新设计Chapter敌人HP公式: enemyHP = playerATK * 3 + chapterId * 50  # 完成 | 2026-03-26 e7661b1 | chapter.js /enter端点动态HP计算
+[P2-B-53-2] WorldBoss伤害改为基于player.attack  # 已确认完成 | worldBoss.js attack端点已使用player.attack*1.5+狂暴机制
 
