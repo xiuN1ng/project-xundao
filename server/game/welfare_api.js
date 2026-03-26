@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { welfareStorage, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES } = require('./welfare_storage');
+const { welfareStorage, getDb: welfareGetDb, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES } = require('./welfare_storage');
 
 // ========== 时区工具（上海时间）==========
 function getShanghaiDate() {
@@ -164,7 +164,7 @@ router.post('/claim-sign-in', async (req, res) => {
 
     // 记录每日领取（防止重复签到）
     const todayStr = getShanghaiDate();
-    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+    const database = welfareGetDb();
     if (database) {
       try {
         database.prepare(
@@ -220,7 +220,7 @@ router.post('/claim-sign-in', async (req, res) => {
     
     // 3. 补签卡奖励
     if (reward.repairCard > 0) {
-      const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+      const database = welfareGetDb();
       if (database) {
         database.prepare(
           'UPDATE welfare_sign_in SET repair_cards = repair_cards + ? WHERE player_id = ?'
@@ -293,7 +293,7 @@ router.get('/daily', (req, res) => {
 
     // 检查今日是否已领取
     let canClaim = true;
-    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+    const database = welfareGetDb();
     if (database) {
       const existing = database.prepare(
         'SELECT id FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
@@ -328,7 +328,7 @@ router.post('/daily', (req, res) => {
     }
 
     const todayStr = getShanghaiDate();
-    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+    const database = welfareGetDb();
 
     // 检查今日是否已领取
     if (database) {
