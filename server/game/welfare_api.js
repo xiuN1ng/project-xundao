@@ -7,6 +7,12 @@ const router = express.Router();
 
 const { welfareStorage, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES } = require('./welfare_storage');
 
+// ========== 时区工具（上海时间）==========
+function getShanghaiDate() {
+  const d = new Date(Date.now() + 8 * 3600000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // 延迟加载依赖
 let playerStorage;
 let playerEquipmentStorage;
@@ -155,7 +161,18 @@ router.post('/claim-sign-in', async (req, res) => {
     if (!result.success) {
       return res.status(400).json(result);
     }
-    
+
+    // 记录每日领取（防止重复签到）
+    const todayStr = getShanghaiDate();
+    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+    if (database) {
+      try {
+        database.prepare(
+          'INSERT OR IGNORE INTO forge_daily_claims (player_id, last_claim_date) VALUES (?, ?)'
+        ).run(playerId, todayStr);
+      } catch (_) { /* 已领取 */ }
+    }
+
     // 发放奖励
     const rewards = [];
     const reward = result.reward;
@@ -270,18 +287,78 @@ router.get('/daily', (req, res) => {
   try {
     const playerIdRaw = req.query.player_id || req.query.playerId || req.headers['x-user-id'] || 1;
     const playerId = parseInt(playerIdRaw) || 1;
-    
-    const today = new Date().toISOString().split('T')[0];
-    
-    // 每日福利配置
+
+    const todayStr = getShanghaiDate();
     const dailyReward = { type: 'lingshi', amount: 100, name: '每日登录礼' };
-    
+
+    // 检查今日是否已领取
+    let canClaim = true;
+    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+    if (database) {
+      const existing = database.prepare(
+        'SELECT id FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
+      ).get(playerId, todayStr);
+      canClaim = !existing;
+    }
+
     res.json({
       success: true,
       data: {
-        date: today,
-        canClaim: true,
+        date: todayStr,
+        canClaim: canClaim,
         reward: dailyReward
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/welfare/daily
+ * 每日福利领取 - 独立于7日签到的每日一次100灵石
+ */
+router.post('/daily', (req, res) => {
+  try {
+    const playerIdRaw = req.body.player_id || req.body.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+
+    const todayStr = getShanghaiDate();
+    const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+
+    // 检查今日是否已领取
+    if (database) {
+      const existing = database.prepare(
+        'SELECT id FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
+      ).get(playerId, todayStr);
+      if (existing) {
+        return res.status(400).json({ success: false, error: '今日已领取每日福利' });
+      }
+    }
+
+    // 发放100灵石
+    const rewardAmount = 100;
+    updatePlayerSpiritStones(playerId, rewardAmount);
+
+    // 记录领取
+    if (database) {
+      try {
+        database.prepare(
+          'INSERT INTO forge_daily_claims (player_id, last_claim_date) VALUES (?, ?)'
+        ).run(playerId, todayStr);
+      } catch (_) { /* 并发已领取 */ }
+    }
+
+    res.json({
+      success: true,
+      message: '领取成功！获得100灵石',
+      data: {
+        date: todayStr,
+        reward: { type: 'lingshi', amount: rewardAmount, name: '每日登录礼' }
       }
     });
   } catch (error) {

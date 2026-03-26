@@ -40,7 +40,7 @@ function initDB() {
 function loadFromDB() {
   if (!db) return;
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     const rows = db.prepare('SELECT * FROM daily_quest_progress WHERE quest_date = ?').all(today);
     rows.forEach(row => {
       if (!userQuests[row.user_id]) userQuests[row.user_id] = { date: today, quests: {} };
@@ -59,7 +59,7 @@ function loadFromDB() {
 function saveQuestToDB(userId, questId, progress, completed, claimed) {
   if (!db) return;
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     db.prepare(`
       INSERT OR REPLACE INTO daily_quest_progress (user_id, quest_id, progress, completed, claimed, quest_date)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -102,8 +102,14 @@ const questTemplates = [
 let userQuests = {};
 
 // 初始化用户每日任务
+// 获取上海时间日期字符串
+function getShanghaiDate() {
+  const d = new Date(Date.now() + 8 * 3600000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function initDailyQuests(userId) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getShanghaiDate();
 
   if (!userQuests[userId]) {
     userQuests[userId] = {

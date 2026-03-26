@@ -477,11 +477,11 @@ router.post('/daily-claim', (req, res) => {
 
       if (existing) {
         db.prepare(
-          'UPDATE forge_materials SET quantity = quantity + ?, updated_at = strftime("%s","now") WHERE player_id = ? AND material_key = ?'
+          'UPDATE forge_materials SET quantity = quantity + ?, updated_at = strftime(\'%s\', \'now\') WHERE player_id = ? AND material_key = ?'
         ).run(r.quantity, player_id, r.id);
       } else {
         db.prepare(
-          'INSERT INTO forge_materials (player_id, material_key, quantity, updated_at) VALUES (?, ?, ?, strftime("%s","now"))'
+          'INSERT INTO forge_materials (player_id, material_key, quantity, updated_at) VALUES (?, ?, ?, strftime(\'%s\', \'now\'))'
         ).run(player_id, r.id, r.quantity);
       }
     }

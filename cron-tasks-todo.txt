@@ -928,3 +928,22 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-DEEP-1] Arena奖励逻辑修改（败者扣分） [B]
 [P2-DEEP-2] Forge制造后材料未扣减 [B]
 [NF-DEEP-1] 实时战斗事件系统 [B]
+
+## 2026-03-27 0651 — 游戏策划 Agent 新增任务
+
+[P0-27-N-10-1] forge.js line480/484: strftime("%s","now") → unixepoch() [P0]
+  根因：双引号导致SQLite把"%s"当列名，实测确认用unixepoch()可修复
+
+[P1-27-N-10-2] welfare.js: 新增 POST /sign-in 和 POST /daily 路由 [P1]
+  现状：只有GET路由，POST返回HTML error，玩家无法签到/领每日登录礼
+
+[P1-27-N-10-3] cultivation/advance 路由实现境界跃迁逻辑 [P1]
+  现状：路由存在但无实现，玩家筑基境无跃迁路径
+
+[P1-27-N-10-4] dailyQuest.js: 修复userQuests初始化顺序 + cultivation/battle操作更新progress [P1]
+  现状：14个任务全部progress:0，服务器重启后userQuests加载失败
+
+[P2-27-N-10-5] sect/create后更新player.sectId字段 [P2]
+  现状：玩家在宗内但player.sectId=null，导致UI显示异常
+
+[NF-27-N-10-1] 境界跃迁后端：跃迁奖励逻辑 + 境界配置表 [P1]

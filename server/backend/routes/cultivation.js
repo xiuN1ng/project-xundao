@@ -7,6 +7,14 @@ const Logger = {
   error: (...args) => console.error('[cultivation:error]', new Date().toISOString(), ...args)
 };
 
+// 每日任务进度更新
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  Logger.info('dailyQuest 路由未找到:', e.message);
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -220,6 +228,15 @@ router.post('/start', (req, res) => {
     // 增加玩家经验（1次修炼 = 10 exp）
     const expGain = 10;
 
+    // ========== 每日任务触发：修炼 ==========
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        console.error('[cultivation] 每日任务更新失败:', e.message);
+      }
+    }
+
     res.json({
       success: true,
       gain,
@@ -278,6 +295,50 @@ router.post('/breakthrough', (req, res) => {
     });
   } catch (err) {
     Logger.error('POST /breakthrough error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 境界跃迁（与突破相同逻辑）
+router.post('/advance', (req, res) => {
+  const userId = parseInt(req.body.userId || req.body.player_id) || 1;
+  const cult = getOrCreateCultivation(userId);
+  const config = realmConfig[cult.realm] || realmConfig[1];
+
+  try {
+    if (parseInt(cult.value) < config.cost) {
+      return res.json({ success: false, message: '灵气不足，无法跃迁' });
+    }
+
+    const nextRealm = cult.realm + 1;
+    if (!realmConfig[nextRealm]) {
+      return res.json({ success: false, message: '已达最高境界' });
+    }
+
+    const nextConfig = realmConfig[nextRealm];
+
+    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, userId);
+    db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
+    db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
+
+    if (achievementTrigger) {
+      try {
+        achievementTrigger.triggerAchievement(userId, 'realm_breakthrough', nextRealm);
+      } catch (e) {
+        console.error('[cultivation] 成就触发失败:', e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      newRealm: nextRealm,
+      realmName: nextConfig.name,
+      realmIcon: nextConfig.icon,
+      realmLevel: nextConfig.realm_level,
+      message: `跃迁成功！进入${nextConfig.name}境界！`
+    });
+  } catch (err) {
+    Logger.error('POST /advance error:', err.message);
     res.json({ success: false, message: err.message });
   }
 });
