@@ -845,8 +845,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - [P0-B-30-3-2] DailyQuest+Achievement progress表初始化+更新链 — cultivation.js/chapter.js完成后调用dailyQuest/achievement进度更新
 
 ### P0 紧急（回归未修复）
-- [P0-B-R1] Arena last_challenge_date → last_challenge_reset（arena.js第169、627行）
-- [P0-B-R2] Sect.create改为写入Sects+Memorials表，移除内存变量
+- [P0-B-R1] Arena last_challenge_date → last_challenge_reset（arena.js第169、627行）# 完成 | 已确认无last_challenge_date残留
+- [P0-B-R2] Sect.create改为写入Sects+Memorials表，移除内存变量 # 完成 | 2026-03-27 bf56909
 
 ### P1 重要
 - [P1-B-30-3-1] Paradise API实现 — routes/paradise.js + game/paradise_system.js（3种福地类型）
