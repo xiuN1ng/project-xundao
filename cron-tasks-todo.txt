@@ -860,15 +860,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ## 2026-03-27 05:15 — 第59轮新增任务
 
 ### P0 紧急（新发现）
-[P0-27-1] 【B】Arena+tower savePlayerTowerData 崩溃
+[P0-27-1] 【B】Arena+tower savePlayerTowerData 崩溃  # 完成 | 2026-03-27 589629d
   问题: POST /api/arena/challenge → "no such column: last_challenge_date"
-  根因: tower_progress 表不存在，savePlayerTowerData INSERT失败
+  根因: arena_player表缺少highest_rank/highest_rank_id列；tower.js DB路径错误
   修复: 
-    1. 确认 tower.js initDatabase() 中 CREATE TABLE IF NOT EXISTS tower_progress 已执行
-    2. 追踪 arena challenge 触发 tower.savePlayerTowerData 的调用链
-    3. 确保 tower_progress 表有 last_challenge_date 列（tower.js第47行定义）
+    1. arena.js: arena_player表添加highest_rank/highest_rank_id列(ALTER TABLE兼容已有表)
+    2. tower.js: 修复DB路径 server/../../data → server/backend/data
+    3. tower.js: 添加GET /info端点
   文件: server/backend/routes/tower.js, server/backend/routes/arena.js
-  截止: 2026-03-27
+  截止: 2026-03-27 | 验证: arena challenge和tower /info均正常
 
 [P0-27-2] 【B】Sect.create 写库修复（回归未修复）
   问题: sect/create 写内存变量，sect/list 返回空
