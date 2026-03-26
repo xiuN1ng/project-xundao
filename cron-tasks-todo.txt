@@ -533,6 +533,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #  在伤害计算时: finalAtk += beastBonus.atk, finalHp += beastBonus.hp
 #  文件: server/backend/routes/battle.js 或对应战斗处理逻辑 | 2026-03-29
 
-# [P1-B-29-5] beast_api.js /capture: 添加保底进度记录
+# [P1-B-29-5] beast_api.js /capture: 添加保底进度记录  # 完成 | 2026-03-26 | e62ef91
 #  累计90次未出神话则下次必出神话灵兽(混沌兽)
+#  beast_pity_counter表(累计非神话次数) + /capture保底逻辑 + GET /pity/status端点
 #  文件: server/game/beast_api.js | 2026-03-29
