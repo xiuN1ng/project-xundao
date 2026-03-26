@@ -58,6 +58,9 @@ app.use('/api/payment', require('./routes/payment'));
 app.use('/api/player', require('./routes/player'));
 app.use('/api/cultivation', require('./routes/cultivation'));
 app.use('/api/tribulation', require('./routes/tribulation'));
+
+// 玩家模块（必须在 chapter/tribulation/achievement setPlayerRef 之前加载）
+const playerModule = require('./routes/player');
 app.use('/api/sect', require('./routes/sect'));
 app.use('/api/sect-missions', require('./routes/sect-missions'));
 app.use('/api/sect-activity', require('./routes/sect-activity'));
@@ -131,7 +134,6 @@ app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}
 
 // 注入玩家数据引用到成就系统 (成就奖励需要更新玩家资源)
 const achievementRouter = require('./routes/achievement');
-const playerModule = require('./routes/player');
 try { if (achievementRouter.setPlayerRef) achievementRouter.setPlayerRef(playerModule._player); } catch(e) {}
 
 // 注入玩家数据引用到渡劫系统

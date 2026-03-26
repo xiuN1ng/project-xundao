@@ -5,6 +5,10 @@ const path = require('path');
 // 数据库连接
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
+
+// 用户成就进度（必须在模块加载时初始化，用于 initAchievementTable → loadAchievementsFromDB 调用链）
+let userAchievements = {};
+
 let db;
 try {
   const Database = require('better-sqlite3');
@@ -132,9 +136,6 @@ const achievementTemplates = [
   { id: 72, category: 'online', name: '持之以恒', desc: '累计登录30天', target: 30, reward: { diamonds: 200 }, icon: '📅' },
   { id: 73, category: 'online', name: '修仙达人', desc: '累计登录100天', target: 100, reward: { diamonds: 1000 }, icon: '📅' }
 ];
-
-// 用户成就进度
-let userAchievements = {};
 
 // 获取用户成就列表
 router.get('/:userId', (req, res) => {
