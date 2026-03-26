@@ -67,6 +67,8 @@
 [P0] [B] 魔器装备系统 - 魔器属性、特效、魔器商店  # 2026-03-27 完成
   - server.js 注册 /api/spirit-artifact 路由 → spirit_artifact_api.js  # 2026-03-27
   - spirit_artifact_storage.js DB路径修正: server/data → server/backend/data  # 2026-03-27
+  - spirit_artifact_api.js loadDependencies修正: require解构 .spiritArtifactStorage  # 2026-03-27
+  - 端点验证: GET /list, GET /my, GET /equipped, POST /acquire, POST /equip, POST /unequip, POST /upgrade  # 2026-03-27
 [P0] [B] 魔晶经济系统 - 魔晶产出公式、商店兑换、每日重置
 [P0] [B] 封魔渊后端逻辑 - 副本生成、怪物数据加载、奖励发放
 [P0] [B] 封魔渊扫荡功能 - 已通关层扫荡、重复奖励发放
