@@ -23,6 +23,14 @@ try {
   achievementTrigger = null;
 }
 
+// 每日任务进度更新
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  console.log('[chapter] 每日任务模块未找到:', e.message);
+}
+
 // 100个章节数据
 const chapters = [
 
@@ -277,14 +285,21 @@ router.post('/complete', (req, res) => {
   if (achievementTrigger) {
     try {
       achievementResults = achievementTrigger.onChapterClear(userId, chapterId);
-      // 获取待推送通知
       const notifications = achievementTrigger.popNotifications(userId);
       if (notifications.length > 0) {
-        // 通知将通过 /api/achievement/notifications 端点获取
         console.log(`[成就通知] 用户${userId}达成成就:`, notifications.map(n => n.achievementName).join(', '));
       }
     } catch (e) {
       console.error('[chapter] 成就触发失败:', e.message);
+    }
+  }
+
+  // ========== 每日任务触发：通关章节 ==========
+  if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+    try {
+      dailyQuestRouter.updateDailyQuestProgress(userId, 'chapter', 1);
+    } catch (e) {
+      console.error('[chapter] 每日任务更新失败:', e.message);
     }
   }
 
@@ -390,9 +405,18 @@ router.post('/battle', (req, res) => {
     }
   }
 
-  res.json({ 
-    success: true, 
-    reward: chapter.reward, 
+  // 每日任务触发：通关章节
+  if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+    try {
+      dailyQuestRouter.updateDailyQuestProgress(userId, 'chapter', 1);
+    } catch (e) {
+      console.error('[chapter] 每日任务更新失败:', e.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    reward: chapter.reward,
     exp: chapter.exp,
     stars,
     spiritStonesGained,
