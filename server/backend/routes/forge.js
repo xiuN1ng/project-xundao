@@ -181,10 +181,13 @@ router.post('/forge', (req, res) => {
       }
     }
 
-    // 扣除材料
-    const upsert = db.prepare('INSERT INTO forge_materials (player_id, material_key, quantity) VALUES (?,?,?) ON CONFLICT(player_id,material_key) DO UPDATE SET quantity=quantity-?');
+    // 扣除材料（UPDATE + INSERT OR IGNORE 安全方式，防止首次UPSERT插入负数）
     for (const [matId, count] of Object.entries(recipe.materials)) {
-      upsert.run(playerId, matId, -count, count);
+      const changes = db.prepare('UPDATE forge_materials SET quantity = quantity - ? WHERE player_id = ? AND material_key = ? AND quantity >= ?').run(count, playerId, matId, count);
+      if (changes.changes === 0) {
+        // 材料不足或行不存在，插入占位行供后续追踪
+        db.prepare('INSERT OR IGNORE INTO forge_materials (player_id, material_key, quantity) VALUES (?, ?, 0)').run(playerId, matId);
+      }
     }
 
     // 创建装备
@@ -231,9 +234,12 @@ router.post('/make', (req, res) => {
       }
     }
 
-    const upsert = db.prepare('INSERT INTO forge_materials (player_id, material_key, quantity) VALUES (?,?,?) ON CONFLICT(player_id,material_key) DO UPDATE SET quantity=quantity-?');
+    // 扣除材料（UPDATE + INSERT OR IGNORE 安全方式，防止首次UPSERT插入负数）
     for (const [matId, count] of Object.entries(recipe.materials)) {
-      upsert.run(playerId, matId, -count, count);
+      const changes = db.prepare('UPDATE forge_materials SET quantity = quantity - ? WHERE player_id = ? AND material_key = ? AND quantity >= ?').run(count, playerId, matId, count);
+      if (changes.changes === 0) {
+        db.prepare('INSERT OR IGNORE INTO forge_materials (player_id, material_key, quantity) VALUES (?, ?, 0)').run(playerId, matId);
+      }
     }
 
     const equipId = getNextEquipId(db);
@@ -328,10 +334,15 @@ router.post('/strengthen', (req, res) => {
     if ((materials.strengthen_stone || 0) < stoneCost) return res.json({ success: false, message: `强化石不足，需要${stoneCost}个` });
     if ((materials.spirit_stone_mat || 0) < spiritCost) return res.json({ success: false, message: `灵石(材料)不足，需要${spiritCost}个` });
 
-    // 扣除材料
-    const upsert = db.prepare('INSERT INTO forge_materials (player_id, material_key, quantity) VALUES (?,?,?) ON CONFLICT(player_id,material_key) DO UPDATE SET quantity=quantity-?');
-    upsert.run(playerId, 'strengthen_stone', -stoneCost, stoneCost);
-    upsert.run(playerId, 'spirit_stone_mat', -spiritCost, spiritCost);
+    // 扣除材料（UPDATE + INSERT OR IGNORE 安全方式，防止首次UPSERT插入负数）
+    const deduct = (matId, count) => {
+      const changes = db.prepare('UPDATE forge_materials SET quantity = quantity - ? WHERE player_id = ? AND material_key = ? AND quantity >= ?').run(count, playerId, matId, count);
+      if (changes.changes === 0) {
+        db.prepare('INSERT OR IGNORE INTO forge_materials (player_id, material_key, quantity) VALUES (?, ?, 0)').run(playerId, matId);
+      }
+    };
+    deduct('strengthen_stone', stoneCost);
+    deduct('spirit_stone_mat', spiritCost);
 
     const roll = Math.random() * 100;
     const success = roll < successRate;
