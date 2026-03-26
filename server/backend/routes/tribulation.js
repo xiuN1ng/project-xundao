@@ -80,7 +80,8 @@ router.get('/rate', (req, res) => {
 // POST /api/tribulation/begin - 开始渡劫（创建动画会话）
 router.post('/begin', (req, res) => {
   try {
-    const { player_id, tribulation_type, difficulty } = req.body;
+    const player_id = req.body.player_id ?? req.body.userId ?? 1;
+    const { tribulation_type, difficulty } = req.body;
     
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });

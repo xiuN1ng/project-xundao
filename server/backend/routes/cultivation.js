@@ -75,7 +75,7 @@ function getOrCreateCultivation(userId) {
   try {
     let cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     if (!cult) {
-      db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower) VALUES (?, 0, 1, 0)').run(userId);
+      db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime("now"), datetime("now"))').run(userId);
       cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     }
     return cult;

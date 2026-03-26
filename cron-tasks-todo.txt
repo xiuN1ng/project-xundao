@@ -485,3 +485,29 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # === P1 新功能 ===
 [P1-B-NEW-A] welfare/claim-sign-in：首日签到奖励从100灵石提升至300灵石  # 完成 | 2026-03-26
+
+# === 2026-03-26 策划提案任务（第50轮补）===
+
+# [P0-B-50-1] cultivation.js: INSERT INTO Cultivations 补上 createdAt/updatedAt（NOT NULL约束）
+#  文件: server/backend/routes/cultivation.js 第82行
+#  改: INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime("now"), datetime("now"))
+#  同时 UPDATE 语句补 updatedAt = datetime("now")
+
+# [P0-B-50-2] arena.js: /ranks JOIN查询修复 p.username→JOIN Users表获取nickname
+#  文件: server/backend/routes/arena.js 第239行
+#  改: JOIN Users u ON u.id = ap.player_id + SELECT u.nickname as username
+
+# [P1-B-50-1] server.js: 注册经脉路由 app.use('/api/meridian', require('./routes/meridian'))
+#  文件: server/backend/server.js
+#  同时检查 meridian.js INSERT 是否有同样 createdAt/updatedAt 问题
+
+# [P1-B-50-2] tribulation.js: /begin 添加 player_id/userId 兼容
+#  文件: server/backend/routes/tribulation.js
+#  改: const player_id = req.body.player_id ?? req.body.userId ?? 1;
+
+# [P2-B-50-1] cultivation.js: 添加离线收益 GET /offline-rewards 端点
+#  文件: server/backend/routes/cultivation.js
+#  逻辑: 计算 now - last_logout，上限8小时，返回离线修炼收益
+
+# [P2-B-50-2] beast_api.js: 完善灵兽捕捉 /beast/capture 和喂养 /beast/feed
+#  文件: server/backend/game/beast_api.js

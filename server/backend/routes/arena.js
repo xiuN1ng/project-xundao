@@ -236,10 +236,11 @@ router.get('/ranks', (req, res) => {
     }
     
     const players = db.prepare(`
-      SELECT p.id, p.username, p.level, p.realm_level, p.combat_power,
+      SELECT p.id, u.nickname as username, p.level, p.realm_level, p.combat_power,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count, ap.total_battles
-      FROM player p
-      JOIN arena_player ap ON p.id = ap.player_id
+      FROM arena_player ap
+      JOIN player p ON p.id = ap.player_id
+      JOIN Users u ON u.id = ap.player_id
       ORDER BY ap.arena_points DESC
       LIMIT ? OFFSET ?
     `).all(parseInt(limit), parseInt(offset));

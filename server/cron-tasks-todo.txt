@@ -378,3 +378,51 @@
   - 创建game_meta表或添加fallback返回硬编码任务
   - 负责人: [B] - 截止: 2026-03-27
 
+
+# ========== 2026-03-27 v5 ==========
+# [B] P0-v5-1: shop.js count未定义
+#   文件: server/backend/routes/shop.js:106
+#   问题: const totalCost = good.price * count; count未定义
+#   方案: 添加 const count = req.body.count || 1;
+#   截止: 2026-03-27
+
+# [B] P0-v5-2: 玩家灵石数据三套口径不一致
+#   文件: server/backend/routes/player.js + cultivation.js + lottery.js
+#   问题: player返回500, cultivation返回9900, lottery直接操作DB
+#   方案: 统一数据源，player API从DB读取真实spirit_stones
+#   截止: 2026-03-27
+
+# [B] P0-v5-3: lottery draw无需userId可被无限刷
+#   文件: server/backend/routes/lottery.js
+#   问题: POST /lottery/draw 无body也成功，无用户验证
+#   方案: 解析req.body.userId，无效返回401
+#   截止: 2026-03-27
+
+# [B] P1-v5-1: tribulation/begin参数名错误
+#   文件: server/backend/routes/tribulation.js
+#   问题: 后端要player_id，前端发userId
+#   方案: 同时支持player_id和userId别名（参考arena.js）
+#   截止: 2026-03-27
+
+# [B] P1-v5-4: welfare持续"数据库不可用"（连续22+轮！）
+#   文件: server/backend/routes/welfare_storage.js
+#   问题: JSON_LENGTH()不存在 + DB路径错误 + 表不存在
+#   方案: 1)修复DB路径 2)替换JSON_LENGTH 3)建表
+#   截止: 2026-03-27
+
+# [B] P2-v5-1: 离线挂机奖励系统（连续20+轮未实现）
+#   文件: server/backend/routes/player.js
+#   方案: 记录last_login_time，登录时计算离线收益，上限8小时
+#   截止: 2026-03-28
+
+# [B] P2-v5-2: 世界BOSS激活机制
+#   文件: server/backend/routes/worldBoss.js
+#   问题: currentBoss永远null，无BOSS可打
+#   方案: 添加/api/worldboss/refresh或定时刷新
+#   截止: 2026-03-28
+
+# [B] P2-v5-3: 锻造材料掉落激活
+#   文件: server/backend/routes/dungeon.js
+#   问题: available:0，副本不掉落材料
+#   方案: battle胜利后按dropChance掉落iron_ingot等
+#   截止: 2026-03-28
