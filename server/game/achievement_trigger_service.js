@@ -334,6 +334,10 @@ function getAchievementsByTrigger(trigger) {
  * @returns {Array} 新达成的成就列表
  */
 function triggerAchievement(userId, trigger, value, extra = {}) {
+  if (!userId) {
+    console.warn('[achievement] triggerAchievement: userId is null/undefined, skipping');
+    return [];
+  }
   initUserAchievements(userId);
   const userData = userAchievementProgress.get(userId);
   const newlyCompleted = [];
