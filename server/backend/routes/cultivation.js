@@ -77,12 +77,20 @@ function getOrCreateCultivation(userId) {
   try {
     let cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     if (!cult) {
-      db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime("now"), datetime("now"))').run(userId);
+      try {
+        db.prepare('INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime("now"), datetime("now"))').run(userId);
+      } catch (insertErr) {
+        Logger.error('INSERT Cultivations 失败:', insertErr.message, 'userId:', userId);
+      }
+      // INSERT 失败后仍尝试重新查询（可能是并发插入）
       cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
+      if (cult) return cult;
+      // 仍无记录则返回 mock，但标记需要后续同步
+      Logger.warn('getOrCreateCultivation 返回 mock，建议检查 userId:', userId);
     }
     return cult;
   } catch (e) {
-    // 数据库无表时使用mock数据
+    Logger.error('getOrCreateCultivation 异常:', e.message);
     return mockCultivation;
   }
 }

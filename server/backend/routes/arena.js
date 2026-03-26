@@ -166,13 +166,13 @@ function checkAndResetDailyChallenges(playerId) {
     const arenaPlayer = db.prepare('SELECT * FROM arena_player WHERE player_id = ?').get(playerId);
     const today = getDateString();
 
-    if (!arenaPlayer || arenaPlayer.last_challenge_date !== today) {
+    if (!arenaPlayer || arenaPlayer.last_challenge_reset !== today) {
       // 重置每日挑战次数
       if (arenaPlayer) {
         db.prepare(`
           UPDATE arena_player
           SET daily_challenges_used = 0,
-              last_challenge_date = ?,
+              last_challenge_reset = ?,
               daily_reward_claimed = 0
           WHERE player_id = ?
         `).run(today, playerId);
@@ -624,7 +624,7 @@ router.post('/challenge', (req, res) => {
           lose_count = lose_count + ?,
           total_battles = total_battles + 1,
           daily_challenges_used = daily_challenges_used + 1,
-          last_challenge_date = ?,
+          last_challenge_reset = ?,
           highest_rank = CASE WHEN ? > highest_rank THEN ? ELSE highest_rank END,
           highest_rank_id = CASE WHEN ? > highest_rank_id THEN ? ELSE highest_rank_id END,
           updated_at = CURRENT_TIMESTAMP

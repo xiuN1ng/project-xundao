@@ -2,6 +2,18 @@
  * 福利系统存储层 - 签到数据管理
  */
 
+// Asia/Shanghai 时区获取当日日期字符串 (YYYY-MM-DD)
+function getShanghaiDate() {
+  const d = new Date(Date.now() + 8 * 3600000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 获取指定日期的上海日期字符串
+function getShanghaiDateStr(date) {
+  const d = new Date(date.getTime() + 8 * 3600000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // 签到奖励配置（7天为一个周期）
 const SIGN_IN_REWARDS = [
   { day: 1, lingshi: 50, equipment: null, repairCard: 0 },
@@ -135,7 +147,7 @@ const welfareStorage = {
     const record = this.getOrCreateSignInRecord(playerId);
     if (!record) return null;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     const lastSignDate = record.last_sign_date;
 
     // 检查今天是否已签到
@@ -144,9 +156,9 @@ const welfareStorage = {
     // 计算连续签到（如果昨天签到了，则连续；否则重置）
     let currentStreak = record.current_streak;
     if (lastSignDate) {
-      const yesterday = new Date();
+      const yesterday = new Date(Date.now() + 8 * 3600000);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdayStr = getShanghaiDateStr(yesterday);
 
       if (lastSignDate !== yesterdayStr && lastSignDate !== today) {
         // 中断了，重新开始
@@ -183,7 +195,7 @@ const welfareStorage = {
 
     // 计算新的连续签到天数
     let newStreak = status.currentStreak + 1;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
 
     // 获取奖励
     const dayIndex = (newStreak - 1) % 7;
