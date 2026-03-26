@@ -99,6 +99,7 @@ app.use('/api/quest', require('./routes/quest'));
 app.use('/api/mail', require('./routes/mail'));
 app.use('/api/activity', require('./routes/activity'));
 app.use('/api/lottery', require('./routes/lottery'));
+app.use('/api/gacha', require('./routes/gacha'));
 app.use('/api/dungeon', require('./routes/dungeon'));
 app.use('/api/bag', require('./routes/bag'));
 app.use('/api/mount', require('./routes/mount'));

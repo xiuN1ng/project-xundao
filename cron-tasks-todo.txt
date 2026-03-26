@@ -566,3 +566,14 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-B-53-1] 重新设计Chapter敌人HP公式: enemyHP = playerATK * 3 + chapterId * 50  # 完成 | 2026-03-26 e7661b1 | chapter.js /enter端点动态HP计算
 [P2-B-53-2] WorldBoss伤害改为基于player.attack  # 已确认完成 | worldBoss.js attack端点已使用player.attack*1.5+狂暴机制
 
+
+# ========== 2026-03-30 策划提案任务（后端）==========
+# 来源: 2026-03-30.md
+
+[B-P0-5-2] 创建 routes/gacha.js 抽奖系统后端  # 完成 | 2026-03-26
+  - 文件: server/backend/routes/gacha.js (约500行)
+  - 实现: GET /pools (奖池列表), GET /pools/:poolKey (奖池详情), POST /draw (单抽), POST /draw-ten (十连), GET /history (历史), GET /pity (保底状态)
+  - 数据库表: gacha_pools, gacha_history, gacha_pity (自动初始化)
+  - 奖池: 普通奖池(100灵石/次)/高级奖池(300灵石/次)/装备奖池(200灵石/次)
+  - 保底机制: 高级/装备奖池90抽保底紫色或橙色
+  - server.js 已注册 /api/gacha 路由
