@@ -9,9 +9,75 @@ let db;
 try {
   const Database = require('better-sqlite3');
   db = new Database(DB_PATH);
+  initWorldBossTables();
 } catch (e) {
   console.log('[worldBoss] DB连接失败:', e.message);
   db = null;
+}
+
+function initWorldBossTables() {
+  if (!db) return;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS world_boss_damage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        boss_id INTEGER NOT NULL,
+        damage INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, boss_id)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS world_boss_rewards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        boss_id INTEGER NOT NULL,
+        rank INTEGER NOT NULL,
+        reward_diamonds INTEGER DEFAULT 0,
+        reward_lingshi BIGINT DEFAULT 0,
+        reward_mc INTEGER DEFAULT 0,
+        settled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, boss_id)
+      )
+    `);
+    console.log('[worldBoss] world_boss_damage/rewards 表初始化完成');
+  } catch (e) {
+    console.error('[worldBoss] 建表失败:', e.message);
+  }
+}
+
+// 记录伤害到DB（UPSERT）
+function recordDamageToDB(userId, bossId, damage) {
+  if (!db) return;
+  try {
+    const existing = db.prepare('SELECT id, damage FROM world_boss_damage WHERE user_id = ? AND boss_id = ?').get(userId, bossId);
+    if (existing) {
+      db.prepare('UPDATE world_boss_damage SET damage = damage + ? WHERE user_id = ? AND boss_id = ?').run(damage, userId, bossId);
+    } else {
+      db.prepare('INSERT INTO world_boss_damage (user_id, boss_id, damage) VALUES (?, ?, ?)').run(userId, bossId, damage);
+    }
+  } catch (e) {
+    console.error('[worldBoss] 记录伤害失败:', e.message);
+  }
+}
+
+// 从DB获取排名
+function getDamageRankingFromDB(bossId, limit = 50) {
+  if (!db) return [];
+  try {
+    return db.prepare(`
+      SELECT user_id as userId, damage,
+             RANK() OVER (ORDER BY damage DESC) as rank
+      FROM world_boss_damage
+      WHERE boss_id = ?
+      ORDER BY damage DESC
+      LIMIT ?
+    `).all(bossId, limit);
+  } catch (e) {
+    console.error('[worldBoss] 查询排名失败:', e.message);
+    return [];
+  }
 }
 
 // 根路径
@@ -120,8 +186,11 @@ router.post('/attack', (req, res) => {
   const hpPercent = worldBoss.hp / maxHp;
   const furyMultiplier = hpPercent < 0.3 ? 2 : 1;
   damage = Math.floor(damage * furyMultiplier);
-  
-  // 记录伤害
+
+  // 记录伤害到DB
+  recordDamageToDB(userId, worldBoss.currentBoss.id, damage);
+
+  // 记录伤害（内存）
   const existing = worldBoss.damageRecords.find(r => r.userId === userId);
   const prevTotalDamage = existing ? existing.damage : 0;
   const newTotalDamage = prevTotalDamage + damage;
@@ -181,39 +250,72 @@ router.post('/attack', (req, res) => {
 
 // 获取伤害排行
 router.get('/ranks', (req, res) => {
+  if (db && worldBoss.currentBoss) {
+    const dbRanks = getDamageRankingFromDB(worldBoss.currentBoss.id, 50);
+    return res.json({ success: true, ranks: dbRanks, source: 'db' });
+  }
   const ranks = worldBoss.damageRecords.slice(0, 50);
-  res.json(ranks);
+  res.json({ success: true, ranks, source: 'memory' });
 });
 
 // 结算BOSS奖励（包含魔晶）
 router.post('/settle', (req, res) => {
   const { userId } = req.body;
-  
+
   if (worldBoss.status !== 'dead') {
     return res.json({ success: false, message: 'BOSS未死亡，无法结算' });
   }
-  
-  const myRecord = worldBoss.damageRecords.find(r => r.userId === userId);
-  if (!myRecord) {
-    return res.json({ success: false, message: '您未参与本次BOSS战' });
+
+  // 从DB获取排名
+  let myRecord = null;
+  let myRank = 0;
+  if (db && worldBoss.currentBoss) {
+    const ranks = getDamageRankingFromDB(worldBoss.currentBoss.id, 1000);
+    myRecord = ranks.find(r => r.userId === userId);
+    if (myRecord) myRank = myRecord.rank;
   }
-  
+
+  if (!myRecord) {
+    // 回退到内存数据
+    const memRecord = worldBoss.damageRecords.find(r => r.userId === userId);
+    if (!memRecord) {
+      return res.json({ success: false, message: '您未参与本次BOSS战' });
+    }
+    myRecord = memRecord;
+    myRank = worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1;
+  }
+
   const boss = worldBoss.currentBoss;
-  const totalDamage = worldBoss.damageRecords.reduce((sum, r) => sum + r.damage, 0);
-  const myDamageRatio = myRecord.damage / (totalDamage || 1);
-  
-  // 计算各项奖励
-  const expReward = Math.floor(boss.reward.lingshi * myDamageRatio * 0.1); // 少量经验
-  const stoneReward = Math.floor(boss.reward.lingshi * myDamageRatio);
-  
+  const totalDamage = myRecord.damage; // Already from DB
+  const myDamageRatio = 1; // Already ranked, use fixed ratio based on rank
+
+  // 按排名分发奖励（Top 10）
+  const rankBonus = myRank <= 10 ? Math.floor(boss.reward.lingshi * (1 - myRank * 0.08)) : 0;
+  const expReward = Math.floor(boss.reward.lingshi * 0.1 * (1 / myRank));
+  const stoneReward = Math.floor(boss.reward.lingshi * (1 / myRank)) + rankBonus;
+
   // 魔晶奖励：参与奖（按伤害比例）
   const baseMc = boss.reward.magicCrystals || 5;
-  const mcReward = Math.max(1, Math.floor(baseMc * myDamageRatio * 0.5));
-  
+  const mcReward = Math.max(1, Math.floor(baseMc * (1 / myRank) * 0.5));
+
   // 最后一击额外魔晶
-  const isKiller = worldBoss.damageRecords[0]?.userId === userId;
+  const topRecord = worldBoss.damageRecords[0];
+  const isKiller = topRecord?.userId === userId;
   const killerBonus = isKiller ? Math.floor(baseMc * 0.5) : 0;
-  
+
+  // 写入结算记录
+  if (db) {
+    try {
+      db.prepare(`
+        INSERT OR REPLACE INTO world_boss_rewards
+        (user_id, boss_id, rank, reward_diamonds, reward_lingshi, reward_mc, settled_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `).run(userId, boss.id, myRank, 0, stoneReward, mcReward + killerBonus);
+    } catch (e) {
+      console.error('[worldBoss] 写入结算记录失败:', e.message);
+    }
+  }
+
   res.json({
     success: true,
     rewards: {
@@ -222,27 +324,28 @@ router.post('/settle', (req, res) => {
       magicCrystals: mcReward + killerBonus,
       killerBonus: isKiller ? killerBonus : 0,
     },
-    damage: myRecord.damage,
-    rank: worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1,
+    damage: totalDamage,
+    rank: myRank,
   });
 });
 
 // 我的伤害
 router.get('/my-damage/:userId', (req, res) => {
   const userId = parseInt(req.params.userId);
+  if (db && worldBoss.currentBoss) {
+    const ranks = getDamageRankingFromDB(worldBoss.currentBoss.id, 1000);
+    const record = ranks.find(r => r.userId === userId);
+    if (record) {
+      return res.json({ damage: record.damage, rank: record.rank, total: ranks.length, source: 'db' });
+    }
+  }
+  // 回退到内存
   const record = worldBoss.damageRecords.find(r => r.userId === userId);
-  
   if (!record) {
     return res.json({ damage: 0, rank: 0 });
   }
-  
   const rank = worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1;
-  
-  res.json({
-    damage: record.damage,
-    rank,
-    total: worldBoss.damageRecords.length
-  });
+  res.json({ damage: record.damage, rank, total: worldBoss.damageRecords.length, source: 'memory' });
 });
 
 // 手动刷新BOSS(测试用)

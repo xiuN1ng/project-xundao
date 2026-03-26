@@ -668,10 +668,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-P1-03] Forge所有材料available=0 — chapter/battle胜利后按dropTable概率掉落iron_ingot等材料到forge_materials表  # 完成 | 2026-03-27 5d6a6fe
 文件: server/backend/routes/chapter.js
 
-[B-P1-04] VIP API "无效的玩家ID" — GET请求读取body导致userId=undefined，改为GET /api/vip/info/:userId或正确读取req.query  # 新增 | 2026-03-27
+[B-P1-04] VIP API "无效的玩家ID" — GET请求读取body导致userId=undefined，改为GET /api/vip/info/:userId或正确读取req.query  # 完成 | 2026-03-27 06fe179
 文件: server/backend/routes/vip.js
 
-[B-P1-05] cultivation/status返回双字段 — spirit_stones和lingshi同时存在(值相同)，统一为lingshi删除spirit_stones  # 新增 | 2026-03-27
+[B-P1-05] cultivation/status返回双字段 — spirit_stones和lingshi同时存在(值相同)，统一为lingshi删除spirit_stones  # 完成 | 2026-03-27 06fe179
 文件: server/backend/routes/cultivation.js
 
 ### 新功能
