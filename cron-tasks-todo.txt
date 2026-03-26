@@ -463,7 +463,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # P0-B-49-1: arena_player建表（arena_player表缺失导致竞技场完全不可用）# 完成 | 2026-03-26 | routes/arena.js添加initArenaTables() + CREATE TABLE IF NOT EXISTS arena_player
 # P0-B-49-2: welfare_sign_in和welfare_storage建表（签到系统无数据层）# 完成 | 2026-03-26 | welfare_storage.js DB路径修正为backend/data/game.db（统一DB）
 # P0-B-49-3: dungeon_records建表修复（次数限制失效，无持久化）# 完成 | 2026-03-26 | dungeon_records添加enter_date列，UNIQUE(user_id,dungeon_id,enter_date)
-# P1-B-49-1: player API GET / 优先从Users表读lingshi替代内存mock# 进行中
+# P1-B-49-1: player API GET / 优先从Users表读lingshi替代内存mock# 完成 | 2026-03-26 | server.js添加db实例化 + player.js GET /和GET /info从Users表读取
 # P1-B-49-2: cultivation/start "no such column: lingshi"修复# 完成 | 2026-03-26 | cultivation.js表名Cultivations+列名userId/cultivationPower修正
 # P1-B-49-3: forge.js添加POST /make端点（目前只有/forge）# 完成 | 2026-03-26 | forge.js添加POST /make端点(/forge别名)
 # P1-B-49-4: sect.js ORDER BY member_count→members（sect/list返回假数据）# 完成 | 2026-03-26 | sect.js ORDER BY members DESC
