@@ -11,6 +11,20 @@
  * - realm_breakthrough: 境界突破
  */
 
+// 持久化回调（由 achievement.js 注册 saveAchievementToDB）
+let saveProgressCallback = null;
+function setSaveProgressCallback(fn) { saveProgressCallback = fn; }
+
+// 每次进度更新后自动持久化
+function autoPersist(userId) {
+  if (!saveProgressCallback) return;
+  const userData = userAchievementProgress.get(userId);
+  if (!userData) return;
+  for (const [achId, achProgress] of userData) {
+    saveProgressCallback(userId, achId, achProgress.progress, achProgress.completed, achProgress.claimed);
+  }
+}
+
 const ACHIEVEMENT_DEFINITIONS = {
   // ========== 升级类成就 ==========
   level_up_10: {
@@ -350,6 +364,9 @@ function triggerAchievement(userId, trigger, value, extra = {}) {
     }
   }
 
+  // 自动持久化到 DB
+  autoPersist(userId);
+
   return newlyCompleted;
 }
 
@@ -518,6 +535,7 @@ module.exports = {
   claimAchievement,
   serializeUserData,
   deserializeUserData,
+  setSaveProgressCallback,
   // 便捷函数
   onLevelUp,
   onChapterClear,

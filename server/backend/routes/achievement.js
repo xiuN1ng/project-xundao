@@ -76,6 +76,8 @@ router.getPlayerRef = () => playerRef;
 let achievementTrigger;
 try {
   achievementTrigger = require('../../game/achievement_trigger_service');
+  // 注册持久化回调：每次成就进度更新自动写入 DB
+  achievementTrigger.setSaveProgressCallback(saveAchievementToDB);
 } catch (e) {
   console.log('[achievement] 成就触发服务加载:', e.message);
   achievementTrigger = null;

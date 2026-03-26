@@ -655,7 +655,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-P0-02] Sect/join端点缺失 — game/sect_api.js无/join路由，请求落入backend DB(空) → 在game/sect_api.js添加POST /join完整实现(joinSect方法)  # 完成 | 2026-03-27 f94c461
 文件: server/game/sect_api.js
 
-[B-P0-03] Sect/list返回空+列名断裂 — routes/sect.js列名member_count→members，leader_name→leaderName；同时DB不统一(monolith用server/data/game.db，backend用server/backend/data/game.db)  # 新增 | 2026-03-27
+[B-P0-03] Sect/list返回空+列名断裂 — routes/sect.js列名member_count→members，leader_name→JOIN Users，DB统一backend/data/game.db  # 完成 | 2026-03-27 c681b4a
 文件: server/backend/routes/sect.js
 
 ### P1 (5个)
