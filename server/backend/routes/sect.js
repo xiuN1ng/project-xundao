@@ -51,8 +51,140 @@ const redPackets = [];
 const sectBonuses = { attack: 5, defense: 3, cultivation: 10 };
 
 // 获取宗门信息
+// GET / - 宗门列表（分页 + 过滤）
 router.get('/', (req, res) => {
-  res.json({ sect, members });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10));
+  const keyword = (req.query.keyword || '').trim();
+  const sort = req.query.sort || 'rank'; // rank | members | level | contribution
+  const offset = (page - 1) * pageSize;
+
+  if (!db) {
+    return res.json({ success: false, message: '数据库未连接' });
+  }
+
+  try {
+    let whereClause = '';
+    let params = [];
+    if (keyword) {
+      whereClause = ' WHERE name LIKE ?';
+      params.push(`%${keyword}%`);
+    }
+
+    // 排序字段映射
+    const sortFieldMap = {
+      rank: 'rank ASC',
+      members: 'members DESC',
+      level: 'level DESC',
+      contribution: 'contribution DESC'
+    };
+    const orderClause = sortFieldMap[sort] || 'rank ASC';
+
+    // 总数
+    const countRow = db.prepare(`SELECT COUNT(*) as total FROM Sects${whereClause}`).get(...params);
+    const total = countRow ? countRow.total : 0;
+
+    // 列表（JOIN Users 获取掌门名称）
+    const list = db.prepare(`
+      SELECT s.*, u.nickname as leaderName
+      FROM Sects s
+      LEFT JOIN Users u ON u.id = s.leaderId
+      ${whereClause}
+      ORDER BY ${orderClause}
+      LIMIT ? OFFSET ?
+    `).all(...params, pageSize, offset);
+
+    return res.json({
+      success: true,
+      list: list.map(s => ({
+        id: s.id,
+        name: s.name,
+        level: s.level,
+        members: s.members,
+        contribution: s.contribution,
+        rank: s.rank,
+        leaderId: s.leaderId,
+        leaderName: s.leaderName || '未知',
+        createdAt: s.createdAt
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    });
+  } catch (e) {
+    console.error('[sect] / 错误:', e.message);
+    return res.json({ success: false, message: '获取宗门列表失败: ' + e.message });
+  }
+});
+
+// /list - 宗门列表别名（分页 + 过滤）
+router.get('/list', (req, res) => {
+  // 委托给 / 处理，保持参数一致
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 10));
+  const keyword = (req.query.keyword || '').trim();
+  const sort = req.query.sort || 'rank';
+  const offset = (page - 1) * pageSize;
+
+  if (!db) {
+    return res.json({ success: false, message: '数据库未连接' });
+  }
+
+  try {
+    let whereClause = '';
+    let params = [];
+    if (keyword) {
+      whereClause = ' WHERE name LIKE ?';
+      params.push(`%${keyword}%`);
+    }
+
+    const sortFieldMap = {
+      rank: 'rank ASC',
+      members: 'members DESC',
+      level: 'level DESC',
+      contribution: 'contribution DESC'
+    };
+    const orderClause = sortFieldMap[sort] || 'rank ASC';
+
+    const countRow = db.prepare(`SELECT COUNT(*) as total FROM Sects${whereClause}`).get(...params);
+    const total = countRow ? countRow.total : 0;
+
+    const list = db.prepare(`
+      SELECT s.*, u.nickname as leaderName
+      FROM Sects s
+      LEFT JOIN Users u ON u.id = s.leaderId
+      ${whereClause}
+      ORDER BY ${orderClause}
+      LIMIT ? OFFSET ?
+    `).all(...params, pageSize, offset);
+
+    return res.json({
+      success: true,
+      list: list.map(s => ({
+        id: s.id,
+        name: s.name,
+        level: s.level,
+        members: s.members,
+        contribution: s.contribution,
+        rank: s.rank,
+        leaderId: s.leaderId,
+        leaderName: s.leaderName || '未知',
+        createdAt: s.createdAt
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    });
+  } catch (e) {
+    console.error('[sect] /list 错误:', e.message);
+    return res.json({ success: false, message: '获取宗门列表失败: ' + e.message });
+  }
 });
 
 // /info - 宗门详细信息

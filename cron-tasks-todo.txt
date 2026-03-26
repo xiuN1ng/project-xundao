@@ -918,3 +918,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   方案: 修复 Sect.create + 宗门每日任务 + 贡献兑换
   文件: server/backend/routes/sect-missions.js, client/src/components/SectMissionPanel.vue
   截止: 2026-04-05
+
+## === 2026-03-30 深度体验分发 (05:56) ===
+[P0-DEEP-1] 全局数据隔离失败 - Auth中间件未应用 + window.gamePlayerId未设置 [CRITICAL] [B]
+[P0-DEEP-2] cultivation/start 新用户静默降级 mockCultivation [CRITICAL] [B]
+[P0-DEEP-3] chapter battle materialDrops返回但未持久化 [B]
+[P1-DEEP-1] sect/list 添加分页和过滤参数 [B]
+[P1-DEEP-2] Welfare签到后forge_daily_claims未写入 [B]
+[P2-DEEP-1] Arena奖励逻辑修改（败者扣分） [B]
+[P2-DEEP-2] Forge制造后材料未扣减 [B]
+[NF-DEEP-1] 实时战斗事件系统 [B]
