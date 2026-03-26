@@ -924,26 +924,30 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P0-DEEP-2] cultivation/start 新用户静默降级 mockCultivation [CRITICAL] [B] # 完成 | 2026-03-27 c362536 | datetime("now")→datetime('now') 修复INSERT失败
 [P0-DEEP-3] chapter battle materialDrops返回但未持久化 [B]
 [P1-DEEP-1] sect/list 添加分页和过滤参数 [B] # 完成 | 2026-03-27 e8d5627 | router.get('/')和'/list'端点从DB读取，JOIN Users获取leaderName，支持page/pageSize/keyword/sort参数 | 网络推送失败，待重试
-[P1-DEEP-2] Welfare签到后forge_daily_claims未写入 [B]
+[P1-DEEP-2] Welfare签到后forge_daily_claims未写入 [B] # 完成 | 2026-03-27 9015b31 | welfare_api.js POST/claim-sign-in增加forge_daily_claims写入；GET/POST /daily端点实现+上海时区检查
 [P2-DEEP-1] Arena奖励逻辑修改（败者扣分） [B]
 [P2-DEEP-2] Forge制造后材料未扣减 [B]
 [NF-DEEP-1] 实时战斗事件系统 [B]
 
 ## 2026-03-27 0651 — 游戏策划 Agent 新增任务
 
-[P0-27-N-10-1] forge.js line480/484: strftime("%s","now") → unixepoch() [P0]
+[P0-27-N-10-1] forge.js line480/484: strftime("%s","now") → unixepoch() [P0] # 完成 | 2026-03-27 9015b31
   根因：双引号导致SQLite把"%s"当列名，实测确认用unixepoch()可修复
+  修复：strftime("%s","now") → strftime('%s','now')（单引号包裹%s和now）
 
-[P1-27-N-10-2] welfare.js: 新增 POST /sign-in 和 POST /daily 路由 [P1]
+[P1-27-N-10-2] welfare.js: 新增 POST /sign-in 和 POST /daily 路由 [P1] # 完成 | 2026-03-27 9015b31
   现状：只有GET路由，POST返回HTML error，玩家无法签到/领每日登录礼
+  修复：welfare_api.js (实际路由文件) 新增 POST /daily 端点 + GET /daily 上海时区检查
 
-[P1-27-N-10-3] cultivation/advance 路由实现境界跃迁逻辑 [P1]
+[P1-27-N-10-3] cultivation/advance 路由实现境界跃迁逻辑 [P1] # 完成 | 2026-03-27 9015b31
   现状：路由存在但无实现，玩家筑基境无跃迁路径
+  修复：cultivation.js 新增 POST /advance 端点（与 /breakthrough 相同逻辑）
 
-[P1-27-N-10-4] dailyQuest.js: 修复userQuests初始化顺序 + cultivation/battle操作更新progress [P1]
+[P1-27-N-10-4] dailyQuest.js: 修复userQuests初始化顺序 + cultivation/battle操作更新progress [P1] # 完成 | 2026-03-27 9015b31
   现状：14个任务全部progress:0，服务器重启后userQuests加载失败
+  修复：dailyQuest.js loadFromDB/initDailyQuests/saveQuestToDB 统一使用上海时区；cultivation.js POST /start 调用 dailyQuestRouter.updateDailyQuestProgress
 
-[P2-27-N-10-5] sect/create后更新player.sectId字段 [P2]
-  现状：玩家在宗内但player.sectId=null，导致UI显示异常
+[P2-27-N-10-5] sect/create后更新player.sectId字段 [P2] # 已确认完成 | 2026-03-26
+  现状：sect.js 第372行已有 UPDATE Users SET sectId = ? WHERE id = ?
 
 [NF-27-N-10-1] 境界跃迁后端：跃迁奖励逻辑 + 境界配置表 [P1]
