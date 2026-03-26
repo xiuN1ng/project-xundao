@@ -241,12 +241,18 @@ router.post('/building/upgrade', (req, res) => {
 router.get('/list', (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
-  
+
   if (db) {
     try {
       const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
-      const sects = db.prepare('SELECT * FROM sects ORDER BY level DESC, members DESC LIMIT ? OFFSET ?').all(parseInt(limit), offset);
-      
+      const sects = db.prepare(`
+        SELECT s.*, COALESCE(u.nickname, '掌门') as leader_name
+        FROM sects s
+        LEFT JOIN Users u ON u.id = s.leaderId
+        ORDER BY s.level DESC, s.members DESC
+        LIMIT ? OFFSET ?
+      `).all(parseInt(limit), offset);
+
       return res.json({
         success: true,
         sects: sects.map(s => ({
@@ -254,10 +260,10 @@ router.get('/list', (req, res) => {
           name: s.name,
           level: s.level,
           icon: s.icon || '🏯',
-          memberCount: s.member_count || 0,
-          leaderName: s.leader_name || '掌门',
+          memberCount: s.members || 0,
+          leaderName: s.leader_name,
           rank: s.rank || 0,
-          contribution: s.total_contribution || 0
+          contribution: s.contribution || 0
         })),
         pagination: {
           page: parseInt(page),
