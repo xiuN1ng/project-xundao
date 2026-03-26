@@ -686,17 +686,17 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## [B] P0 紧急修复
 
-[P0-B-30-1] 【B】Cultivations表新用户静默失败 → 修复 INSERT 逻辑
+[P0-B-30-1] 【B】Cultivations表新用户静默失败 → 修复 INSERT 逻辑  # 完成 | 2026-03-27 b0908f2
   - 文件: server/backend/routes/cultivation.js
   - 问题: getOrCreateCultivation() INSERT 失败时静默降级到 mockCultivation，UPDATE 执行但0行受影响，代码不检查 result.changes
-  - 修复: INSERT 失败时打印错误日志；UPDATE 后检查 result.changes === 0 时主动 INSERT；确保新用户 row 一定被创建
+  - 修复: INSERT 失败时打印错误日志；INSERT失败后仍重查DB，仅在重查仍无结果时才fallback mock；添加Logger.warn提示
   - 验证: curl -X POST http://localhost:3001/api/cultivation/start -d '{"player_id":1}' 后 SELECT * FROM Cultivations WHERE userId=1 返回 value > 0
   - 负责人: [B]
 
-[P0-B-30-2] 【B】Arena last_challenge_date 列名错误 → 全部改为 last_challenge_reset
+[P0-B-30-2] 【B】Arena last_challenge_date 列名错误 → 全部改为 last_challenge_reset  # 完成 | 2026-03-27 b0908f2
   - 文件: server/backend/routes/arena.js (第169/175/627行)
   - 问题: 代码引用 arenaPlayer.last_challenge_date，但 DB schema 列名是 last_challenge_reset
-  - 修复: 全局替换 last_challenge_date → last_challenge_reset
+  - 修复: 全局替换 last_challenge_date → last_challenge_reset (3处)
   - 验证: curl -X POST http://localhost:3001/api/arena/challenge -d '{"player_id":1,"target_id":-1}' 不再报 no such column 错误
   - 负责人: [B]
 
@@ -707,19 +707,19 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 验证: tail -100 /tmp/server.log | grep "NOT NULL" 应无输出
   - 负责人: [B]
 
-[P0-B-30-4] 【B】VIP /info 参数名解析断裂
+[P0-B-30-4] 【B】VIP /info 参数名解析断裂  # 完成 | 2026-03-27 已确认修复
   - 文件: server/backend/routes/vip.js
   - 问题: GET /api/vip/info?player_id=1 返回"无效的玩家ID"，同时接受 userId 和 player_id 参数
-  - 修复: const userId = parseInt(req.query.userId || req.query.player_id || req.body.userId || 1)
+  - 修复: router.get('/info') 中使用 req.query.userId || req.query.player_id || req.query.user_id 兼容
   - 验证: curl http://localhost:3001/api/vip/info?player_id=1 返回 VIP 数据
   - 负责人: [B]
 
 ## [B] P1 重要
 
-[P1-B-30-1] 【B】Welfare 签到 UTC 时区冲突
+[P1-B-30-1] 【B】Welfare 签到 UTC 时区冲突  # 完成 | 2026-03-27 b0908f2
   - 文件: server/game/welfare_storage.js
   - 问题: new Date().toISOString() 使用 UTC，与 DB 中 Asia/Shanghai 时区冲突，导致"今天已经签到过了"误判
-  - 修复: const today = new Date(Date.now() + 8*3600000).toISOString().split('T')[0]
+  - 修复: 新增 getShanghaiDate() / getShanghaiDateStr() 辅助函数，基于 Date.now()+8h 然后手动拼接 YYYY-MM-DD；替换所有 UTC toISOString 调用
   - 验证: 午夜前后签到行为正确
   - 负责人: [B]
 
@@ -837,3 +837,22 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   问题: worldboss/attack 返回 rank 但无详细排名
   修复: GET /api/worldboss/ranks 返回前20名 + 前端展示
   截止: 2026-04-07
+
+## 2026-03-27 03:30 — 第58轮新增任务
+
+### P0 紧急（新发现）
+- [P0-B-30-3-1] Chapter战斗物品掉落持久化 — chapter.js战斗结算时INSERT/UPDATE forge_materials表，UPDATE Users.lingshi
+- [P0-B-30-3-2] DailyQuest+Achievement progress表初始化+更新链 — cultivation.js/chapter.js完成后调用dailyQuest/achievement进度更新
+
+### P0 紧急（回归未修复）
+- [P0-B-R1] Arena last_challenge_date → last_challenge_reset（arena.js第169、627行）
+- [P0-B-R2] Sect.create改为写入Sects+Memorials表，移除内存变量
+
+### P1 重要
+- [P1-B-30-3-1] Paradise API实现 — routes/paradise.js + game/paradise_system.js（3种福地类型）
+- [P1-B-30-3-2] Meridian经脉激活端点 — POST /api/meridian/activate，消耗经脉点激活穴位
+
+### P2
+- [P2-B-30-3-1] Tower初始化 — 首次访问时INSERT tower_progress记录，初始化currentFloor=highestFloor=1
+- [NF-B-30-3-1] 装备强化+锻造联动系统 — equipment/enhance端点 + equipment/dismantle端点
+
