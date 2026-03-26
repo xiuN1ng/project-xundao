@@ -10,7 +10,8 @@ let spiritArtifactStorage;
 function loadDependencies() {
   if (!spiritArtifactStorage) {
     try {
-      spiritArtifactStorage = require('./spirit_artifact_storage');
+      const mod = require('./spirit_artifact_storage');
+      spiritArtifactStorage = mod.spiritArtifactStorage;
     } catch (e) {
       console.error('加载spirit_artifact_storage失败:', e.message);
     }
