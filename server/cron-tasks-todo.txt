@@ -600,3 +600,39 @@
 [P2-35] welfare_sign_in表 → 添加daily_claimed_at防重复领取
 [NF-36] welfare/daily claim完整实现(灵石写DB)
 [NF-37] 宗门活跃积分系统对接真实任务数据
+
+### P0 [B] (2026-03-27 v5)
+[P0-5-1] sect/join始终失败 → sect/create写库+sect/join同时支持内存+sect/list实时读库
+[P0-5-2] arena对手池SQL断裂(p.username不存在) → 全部改为p.name
+[P0-5-3] WorldBoss数值不可能(185小时) → 伤害×5，HP降至1/200，Boss攻击降至500
+[P0-5-4] forge路由服务器未加载(代码有但404) → 重启后端服务器(PID 984669)
+
+### P1 [B] (2026-03-27 v5)
+[P1-5-1] achievement全0无驱动 → 在chapter/complete等关键行为处触发achievement检查
+[P1-5-2] welfare前端路径错配 → 添加POST /sign-in和GET /status/:userId兼容层
+[P1-5-3] cultivation突破无进度反馈 → /cultivation/status返回突破所需灵气值
+
+### NF [B] (2026-03-27 v5)
+[NF-5-1] 宗门副本系统缺失 → 创建sect-dungeon路由(3个难度/成员组队/贡献奖励)
+
+## 2026-03-27 夜场版（01:19）新增
+
+### P0（阻断性）
+[P0] P0-27-1: Arena opponents p.username SQL错误 - arena.js JOIN 列名修正
+[P0] P0-27-2: Sect create写内存+join读DB不匹配 - create后写DB并更新Users.sectId
+[P0] P0-27-3: Ladder路由未挂载 - server.js添加app.use('/api/ladder', ladderApi)
+
+### P1（功能性）
+[P1] P1-27-1: cultivation进度不持久化 - cultivation/start成功后写DB
+[P1] P1-27-2: daily-quest全部progress=0无事件驱动 - 引入eventBus
+[P1] P1-27-3: forge daily-claim路由不存在 - forge.js添加/daily-claim handler
+
+### P2（体验/数值）
+[P2] P2-27-1: WorldBoss HP=1亿需20小时击杀 - 降低HP或引入fury叠加
+[P2] P2-27-3: sect/list DB为空时不fallback mockSects
+
+### 新功能
+[NF] NF-27-2: 每日限时活动系统（参考周一宗门boss日/周五世界boss等）
+[NF] NF-27-3: 离线收益系统（连续22+轮未实现❗）
+
+来源: /docs/PROPOSALS/2026-03-27.md

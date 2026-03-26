@@ -8,7 +8,7 @@ function getDb() {
   if (!db) {
     const Database = require('better-sqlite3');
     const path = require('path');
-    const dbPath = path.join(__dirname, '..', 'data', 'game.db');
+    const dbPath = path.join(__dirname, '..', 'backend', 'data', 'game.db');
     db = new Database(dbPath);
   }
   return db;

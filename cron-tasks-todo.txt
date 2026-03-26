@@ -675,5 +675,5 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 文件: server/backend/routes/cultivation.js
 
 ### 新功能
-[B-NF-01] WorldBoss伤害排行榜 — 每攻击更新world_boss_damage表，查询SUM(damage)排名，结算按排名分发额外奖励  # 新增 | 2026-03-27
+[B-NF-01] WorldBoss伤害排行榜 — 每攻击更新world_boss_damage表，查询SUM(damage)排名，结算按排名分发额外奖励  # 完成 | 2026-03-27 80b1e18
 文件: server/backend/routes/worldBoss.js
