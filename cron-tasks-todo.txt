@@ -537,3 +537,24 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #  累计90次未出神话则下次必出神话灵兽(混沌兽)
 #  beast_pity_counter表(累计非神话次数) + /capture保底逻辑 + GET /pity/status端点
 #  文件: server/game/beast_api.js | 2026-03-29
+
+# === P0-B-53 === [2026-03-26 v53]
+[P0-B-53-1] welfare_storage.js DB路径修复
+根因: path.join(__dirname, '..', '..', 'backend', 'data') → 少一层server
+修复: 改为 path.join(__dirname, '..', 'server', 'backend', 'data', 'game.db')
+
+[P0-B-53-2] Arena AI池 p.username 列错误
+修复: SQL中 p.username 改为 'AI_' || p.id 作为AI名称
+
+[P0-B-53-3] sect/list 空返回值添加mock兜底
+修复: DB total===0 时 fallback 到 mockSects
+
+# === P1-B-53 === [2026-03-26 v53]
+[P1-B-53-1] 添加 sect/my 路由 (GET /api/sect/my)
+[P1-B-53-2] 修复 forge/recipes 返回空问题
+[P1-B-53-3] 挂载 dailyQuest 路由 (app.use('/api/dailyQuest', ...))
+
+# === P2-B-53 === [2026-03-26 v53]
+[P2-B-53-1] 重新设计Chapter敌人HP公式: enemyHP = playerATK * 3 + chapterId * 50
+[P2-B-53-2] WorldBoss伤害改为基于player.attack
+

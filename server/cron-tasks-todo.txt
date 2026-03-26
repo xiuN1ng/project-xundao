@@ -487,3 +487,63 @@
 #   问题: boss HP=5亿，每次攻击1点，需15年击杀
 #   方案: boss_hp=player_attack*100；奖励lingshi=level*100
 #   截止: 2026-03-30
+
+# [B] P0-v6-1: tribulation realm_level列不存在修复
+#   文件: backend/routes/tribulation.js:38,71
+#   问题: tribulation.js读player.realm_level，但player表只有realm列
+#   方案: 将所有player.realm_level改为player.realm，或添加realm_level列到player表
+#   截止: 2026-03-26
+
+# [B] P0-v6-2: arena opponents SQL错误 "no such column: p.username"
+#   文件: backend/routes/arena.js opponents路由
+#   问题: SQL JOIN使用p.username，player表只有name列
+#   方案: 将SQL中p.username改为p.name
+#   截止: 2026-03-26
+
+# [B] P0-v6-3: welfare sign-in 数据库不可用
+#   文件: game/welfare_api.js + game/welfare_storage.js
+#   问题: getSignInStatus返回null，sign-in和claim-sign-in均失败
+#   方案: 检查welfare_storage sign_in表是否存在/字段是否匹配
+#   截止: 2026-03-26
+
+# [B] P0-v6-4: cultivation/status字段名spirit_stones（应为lingshi）
+#   文件: backend/routes/cultivation.js status端点
+#   问题: cultivation/status返回spirit_stones，player表用lingshi，名称不统一
+#   方案: cultivation/status端点中spirit_stones字段改为lingshi
+#   截止: 2026-03-26
+
+# [B] P1-v6-1: dailyQuest progress全为0，无事件驱动
+#   文件: backend/routes/dailyQuest.js
+#   问题: 14个任务progress全为0，后端无事件监听
+#   方案: 在battle/chapter/cultivation/shop/equipment等事件中插入dailyQuestStorage.updateProgress()
+#   截止: 2026-03-27
+
+# [B] P1-v6-2: achievement progress全为0，无事件驱动
+#   文件: backend/routes/achievement.js
+#   问题: 31个成就progress全为0
+#   方案: 各行为事件中调用achievementStorage.checkAchievements()
+#   截止: 2026-03-27
+
+# [B] P1-v6-3: forge所有材料available:0，锻造不可用
+#   文件: backend/routes/forge.js
+#   问题: 10个配方材料available全为0
+#   方案: 从bag/inventory表读取玩家实际拥有材料数量
+#   截止: 2026-03-27
+
+# [B] P1-v6-4: sect/create无资源消耗，可无限创建宗门
+#   文件: backend/routes/sect.js create路由
+#   问题: 创建宗门不扣灵石
+#   方案: 创建宗门消耗5000-10000灵石
+#   截止: 2026-03-27
+
+# [B] P1-v6-5: VIP API "no such column: vipPoints"
+#   文件: backend/routes/vip.js
+#   问题: player表缺少vipPoints列
+#   方案: 添加vipPoints列或修改VIP查询逻辑
+#   截止: 2026-03-27
+
+# [B] P1-v6-6: worldBoss数值失衡 - 单人击杀需9小时
+#   文件: backend/routes/worldBoss.js
+#   问题: boss HP=500万，150伤害/次，需9小时连续攻击
+#   方案: HP改为playerAttack*500（约75万），或改为限时挑战
+#   截止: 2026-03-27

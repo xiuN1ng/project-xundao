@@ -187,7 +187,19 @@ router.post('/enter', (req, res) => {
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   if (chapterId > progress.currentChapter) return res.json({ success: false, message: '章节未解锁' });
   
-  res.json({ success: true, battle: { chapterId, enemies: chapter.enemies, hp: chapter.hp, attack: chapter.attack } });
+  // 动态计算敌人HP: enemyHP = playerATK * 3 + chapterId * 50
+  let playerATK = 50; // 默认攻击力
+  if (db) {
+    try {
+      const player = db.prepare('SELECT attack FROM Users WHERE id = ?').get(userId);
+      if (player) playerATK = parseInt(player.attack) || 50;
+    } catch (e) {
+      console.error('[chapter] 获取玩家攻击力失败:', e.message);
+    }
+  }
+  const enemyHP = Math.floor(playerATK * 3 + chapterId * 50);
+  
+  res.json({ success: true, battle: { chapterId, enemies: chapter.enemies, hp: enemyHP, attack: chapter.attack } });
 });
 
 // 章节战斗完成
