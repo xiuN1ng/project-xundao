@@ -38,11 +38,11 @@ router.get('/', (req, res) => {
 // 世界BOSS配置
 const bossConfig = {
   bosses: [
-    { id: 1, name: '上古蛟龙', level: 10, hp: 1000000, attack: 5000, quality: 'rare', reward: { diamonds: 100, lingshi: 10000, magicCrystals: 5 } },
-    { id: 2, name: '远古巨龟', level: 20, hp: 5000000, attack: 15000, quality: 'epic', reward: { diamonds: 300, lingshi: 30000, magicCrystals: 15 } },
-    { id: 3, name: '暗黑魔龙', level: 30, hp: 20000000, attack: 50000, quality: 'legendary', reward: { diamonds: 500, lingshi: 50000, magicCrystals: 30 } },
-    { id: 4, name: '九尾妖狐', level: 40, hp: 100000000, attack: 200000, quality: 'legendary', reward: { diamonds: 1000, lingshi: 100000, magicCrystals: 60 } },
-    { id: 5, name: '仙帝残魂', level: 50, hp: 500000000, attack: 1000000, quality: 'mythical', reward: { diamonds: 5000, lingshi: 500000, magicCrystals: 200 } }
+    { id: 1, name: '上古蛟龙', level: 10, hp: 10000, attack: 5000, quality: 'rare', reward: { diamonds: 100, lingshi: 10000, magicCrystals: 5 } },
+    { id: 2, name: '远古巨龟', level: 20, hp: 50000, attack: 15000, quality: 'epic', reward: { diamonds: 300, lingshi: 30000, magicCrystals: 15 } },
+    { id: 3, name: '暗黑魔龙', level: 30, hp: 200000, attack: 50000, quality: 'legendary', reward: { diamonds: 500, lingshi: 50000, magicCrystals: 30 } },
+    { id: 4, name: '九尾妖狐', level: 40, hp: 1000000, attack: 200000, quality: 'legendary', reward: { diamonds: 1000, lingshi: 100000, magicCrystals: 60 } },
+    { id: 5, name: '仙帝残魂', level: 50, hp: 5000000, attack: 1000000, quality: 'mythical', reward: { diamonds: 5000, lingshi: 500000, magicCrystals: 200 } }
   ],
   refreshInterval: 3600000, // 1小时刷新
   maxDamageRecords: 100

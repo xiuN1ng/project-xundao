@@ -604,3 +604,28 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-P2-6-1] gacha后端缺失 - 创建/api/gacha/draw端点(参考lottery.js概率和保底)  # 完成 | 2026-03-26
 文件: xundao-server/server/backend/routes/gacha.js
   - gacha.js已存在，/draw + /draw-ten端点完整，与[B-P0-5-2]为同一实现
+
+### 2026-03-26 晚间批次
+[B-P0-6-1] WorldBoss HP=500M不可击杀 - 动态分级: bossId=ceil(level/10)，各BOSS HP调整为: ID1=10K, ID2=50K, ID3=200K, ID4=1M, ID5=5M # 新增 | 2026-03-26
+文件: backend/routes/worldBoss.js
+
+[B-P0-6-2] Arena rank JS错误: current未定义 - 第355行 current, 改为 currentRank, # 新增 | 2026-03-26
+文件: backend/routes/arena.js
+
+[B-P1-6-1] cultivation/status路径参数不匹配 - 后端兼容 /status/:userId (path) 和 /status?userId= (query) 两种格式 # 新增 | 2026-03-26
+文件: backend/routes/cultivation.js
+
+[B-P1-6-2] tribulation/attempt参数名错误(20+轮) - 后端兼容 player_id || userId || playerId # 新增 | 2026-03-26
+文件: backend/routes/tribulation.js
+
+[B-P1-6-3] arena/challenge参数名错误 - 后端兼容 player_id/userId/playerId 和 target_id/targetId/opponentId # 新增 | 2026-03-26
+文件: backend/routes/arena.js
+
+[B-P1-6-4] ladder/daily_dungeon/alchemy_api三个route文件缺失或为空 - 创建三个route文件(静态mock数据可用) # 新增 | 2026-03-26
+文件: server/src/ladder_api.js, server/src/daily_dungeon.js, server/src/alchemy_api.js
+
+[B-P2-6-1] Forge所有材料available=0 - 修复材料来源(chapter通关奖励材料) 或添加GET /api/materials/list # 新增 | 2026-03-26
+文件: backend/routes/forge.js
+
+[B-NF-6-1] WorldBoss分级挑战系统 - 完整实现: 难度选择+动态BOSS匹配+奖励倍率+刷新时间+伤害排行榜 # 新增 | 2026-03-26
+文件: backend/routes/worldBoss.js
