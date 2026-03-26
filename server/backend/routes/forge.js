@@ -128,6 +128,29 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/forge/recipes - 获取所有配方（别名）
+router.get('/recipes', (req, res) => {
+  const playerId = parseInt(req.query.player_id || req.query.userId || 1);
+  const db = getDb();
+  try {
+    const materials = getPlayerMaterials(db, playerId);
+    const result = recipes.map(recipe => {
+      const materialCosts = Object.entries(recipe.materials).map(([matId, count]) => ({
+        id: matId, name: materialNames[matId] || matId,
+        required: count, available: materials[matId] || 0,
+        sufficient: (materials[matId] || 0) >= count
+      }));
+      return { ...recipe, materialCosts };
+    });
+    res.json({ success: true, recipes: result });
+  } catch(e) {
+    // 表格不存在时返回配方不含材料数据
+    res.json({ success: true, recipes: recipes.map(r => ({ ...r, materialCosts: [] })) });
+  } finally {
+    db.close();
+  }
+});
+
 // GET /api/forge/materials - 获取玩家材料
 router.get('/materials', (req, res) => {
   const playerId = parseInt(req.query.player_id || req.query.userId || 1);

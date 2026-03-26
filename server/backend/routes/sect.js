@@ -61,6 +61,32 @@ router.get('/info', (req, res) => {
   res.json({ success: true, sect, memberCount: members.length });
 });
 
+// /my - 获取当前玩家所属宗门
+router.get('/my', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || parseInt(req.query.playerId) || 1;
+  try {
+    if (!db) return res.json({ success: false, message: '数据库未连接' });
+    const user = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!user || !user.sectId) {
+      return res.json({ success: true, inSect: false, message: '未加入宗门' });
+    }
+    const sectInfo = db.prepare('SELECT * FROM Sects WHERE id = ?').get(user.sectId);
+    if (!sectInfo) {
+      return res.json({ success: true, inSect: false, message: '宗门不存在' });
+    }
+    const memberRole = db.prepare('SELECT role FROM SectMembers WHERE userId = ? AND sectId = ?').get(playerId, user.sectId);
+    return res.json({
+      success: true,
+      inSect: true,
+      sect: sectInfo,
+      role: memberRole ? memberRole.role : '成员'
+    });
+  } catch(e) {
+    // SectMembers表可能不存在，降级到内存数据
+    return res.json({ success: true, inSect: true, sect, members, role: '成员' });
+  }
+});
+
 // /bonus - 宗门加成
 router.get('/bonus', (req, res) => {
   res.json({ success: true, bonuses: sectBonuses });
