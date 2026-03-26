@@ -29,3 +29,24 @@
   问题: 客户端forge API是独立stub，完全不连接后端
   修复: 对接 /api/forge/recipes 和 /api/forge/make
   文件: client/src/api/index.js 的 forge 相关 + ForgePanel.vue
+
+## 2026-03-27 05:15 — 第59轮新增任务（前端）
+
+### 新功能
+[NF-27-1-F] 【F】OfflineRewardPanel.vue — 离线收益UI
+  方案: 玩家登录时弹出离线收益面板，显示离线时长、灵石/经验收益
+  文件: client/src/components/OfflineRewardPanel.vue (新建)
+  依赖: [B] idle_rewards.js
+  截止: 2026-04-05
+
+[NF-27-2-F] 【F】SectMissionPanel.vue — 宗门任务UI
+  方案: 宗门每日任务列表+提交+贡献兑换商店
+  文件: client/src/components/SectMissionPanel.vue (新建)
+  依赖: [B] sect-missions.js
+  截止: 2026-04-05
+
+### P2 体验优化
+[P2-27-1-F] 【F】MeridianPanel.vue — 经脉树UI
+  方案: 展示经脉树（3分支），点击激活穴位，消耗经脉点
+  文件: client/src/components/MeridianPanel.vue
+  截止: 2026-04-01

@@ -636,3 +636,21 @@
 [NF] NF-27-3: 离线收益系统（连续22+轮未实现❗）
 
 来源: /docs/PROPOSALS/2026-03-27.md
+
+=== 2026-03-27-v9 新增任务 ===
+
+[P0-27-N-9-1] 灵石救济金系统 — 玩家lingshi=0时，每日首次登录发200灵石救济金 [P0]
+[P0-27-N-9-2] cultivation满级(cost=1000,value=1000)自动触发境界跃迁逻辑，返回breakthrough:true [P0]
+[P0-27-N-9-3] forge/daily-claim SQL错误: "no such column: %s" — 检查SQL占位符是否正确使用? [P0]
+[P1-27-N-9-4] welfare/signin-status(GET) + welfare/claim-daily(POST) 两个端点未定义 [P1]
+[P1-27-N-9-5] Meridian灵脉: totalEffect全为0% — 根据meridianPoints计算实际加成 [P1]
+[P1-27-N-9-6] tribulation/begin: 后端期望tribulation_type，前端发typeId — 同时支持两种参数名 [P1]
+[P2-27-N-9-8] sect/create写内存但重启丢失 — 改为写DB持久化 [P2]
+[NF-27-N-9-1] 灵石循环激活: worldboss攻击保证掉落灵石袋，dailyQuest可完成奖励灵石 [P1]
+[NF-27-N-9-2] 境界跃迁后端: 触发后重置value=0, cost*=2, realm+=1, 奖励300灵石+500exp [P1]
+
+长期未修复:
+- Arena last_challenge_date列名: 40+轮❗
+- welfare/status 404: 22+轮❗
+- ladder路由未挂载: 多轮❗
+- tribulation参数名: 22+轮❗

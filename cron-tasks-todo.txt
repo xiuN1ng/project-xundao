@@ -856,3 +856,65 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - [P2-B-30-3-1] Tower初始化 — 首次访问时INSERT tower_progress记录，初始化currentFloor=highestFloor=1
 - [NF-B-30-3-1] 装备强化+锻造联动系统 — equipment/enhance端点 + equipment/dismantle端点
 
+
+## 2026-03-27 05:15 — 第59轮新增任务
+
+### P0 紧急（新发现）
+[P0-27-1] 【B】Arena+tower savePlayerTowerData 崩溃
+  问题: POST /api/arena/challenge → "no such column: last_challenge_date"
+  根因: tower_progress 表不存在，savePlayerTowerData INSERT失败
+  修复: 
+    1. 确认 tower.js initDatabase() 中 CREATE TABLE IF NOT EXISTS tower_progress 已执行
+    2. 追踪 arena challenge 触发 tower.savePlayerTowerData 的调用链
+    3. 确保 tower_progress 表有 last_challenge_date 列（tower.js第47行定义）
+  文件: server/backend/routes/tower.js, server/backend/routes/arena.js
+  截止: 2026-03-27
+
+[P0-27-2] 【B】Sect.create 写库修复（回归未修复）
+  问题: sect/create 写内存变量，sect/list 返回空
+  修复: sect.create 必须 INSERT INTO Sects 表，移除内存变量
+  文件: server/backend/routes/sect.js
+  截止: 2026-03-27
+
+### P1 重要（回归未修复）
+[P1-27-1] 【B】DailyQuest+Achievement progress 更新链
+  问题: cultivation/start 完成后 progress 仍为0
+  修复: cultivation.js 触发 eventBus，dailyQuest/achievement 监听更新
+  文件: server/backend/routes/cultivation.js, routes/dailyQuest.js, routes/achievement.js
+  截止: 2026-03-28
+
+[P1-27-2] 【B】Rank/combat 硬编码数据
+  问题: GET /rank/combat 返回 test/玩家2 等假数据
+  修复: 从 Users 表实时查询 (attack*10 + defense*5 + hp/10)
+  文件: server/backend/routes/rank.js
+  截止: 2026-03-28
+
+[P1-27-3] 【B】Welfare UTC/上海时区统一
+  问题: welfare_storage.js 混用 UTC 和本地时间
+  修复: 统一用 dayjs timezone Asia/Shanghai
+  文件: server/backend/game/welfare_storage.js
+  截止: 2026-03-28
+
+### P2
+[P2-27-1] 【B+F】Meridian 经脉激活端点
+  问题: 120点无消耗出口，穴位效果极小
+  修复: POST /api/meridian/unlock + 经脉树UI
+  文件: server/backend/routes/meridian.js, client/src/components/MeridianPanel.vue
+  截止: 2026-04-01
+
+[P2-27-2] 【B】Tower 通天塔挑战逻辑
+  问题: tower_progress表不存在，100层无内容
+  修复: 创建 tower_floors 配置 + POST /api/tower/challenge
+  文件: server/backend/routes/tower.js
+  截止: 2026-04-01
+
+### 新功能
+[NF-27-1] 【B+F】离线挂机收益系统
+  方案: 记录 last_logout_at，登录时计算离线收益（灵石+经验）
+  文件: server/backend/game/idle_rewards.js (新), client/src/components/OfflineRewardPanel.vue (新)
+  截止: 2026-04-05
+
+[NF-27-2] 【B+F】宗门日常任务系统
+  方案: 修复 Sect.create + 宗门每日任务 + 贡献兑换
+  文件: server/backend/routes/sect-missions.js, client/src/components/SectMissionPanel.vue
+  截止: 2026-04-05

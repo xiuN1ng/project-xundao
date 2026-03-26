@@ -51,10 +51,15 @@ function initArenaTables() {
         total_battles INTEGER DEFAULT 0,
         daily_challenges_used INTEGER DEFAULT 0,
         last_challenge_reset TEXT,
+        highest_rank INTEGER DEFAULT 0,
+        highest_rank_id INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // 为已有表添加新增列（ALTER TABLE 对已存在表无效，用此方式兼容）
+    try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank_id INTEGER DEFAULT 0"); } catch(e) {}
     Logger.info('arena_player表初始化完成');
   } catch (err) {
     Logger.warn('arena_player表初始化失败:', err.message);

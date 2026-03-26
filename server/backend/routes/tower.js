@@ -10,7 +10,7 @@ const Logger = {
 };
 
 // 数据库路径
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
 // 初始化数据库连接
@@ -430,6 +430,27 @@ function checkDailyReset(data) {
 
 // GET / - 获取玩家塔信息
 router.get('/', (req, res) => {
+  const playerId = getPlayerId(req);
+  let data = getPlayerTowerData(playerId);
+  data = checkDailyReset(data);
+
+  res.json({
+    success: true,
+    data: {
+      currentFloor: data.currentFloor,
+      highestFloor: data.highestFloor,
+      totalFloors: MAX_FLOOR,
+      totalWins: data.totalWins,
+      totalBattles: data.totalBattles,
+      todayChallenges: data.todayChallenges,
+      firstClearFloors: data.firstClearFloors,
+      claimedRewards: data.claimedRewards
+    }
+  });
+});
+
+// GET /info - 获取玩家塔信息（别名）
+router.get('/info', (req, res) => {
   const playerId = getPlayerId(req);
   let data = getPlayerTowerData(playerId);
   data = checkDailyReset(data);
