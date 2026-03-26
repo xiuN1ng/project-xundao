@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const Database = require('better-sqlite3');
+
+// 主数据库实例（供 player.js 等模块使用）
+const dbPath = path.join(__dirname, 'data', 'game.db');
+const db = new Database(dbPath);
 
 // 初始化婚姻系统数据库表
 try {
@@ -15,9 +20,7 @@ try {
 
 // 初始化灵兽系统数据库表
 try {
-  const Database = require('better-sqlite3');
-  const dbPath = path.join(__dirname, 'data', 'game.db');
-  const beastDb = new Database(dbPath);
+  const beastDb = db; // 复用主数据库实例
   
   const beastApi = require('../game/beast_api');
   if (beastApi.initBeastDatabase) {

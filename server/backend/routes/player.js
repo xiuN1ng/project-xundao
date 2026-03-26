@@ -30,13 +30,67 @@ let player = {
   createdAt: Date.now()
 };
 
-// 获取玩家信息
+// 获取玩家信息（优先从 Users 表读取，替代内存 mock）
 router.get('/', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || parseInt(req.query.playerId) || parseInt(req.get('X-User-Id')) || 1;
+
+  if (dbRef && userId) {
+    try {
+      const user = dbRef.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        return res.json({
+          id: user.id,
+          name: user.nickname || user.username,
+          level: user.level || 1,
+          realm: user.realm || 1,
+          lingshi: user.lingshi || 0,
+          diamonds: user.diamonds || 0,
+          hp: user.hp || 1000,
+          attack: user.attack || 50,
+          defense: user.defense || 50,
+          speed: user.speed || 30,
+          sectId: user.sect_id || null,
+          vipLevel: user.vipLevel || 0,
+          createdAt: user.createdAt
+        });
+      }
+    } catch (e) {
+      console.error('[player] GET / Users表查询失败:', e.message);
+    }
+  }
+  // Fallback: 返回内存 mock
   res.json(player);
 });
 
 // 获取玩家信息 (兼容 /info 路径)
 router.get('/info', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || parseInt(req.query.playerId) || parseInt(req.get('X-User-Id')) || 1;
+
+  if (dbRef && userId) {
+    try {
+      const user = dbRef.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        return res.json({
+          id: user.id,
+          name: user.nickname || user.username,
+          level: user.level || 1,
+          realm: user.realm || 1,
+          lingshi: user.lingshi || 0,
+          diamonds: user.diamonds || 0,
+          hp: user.hp || 1000,
+          attack: user.attack || 50,
+          defense: user.defense || 50,
+          speed: user.speed || 30,
+          sectId: user.sect_id || null,
+          vipLevel: user.vipLevel || 0,
+          createdAt: user.createdAt
+        });
+      }
+    } catch (e) {
+      console.error('[player] GET /info Users表查询失败:', e.message);
+    }
+  }
+  // Fallback: 返回内存 mock
   res.json(player);
 });
 
