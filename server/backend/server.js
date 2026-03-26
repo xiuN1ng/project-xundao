@@ -71,7 +71,9 @@ app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/equipmentDismantle', require('./routes/equipment_dismantle'));
 app.use('/api/forge', require('./routes/forge'));
-app.use('/api/chapter', require('./routes/chapter'));
+const chapterRouter = require('./routes/chapter');
+app.use('/api/chapter', chapterRouter);
+try { if (chapterRouter.setPlayerRef) chapterRouter.setPlayerRef(playerModule._player); } catch(e) { console.log('[chapter setPlayerRef]', e.message); }
 app.use('/api/story', require('./routes/story'));
 app.use('/api/pill', require('./routes/pill'));
 

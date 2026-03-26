@@ -37,7 +37,7 @@ const chapters = [
   { id: 8, name: '沼泽探险', reqLevel: 8, enemies: 12, hp: 10000, attack: 60, reward: 680, exp: 300, desc: '危险沼泽地的探索' },
   { id: 9, name: '雪山攀登', reqLevel: 9, enemies: 15, hp: 10000, attack: 70, reward: 820, exp: 360, desc: '冰封雪山的挑战' },
   { id: 10, name: '深渊入口', reqLevel: 10, enemies: 15, hp: 10000, attack: 80, reward: 1000, exp: 420, desc: '通往深渊的入口' },
-  
+
   // 筑基篇 (11-20)
   { id: 11, name: '筑基丹成', reqLevel: 11, enemies: 18, hp: 10000, attack: 100, reward: 1200, exp: 500, desc: '筑基期的第一战' },
   { id: 12, name: '筑基之乱', reqLevel: 12, enemies: 20, hp: 10000, attack: 120, reward: 1500, exp: 600, desc: '筑基修士的争斗' },
@@ -49,7 +49,7 @@ const chapters = [
   { id: 18, name: '心魔考验', reqLevel: 18, enemies: 35, hp: 10000, attack: 250, reward: 4400, exp: 1650, desc: '心魔的试炼' },
   { id: 19, name: '筑基圆满', reqLevel: 19, enemies: 35, hp: 10000, attack: 280, reward: 5200, exp: 1900, desc: '筑基期的圆满' },
   { id: 20, name: '金丹之路', reqLevel: 20, enemies: 40, hp: 10000, attack: 320, reward: 6200, exp: 2200, desc: '冲击金丹境界' },
-  
+
   // 金丹篇 (21-35)
   { id: 21, name: '金丹天劫', reqLevel: 21, enemies: 40, hp: 15000, attack: 380, reward: 7500, exp: 2600, desc: '金丹天劫的考验' },
   { id: 22, name: '金丹之威', reqLevel: 22, enemies: 45, hp: 22500, attack: 450, reward: 9000, exp: 3000, desc: '金丹修士的威能' },
@@ -66,7 +66,7 @@ const chapters = [
   { id: 33, name: '天外有天', reqLevel: 33, enemies: 70, hp: 500000, attack: 1950, reward: 82000, exp: 15500, desc: '天外天的广阔' },
   { id: 34, name: '域外战场', reqLevel: 34, enemies: 75, hp: 500000, attack: 2200, reward: 100000, exp: 18000, desc: '域外战场的惨烈' },
   { id: 35, name: '化神之始', reqLevel: 35, enemies: 75, hp: 500000, attack: 2500, reward: 122000, exp: 20800, desc: '化神之路的开端' },
-  
+
   // 化神篇 (36-50)
   { id: 36, name: '天地之变', reqLevel: 36, enemies: 80, hp: 500000, attack: 2800, reward: 150000, exp: 24000, desc: '天地间的巨变' },
   { id: 37, name: '神劫降临', reqLevel: 37, enemies: 80, hp: 500000, attack: 3200, reward: 185000, exp: 27600, desc: '神劫的恐怖威能' },
@@ -83,7 +83,7 @@ const chapters = [
   { id: 48, name: '仙宫秘宝', reqLevel: 48, enemies: 110, hp: 500000, attack: 14800, reward: 1980000, exp: 130000, desc: '仙宫中的秘宝' },
   { id: 49, name: '蟠桃盛会', reqLevel: 49, enemies: 110, hp: 500000, attack: 17200, reward: 2500000, exp: 150000, desc: '参加蟠桃盛会' },
   { id: 50, name: '渡劫飞升', reqLevel: 50, enemies: 120, hp: 500000, attack: 20000, reward: 3200000, exp: 175000, desc: '渡劫飞升的终极考验' },
-  
+
   // 仙王篇 (51-70)
   { id: 51, name: '仙王之境', reqLevel: 51, enemies: 120, hp: 750000, attack: 23000, reward: 4000000, exp: 200000, desc: '踏入仙王境界' },
   { id: 52, name: '大道三千', reqLevel: 52, enemies: 130, hp: 1125000, attack: 27000, reward: 5000000, exp: 230000, desc: '感悟三千大道' },
@@ -105,7 +105,7 @@ const chapters = [
   { id: 68, name: '大道至简', reqLevel: 68, enemies: 210, hp: 5000000, attack: 550000, reward: 520000000, exp: 2580000, desc: '大道至简的真谛' },
   { id: 69, name: '返璞归真', reqLevel: 69, enemies: 210, hp: 5000000, attack: 690000, reward: 780000000, exp: 3080000, desc: '返璞归真的境界' },
   { id: 70, name: '无极无量', reqLevel: 70, enemies: 220, hp: 5000000, attack: 880000, reward: 1200000000, exp: 3720000, desc: '无极无量的尽头' },
-  
+
   // 终极篇 (71-100)
   { id: 71, name: '道心永恒', reqLevel: 71, enemies: 220, hp: 5000000, attack: 1100000, reward: 1800000000, exp: 4500000, desc: '道心的永恒不灭' },
   { id: 72, name: '万道归一', reqLevel: 72, enemies: 230, hp: 5000000, attack: 1400000, reward: 2800000000, exp: 5500000, desc: '万道归一的奥义' },
@@ -145,13 +145,13 @@ let userProgress = { 1: { currentChapter: 1, totalKills: 0, stars: {} } };
 router.get('/', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
-  
+
   const chaptersWithStars = chapters.map(ch => ({
     ...ch,
     stars: progress.stars?.[ch.id] || 0,
     unlocked: ch.id <= progress.currentChapter
   }));
-  
+
   res.json({ chapters: chaptersWithStars, progress: { currentChapter: progress.currentChapter, totalKills: progress.totalKills } });
 });
 
@@ -159,13 +159,13 @@ router.get('/', (req, res) => {
 router.get('/list', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
-  
+
   const chaptersWithStars = chapters.map(ch => ({
     ...ch,
     stars: progress.stars?.[ch.id] || 0,
     unlocked: ch.id <= progress.currentChapter
   }));
-  
+
   res.json({ chapters: chaptersWithStars, progress: { currentChapter: progress.currentChapter, totalKills: progress.totalKills } });
 });
 
@@ -174,7 +174,7 @@ router.get('/:id', (req, res) => {
   const chapterId = parseInt(req.params.id);
   const chapter = chapters.find(c => c.id === chapterId);
   if (!chapter) return res.json({ success: false });
-  
+
   res.json(chapter);
 });
 
@@ -183,10 +183,10 @@ router.post('/enter', (req, res) => {
   const { userId, chapterId } = req.body;
   const chapter = chapters.find(c => c.id === chapterId);
   if (!chapter) return res.json({ success: false, message: '章节不存在' });
-  
+
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   if (chapterId > progress.currentChapter) return res.json({ success: false, message: '章节未解锁' });
-  
+
   // 动态计算敌人HP: enemyHP = playerATK * 3 + chapterId * 50
   let playerATK = 50; // 默认攻击力
   if (db) {
@@ -198,59 +198,80 @@ router.post('/enter', (req, res) => {
     }
   }
   const enemyHP = Math.floor(playerATK * 3 + chapterId * 50);
-  
+
   res.json({ success: true, battle: { chapterId, enemies: chapter.enemies, hp: enemyHP, attack: chapter.attack } });
 });
 
 // 章节战斗完成
 router.post('/complete', (req, res) => {
   const { userId, chapterId, kills = 0, time } = req.body;
-  
+
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
-  
+
   const chapter = chapters.find(c => c.id === chapterId);
-  
+
   // 安全检查
   if (!chapter) {
     return res.status(404).json({ success: false, error: '章节不存在' });
   }
-  
+
   // 计算星级
   const enemyCount = chapter.enemies || 1;
   let stars = 1;
   if (kills >= enemyCount) stars = 3;
   else if (kills >= enemyCount * 0.7) stars = 2;
-  
+
   progress.stars = progress.stars || {};
-  
+
   // 首通检查（记录更新前的星级）
   const previousStars = progress.stars[chapterId] || 0;
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
-  
-  // 首通奖励：+200灵石
+
+  // ========== 奖励发放（最终修复：更新 Users 表，正确字段名）==========
   let spiritStonesGained = 0;
-  if (isFirstClear && db) {
+  let expGained = chapter.exp || 0;
+  let rewardGained = chapter.reward || 0;
+  let newLevel = null;
+
+  if (db) {
     try {
-      spiritStonesGained = 200;
-      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(200, userId);
+      // 读取 Users 表（权威数据源）
+      const user = db.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        // 累加灵石（章节奖励 + 首通 bonus）
+        const totalSpiritStones = rewardGained + (isFirstClear ? 200 : 0);
+        user.lingshi += totalSpiritStones;
+        spiritStonesGained = totalSpiritStones;
+
+        // 升级：首通奖励+1级（简化逻辑，待开发exp体系）
+        if (isFirstClear) {
+          user.level++;
+          newLevel = user.level;
+          console.log(`[chapter] 玩家升级: ${user.level - 1} → ${user.level}`);
+        }
+
+        // 写入 Users 表（正确表名和字段）
+        db.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
+          .run(user.lingshi, user.level, userId);
+      }
     } catch (e) {
-      console.error('[chapter] 首通奖励发放失败:', e.message);
+      console.error('[chapter] 奖励发放失败:', e.message);
       spiritStonesGained = 0;
     }
   }
-  
+
   // 开启下一章
   if (chapterId === progress.currentChapter && chapterId < 100) {
     progress.currentChapter = chapterId + 1;
   }
-  
+
   progress.totalKills += kills;
-  
+
   // 计算评价
   const evaluation = stars === 3 ? '完美通关' : stars === 2 ? '顺利通关' : '艰难通关';
-  
+
   // ========== 成就触发：通关章节 ==========
   let achievementResults = [];
   if (achievementTrigger) {
@@ -266,15 +287,16 @@ router.post('/complete', (req, res) => {
       console.error('[chapter] 成就触发失败:', e.message);
     }
   }
-  
-  res.json({ 
-    success: true, 
-    reward: chapter.reward, 
+
+  res.json({
+    success: true,
+    reward: chapter.reward,
     exp: chapter.exp,
     stars,
     spiritStonesGained,
     evaluation,
     nextChapter: chapterId < 100 ? chapterId + 1 : null,
+    newLevel,
     achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
       id: a.id,
       name: a.name,
@@ -289,7 +311,7 @@ router.get('/story/:id', (req, res) => {
   const chapterId = parseInt(req.params.id);
   const chapter = chapters.find(c => c.id === chapterId);
   if (!chapter) return res.json({ success: false });
-  
+
   res.json({ id: chapter.id, name: chapter.name, desc: chapter.desc, reward: chapter.reward });
 });
 
@@ -297,52 +319,67 @@ router.get('/story/:id', (req, res) => {
 router.post('/battle', (req, res) => {
   // 直接映射到 /complete 的逻辑
   const { userId, chapterId, kills = 0, time } = req.body;
-  
+
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
-  
+
   const chapter = chapters.find(c => c.id === chapterId);
-  
+
   // 安全检查
   if (!chapter) {
     return res.status(404).json({ success: false, error: '章节不存在' });
   }
-  
+
   // 计算星级
   const enemyCount = chapter.enemies || 1;
   let stars = 1;
   if (kills >= enemyCount) stars = 3;
   else if (kills >= enemyCount * 0.7) stars = 2;
-  
+
   progress.stars = progress.stars || {};
-  
+
   // 首通检查
   const previousStars = progress.stars[chapterId] || 0;
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
-  
-  // 首通奖励：+200灵石
+
+  // ========== 奖励发放（最终修复：更新 Users 表，正确字段名）==========
   let spiritStonesGained = 0;
-  if (isFirstClear && db) {
+  let expGained = chapter.exp || 0;
+  let rewardGained = chapter.reward || 0;
+  let newLevel = null;
+
+  if (db) {
     try {
-      spiritStonesGained = 200;
-      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(200, userId);
+      const user = db.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        const totalSpiritStones = rewardGained + (isFirstClear ? 200 : 0);
+        user.lingshi += totalSpiritStones;
+        spiritStonesGained = totalSpiritStones;
+        if (isFirstClear) {
+          user.level++;
+          newLevel = user.level;
+          console.log(`[chapter] 玩家升级: → ${user.level}`);
+        }
+        db.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
+          .run(user.lingshi, user.level, userId);
+      }
     } catch (e) {
-      console.error('[chapter] 首通奖励发放失败:', e.message);
+      console.error('[chapter] 奖励发放失败:', e.message);
       spiritStonesGained = 0;
     }
   }
-  
+
   // 开启下一章
   if (chapterId === progress.currentChapter && chapterId < 100) {
     progress.currentChapter = chapterId + 1;
   }
-  
+
   progress.totalKills += kills;
-  
+
   // 计算评价
   const evaluation = stars === 3 ? '完美通关' : stars === 2 ? '顺利通关' : '艰难通关';
-  
+
   // 成就触发
   let achievementResults = [];
   if (achievementTrigger) {
@@ -352,7 +389,7 @@ router.post('/battle', (req, res) => {
       console.error('[chapter] 成就触发失败:', e.message);
     }
   }
-  
+
   res.json({ 
     success: true, 
     reward: chapter.reward, 
@@ -361,6 +398,7 @@ router.post('/battle', (req, res) => {
     spiritStonesGained,
     evaluation,
     nextChapter: chapterId < 100 ? chapterId + 1 : null,
+    newLevel,
     achievements: achievementResults.length > 0 ? achievementResults.map(a => ({
       id: a.id,
       name: a.name,
@@ -370,5 +408,10 @@ router.post('/battle', (req, res) => {
   });
 });
 
+// 内存中的玩家对象引用（由 server.js 注入）
+let playerRef = null;
+function setPlayerRef(p) { playerRef = p; }
+
 module.exports = router;
 module.exports.__chapters = chapters;
+module.exports.setPlayerRef = setPlayerRef;

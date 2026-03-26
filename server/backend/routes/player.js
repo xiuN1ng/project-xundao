@@ -58,7 +58,6 @@ router.get('/', (req, res) => {
       console.error('[player] GET / Users表查询失败:', e.message);
     }
   }
-  // Fallback: 返回内存 mock
   res.json(player);
 });
 
@@ -97,7 +96,9 @@ router.get('/info', (req, res) => {
 // 更新玩家信息
 router.put('/', (req, res) => {
   const oldLevel = player.level;
-  player = { ...player, ...req.body };
+  // 就地修改对象，不新建引用（保持 _player 同步）
+  Object.assign(player, req.body);
+  _player = player; // 保持 _player 指向最新对象
   
   // ========== 数据库持久化 ==========
   if (dbRef && player.id) {
