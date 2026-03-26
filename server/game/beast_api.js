@@ -184,13 +184,13 @@ function getAffectionLevel(affection) {
 // 计算灵兽属性
 function calculateBeastStats(beast, beastTemplate) {
   if (!beast || !beastTemplate) return null;
-  
+
   const affectionData = getAffectionLevel(beast.affection);
   const moodBonus = BEAST_MOOD[beast.mood]?.bonus || 1;
-  
+
   const baseAtk = beastTemplate.base_atk + (beast.level - 1) * beastTemplate.growth_atk;
   const baseHp = beastTemplate.base_hp + (beast.level - 1) * beastTemplate.growth_hp;
-  
+
   return {
     atk: Math.floor(baseAtk * affectionData.bonus * moodBonus),
     hp: Math.floor(baseHp * affectionData.bonus * moodBonus),
@@ -241,7 +241,7 @@ function initBeastDatabase(database) {
       rarity INTEGER DEFAULT 1
     )
   `);
-  
+
   // 玩家灵兽表
   db.exec(`
     CREATE TABLE IF NOT EXISTS player_beasts (
@@ -259,7 +259,7 @@ function initBeastDatabase(database) {
       UNIQUE(player_id, beast_id)
     )
   `);
-  
+
   // 玩家灵兽栏位表
   db.exec(`
     CREATE TABLE IF NOT EXISTS player_beast_slots (
@@ -269,7 +269,7 @@ function initBeastDatabase(database) {
       upgraded_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  
+
   // 玩家灵兽捕捉记录
   db.exec(`
     CREATE TABLE IF NOT EXISTS beast_capture_records (
@@ -281,7 +281,16 @@ function initBeastDatabase(database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  
+
+  // 灵兽捕捉保底计数器（90次未出神话则下次必出混沌兽）
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS beast_pity_counter (
+      player_id INTEGER PRIMARY KEY,
+      consecutive_non_mythical INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // 灵兽战斗记录
   db.exec(`
     CREATE TABLE IF NOT EXISTS beast_battle_records (
@@ -294,16 +303,16 @@ function initBeastDatabase(database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  
+
   // 种子数据
   const count = db.prepare('SELECT COUNT(*) as count FROM beast_templates').get();
   if (count.count === 0) {
     const stmt = db.prepare(`
-      INSERT INTO beast_templates 
+      INSERT INTO beast_templates
       (id, name, type, quality, icon, base_atk, base_hp, growth_atk, growth_hp, skill, skill_name, description, capture_rate, habitat, rarity)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+
     for (const [id, beast] of Object.entries(BEAST_DATA)) {
       stmt.run(
         id, beast.name, beast.type, beast.quality, beast.icon,
@@ -321,33 +330,33 @@ function initBeastDatabase(database) {
 router.get('/types', (req, res) => {
   try {
     const { habitat } = req.query;
-    
+
     let sql = 'SELECT * FROM beast_templates';
     const params = [];
-    
+
     if (habitat) {
       sql += ' WHERE habitat = ?';
       params.push(habitat);
     }
-    
+
     sql += ' ORDER BY rarity DESC, capture_rate ASC';
-    
+
     const beasts = db.prepare(sql).all(...params);
-    
+
     // 获取玩家已拥有的灵兽
     const playerId = req.query.player_id;
     let ownedBeasts = [];
     if (playerId) {
       ownedBeasts = db.prepare('SELECT beast_id FROM player_beasts WHERE player_id = ?').all(playerId);
     }
-    
+
     const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
-    
+
     const result = beasts.map(b => ({
       ...b,
       owned: ownedIds.has(b.id) ? true : null
     }));
-    
+
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('获取灵兽类型失败:', error);
@@ -359,26 +368,26 @@ router.get('/types', (req, res) => {
 router.get('/list', (req, res) => {
   try {
     const { player_id, habitat } = req.query;
-    
+
     let sql = 'SELECT * FROM beast_templates';
     const params = [];
-    
+
     if (habitat) {
       sql += ' WHERE habitat = ?';
       params.push(habitat);
     }
-    
+
     sql += ' ORDER BY rarity DESC, capture_rate ASC';
-    
+
     const beasts = db.prepare(sql).all(...params);
-    
+
     // 获取玩家已拥有的灵兽
     const ownedBeasts = {};
     if (player_id) {
       const owned = db.prepare('SELECT beast_id, level, affection, is_active FROM player_beasts WHERE player_id = ?').all(player_id);
       owned.forEach(b => { ownedBeasts[b.beast_id] = { level: b.level, affection: b.affection, is_active: b.is_active }; });
     }
-    
+
     const result = beasts.map(b => ({
       id: b.id,
       name: b.name,
@@ -396,8 +405,40 @@ router.get('/list', (req, res) => {
       rarity: b.rarity,
       owned: ownedBeasts[b.id] || null
     }));
-    
+
     res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取灵兽捕捉保底进度
+router.get('/pity/status', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id' });
+    }
+    
+    let pity = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(player_id);
+    if (!pity) {
+      db.prepare('INSERT INTO beast_pity_counter (player_id, consecutive_non_mythical) VALUES (?, 0)').run(player_id);
+      pity = { consecutive_non_mythical: 0 };
+    }
+    
+    const remaining = Math.max(0, 90 - pity.consecutive_non_mythical);
+    const nextMythicalIn = remaining === 0 ? '下次捕捉必出神话！' : `还差 ${remaining} 次`;
+    
+    res.json({
+      success: true,
+      data: {
+        consecutive_non_mythical: pity.consecutive_non_mythical,
+        pity_threshold: 90,
+        remaining_to_guaranteed: remaining,
+        next_mythical_hint: nextMythicalIn,
+        guaranteed_active: pity.consecutive_non_mythical >= 90
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -408,18 +449,18 @@ router.get('/:id', (req, res) => {
   try {
     const { id } = req.params;
     const { player_id } = req.query;
-    
+
     const beast = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(id);
     if (!beast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取玩家拥有的该灵兽信息
     let playerBeast = null;
     if (player_id) {
       playerBeast = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND beast_id = ?').get(player_id, id);
     }
-    
+
     const result = {
       ...beast,
       quality_name: BEAST_QUALITY[beast.quality]?.name || beast.quality,
@@ -434,7 +475,7 @@ router.get('/:id', (req, res) => {
         stats: calculateBeastStats(playerBeast, beast)
       } : null
     };
-    
+
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -462,6 +503,13 @@ router.post('/capture', (req, res) => {
       player = db.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
     }
     
+    // === 保底系统：检查保底计数器 ===
+    let pityCounter = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(actualPlayerId);
+    if (!pityCounter) {
+      db.prepare('INSERT INTO beast_pity_counter (player_id, consecutive_non_mythical) VALUES (?, 0)').run(actualPlayerId);
+      pityCounter = { consecutive_non_mythical: 0 };
+    }
+    
     // 获取灵兽模板
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(beast_id);
     if (!beastTemplate) {
@@ -487,27 +535,61 @@ router.post('/capture', (req, res) => {
       return res.status(400).json({ success: false, error: `灵兽栏位已满（${slotRecord.slots}格），请扩展栏位` });
     }
     
-    // 计算捕捉成功率
-    const baseRate = beastTemplate.capture_rate || 0.3;
-    const realmBonus = player.realm_level * 0.02; // 每个境界+2%
-    const qualityBonus = BEAST_QUALITY[beastTemplate.quality]?.capture_bonus || 1;
-    const finalRate = Math.min(0.8, baseRate * qualityBonus + realmBonus);
+    // === 保底逻辑：90次未出神话，下次必出混沌兽 ===
+    let guaranteedPity = pityCounter.consecutive_non_mythical >= 90;
+    let captureResult;
+    let finalBeastTemplate = beastTemplate;
     
-    // 记录捕捉尝试
-    db.prepare('INSERT INTO beast_capture_records (player_id, beast_id, success, capture_rate) VALUES (?, ?, ?, ?)').run(actualPlayerId, beast_id, 0, finalRate);
+    if (guaranteedPity) {
+      // 保底触发：强制捕捉混沌兽
+      finalBeastTemplate = db.prepare("SELECT * FROM beast_templates WHERE id = 'chaos_beast'").get();
+      if (!finalBeastTemplate) {
+        return res.status(500).json({ success: false, error: '混沌兽模板不存在' });
+      }
+      
+      // 检查是否已有混沌兽
+      const existingChaos = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND beast_id = ?').get(actualPlayerId, 'chaos_beast');
+      if (existingChaos) {
+        // 已有混沌兽，保底转为基础成功率
+        guaranteedPity = false;
+      } else {
+        captureResult = { success: true, guaranteed: true };
+      }
+    }
     
-    // 判定捕捉结果
-    const roll = Math.random();
-    if (roll > finalRate) {
+    if (!guaranteedPity) {
+      // 正常捕捉流程
+      const baseRate = beastTemplate.capture_rate || 0.3;
+      const realmBonus = player.realm_level * 0.02;
+      const qualityBonus = BEAST_QUALITY[beastTemplate.quality]?.capture_bonus || 1;
+      const finalRate = Math.min(0.8, baseRate * qualityBonus + realmBonus);
+      
+      db.prepare('INSERT INTO beast_capture_records (player_id, beast_id, success, capture_rate) VALUES (?, ?, ?, ?)').run(actualPlayerId, beast_id, 0, finalRate);
+      
+      const roll = Math.random();
+      captureResult = { success: roll <= finalRate, guaranteed: false, roll, finalRate };
+    }
+    
+    if (!captureResult.success) {
+      // 捕捉失败：如果是神话兽逃走，仍重置保底（因为已经见过神话了）
+      const isMythical = beastTemplate.quality === 'mythical';
+      if (isMythical) {
+        db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+      } else {
+        db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = consecutive_non_mythical + 1, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+      }
+      
       return res.json({
         success: false,
         message: `捕捉${beastTemplate.name}失败！它逃走了`,
         data: {
           beast_id,
           beast_name: beastTemplate.name,
-          capture_rate: finalRate,
-          roll,
-          escaped: true
+          capture_rate: captureResult.finalRate || null,
+          roll: captureResult.roll || null,
+          escaped: true,
+          pity_counter: pityCounter.consecutive_non_mythical + (isMythical ? 0 : 1),
+          pity_triggered: false
         }
       });
     }
@@ -519,24 +601,34 @@ router.post('/capture', (req, res) => {
     db.prepare(`
       INSERT INTO player_beasts (player_id, beast_id, level, exp, affection, mood, is_active)
       VALUES (?, ?, 1, 0, 50, ?, 0)
-    `).run(actualPlayerId, beast_id, randomMood);
+    `).run(actualPlayerId, finalBeastTemplate.id, randomMood);
     
     // 更新捕捉成功记录
-    db.prepare('UPDATE beast_capture_records SET success = 1 WHERE player_id = ? AND beast_id = ? AND success = 0 ORDER BY created_at DESC LIMIT 1').run(actualPlayerId, beast_id);
+    if (!guaranteedPity) {
+      db.prepare('UPDATE beast_capture_records SET success = 1 WHERE player_id = ? AND beast_id = ? AND success = 0 ORDER BY created_at DESC LIMIT 1').run(actualPlayerId, beast_id);
+    }
     
+    // 保底重置（成功捕捉神话 → 重置计数器）
+    db.prepare('UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime("now") WHERE player_id = ?').run(actualPlayerId);
+    
+    const isMythicalCaught = finalBeastTemplate.quality === 'mythical';
     res.json({
       success: true,
-      message: `🎉 成功捕捉${beastTemplate.name}！`,
+      message: isMythicalCaught && captureResult.guaranteed
+        ? `🎉 保底成功！获得${finalBeastTemplate.name}！`
+        : `🎉 成功捕捉${finalBeastTemplate.name}！`,
       data: {
-        beast_id,
-        beast_name: beastTemplate.name,
-        icon: beastTemplate.icon,
-        quality: beastTemplate.quality,
-        quality_name: BEAST_QUALITY[beastTemplate.quality]?.name,
+        beast_id: finalBeastTemplate.id,
+        beast_name: finalBeastTemplate.name,
+        icon: finalBeastTemplate.icon,
+        quality: finalBeastTemplate.quality,
+        quality_name: BEAST_QUALITY[finalBeastTemplate.quality]?.name,
         level: 1,
         affection: 50,
         mood: randomMood,
-        capture_rate: finalRate
+        capture_rate: captureResult.finalRate || null,
+        pity_counter: 0,
+        pity_triggered: !!guaranteedPity
       }
     });
   } catch (error) {
@@ -550,27 +642,27 @@ router.post('/capture', (req, res) => {
 router.get('/my/list', (req, res) => {
   try {
     const { player_id } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     // 获取玩家灵兽
     const beasts = db.prepare(`
-      SELECT pb.*, bt.name, bt.icon, bt.quality, bt.base_atk, bt.base_hp, 
+      SELECT pb.*, bt.name, bt.icon, bt.quality, bt.base_atk, bt.base_hp,
              bt.growth_atk, bt.growth_hp, bt.skill, bt.skill_name, bt.rarity
       FROM player_beasts pb
       JOIN beast_templates bt ON pb.beast_id = bt.id
       WHERE pb.player_id = ?
       ORDER BY pb.is_active DESC, pb.level DESC, pb.obtained_at DESC
     `).all(player_id);
-    
+
     // 获取栏位信息
     let slotRecord = db.prepare('SELECT * FROM player_beast_slots WHERE player_id = ?').get(player_id);
     if (!slotRecord) {
       slotRecord = { slots: 5 };
     }
-    
+
     const result = {
       slots: slotRecord.slots,
       beasts: beasts.map(b => {
@@ -581,7 +673,7 @@ router.get('/my/list', (req, res) => {
           growth_hp: b.growth_hp
         };
         const stats = calculateBeastStats(b, template);
-        
+
         return {
           id: b.id,
           beast_id: b.beast_id,
@@ -603,7 +695,7 @@ router.get('/my/list', (req, res) => {
         };
       })
     };
-    
+
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -614,11 +706,11 @@ router.get('/my/list', (req, res) => {
 router.post('/upgrade', (req, res) => {
   try {
     const { player_id, beast_id, use_spirit_stones } = req.body;
-    
+
     if (!player_id || !beast_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare(`
       SELECT pb.*, bt.name, bt.icon, bt.quality, bt.growth_atk, bt.growth_hp
@@ -626,24 +718,24 @@ router.post('/upgrade', (req, res) => {
       JOIN beast_templates bt ON pb.beast_id = bt.id
       WHERE pb.id = ? AND pb.player_id = ?
     `).get(beast_id, player_id);
-    
+
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取玩家
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-    
+
     // 检查经验是否足够升级
     const expNeeded = BEAST_EXP_CURVE(playerBeast.level);
-    
+
     if (playerBeast.exp >= expNeeded) {
       // 经验升级
       const newExp = playerBeast.exp - expNeeded;
       const newLevel = playerBeast.level + 1;
-      
+
       db.prepare('UPDATE player_beasts SET level = ?, exp = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newLevel, newExp, beast_id);
-      
+
       res.json({
         success: true,
         message: `${playerBeast.name} 升级到 Lv.${newLevel}！`,
@@ -659,16 +751,16 @@ router.post('/upgrade', (req, res) => {
     } else if (use_spirit_stones) {
       // 灵石直接升级
       const upgradeCost = Math.floor(50 * Math.pow(1.5, playerBeast.level));
-      
+
       if (player.spirit_stones < upgradeCost) {
         return res.status(400).json({ success: false, error: `灵石不足，需要${upgradeCost}灵石` });
       }
-      
+
       const newLevel = playerBeast.level + 1;
-      
+
       db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(upgradeCost, player_id);
       db.prepare('UPDATE player_beasts SET level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newLevel, beast_id);
-      
+
       res.json({
         success: true,
         message: `${playerBeast.name} 花费${upgradeCost}灵石升级到 Lv.${newLevel}！`,
@@ -682,9 +774,9 @@ router.post('/upgrade', (req, res) => {
         }
       });
     } else {
-      return res.status(400).json({ 
-        success: false, 
-        error: `经验不足，需要${expNeeded}经验，当前${playerBeast.exp}经验。可使用use_spirit_stones=true消耗灵石直接升级` 
+      return res.status(400).json({
+        success: false,
+        error: `经验不足，需要${expNeeded}经验，当前${playerBeast.exp}经验。可使用use_spirit_stones=true消耗灵石直接升级`
       });
     }
   } catch (error) {
@@ -696,39 +788,39 @@ router.post('/upgrade', (req, res) => {
 router.post('/feed', (req, res) => {
   try {
     const { player_id, beast_id, food_id } = req.body;
-    
+
     if (!player_id || !beast_id || !food_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     const food = BEAST_FOODS[food_id];
     if (!food) {
       return res.status(400).json({ success: false, error: '饲料不存在' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beast_id, player_id);
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取灵兽模板
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(playerBeast.beast_id);
-    
+
     // 获取玩家
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-    
+
     // 检查灵石
     if (player.spirit_stones < food.cost) {
       return res.status(400).json({ success: false, error: `灵石不足，需要${food.cost}灵石` });
     }
-    
+
     // 扣除灵石
     db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(food.cost, player_id);
-    
+
     // 增加亲密度
     const newAffection = Math.min(100, playerBeast.affection + food.affection);
-    
+
     // 心情变化
     let newMood = playerBeast.mood;
     if (food.affection >= 50) {
@@ -738,13 +830,13 @@ router.post('/feed', (req, res) => {
     } else if (food.affection >= 10 && playerBeast.mood === 'angry') {
       newMood = 'sad';
     }
-    
+
     db.prepare(`
-      UPDATE player_beasts 
+      UPDATE player_beasts
       SET affection = ?, mood = ?, mood_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(newAffection, newMood, beast_id);
-    
+
     res.json({
       success: true,
       message: `${beastTemplate.name} 亲密度+${food.affection}，当前亲密度：${newAffection}`,
@@ -770,31 +862,31 @@ router.post('/feed', (req, res) => {
 router.post('/activate', (req, res) => {
   try {
     const { player_id, beast_id } = req.body;
-    
+
     if (!player_id || !beast_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beast_id, player_id);
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 如果已经是激活状态
     if (playerBeast.is_active === 1) {
       return res.json({ success: true, message: '该灵兽已经是参战状态' });
     }
-    
+
     // 先取消其他灵兽的激活状态
     db.prepare('UPDATE player_beasts SET is_active = 0 WHERE player_id = ?').run(player_id);
-    
+
     // 激活指定灵兽
     db.prepare('UPDATE player_beasts SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(beast_id);
-    
+
     // 获取模板信息
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(playerBeast.beast_id);
-    
+
     res.json({
       success: true,
       message: `${beastTemplate.name} 已设为参战灵兽！`,
@@ -814,14 +906,14 @@ router.post('/activate', (req, res) => {
 router.post('/deactivate', (req, res) => {
   try {
     const { player_id, beast_id } = req.body;
-    
+
     if (!player_id || !beast_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     // 取消激活
     db.prepare('UPDATE player_beasts SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND player_id = ?').run(beast_id, player_id);
-    
+
     res.json({
       success: true,
       message: '灵兽已取消参战',
@@ -836,15 +928,15 @@ router.post('/deactivate', (req, res) => {
 router.post('/expand-slots', (req, res) => {
   try {
     const { player_id } = req.body;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     // 获取当前栏位
     const slotRecord = db.prepare('SELECT * FROM player_beast_slots WHERE player_id = ?').get(player_id);
     const currentSlots = slotRecord?.slots || 5;
-    
+
     // 找到下一个升级目标
     let nextUpgrade = null;
     for (const [slots, config] of Object.entries(BEAST_SLOT_UPGRADE)) {
@@ -853,27 +945,27 @@ router.post('/expand-slots', (req, res) => {
         break;
       }
     }
-    
+
     if (!nextUpgrade) {
       return res.status(400).json({ success: false, error: '灵兽栏位已达到最大上限' });
     }
-    
+
     // 获取玩家
     const player = db.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-    
+
     if (player.spirit_stones < nextUpgrade.cost) {
       return res.status(400).json({ success: false, error: `灵石不足，需要${nextUpgrade.cost}灵石` });
     }
-    
+
     // 扣除灵石并扩展栏位
     db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(nextUpgrade.cost, player_id);
-    
+
     if (slotRecord) {
       db.prepare('UPDATE player_beast_slots SET slots = ?, upgraded_at = CURRENT_TIMESTAMP WHERE player_id = ?').run(nextUpgrade.slots, player_id);
     } else {
       db.prepare('INSERT INTO player_beast_slots (player_id, slots) VALUES (?, ?)').run(player_id, nextUpgrade.slots);
     }
-    
+
     res.json({
       success: true,
       message: `灵兽栏位扩展至${nextUpgrade.slots}格！`,
@@ -895,20 +987,20 @@ router.post('/expand-slots', (req, res) => {
 router.get('/battle-bonus', (req, res) => {
   try {
     const { player_id } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     // 获取激活的灵兽
     const activeBeast = db.prepare(`
-      SELECT pb.*, bt.name, bt.icon, bt.quality, bt.base_atk, bt.base_hp, 
+      SELECT pb.*, bt.name, bt.icon, bt.quality, bt.base_atk, bt.base_hp,
              bt.growth_atk, bt.growth_hp, bt.skill, bt.skill_name
       FROM player_beasts pb
       JOIN beast_templates bt ON pb.beast_id = bt.id
       WHERE pb.player_id = ? AND pb.is_active = 1
     `).get(player_id);
-    
+
     // 获取所有灵兽
     const allBeasts = db.prepare(`
       SELECT pb.*, bt.name, bt.quality, bt.rarity
@@ -916,7 +1008,7 @@ router.get('/battle-bonus', (req, res) => {
       JOIN beast_templates bt ON pb.beast_id = bt.id
       WHERE pb.player_id = ?
     `).all(player_id);
-    
+
     // 灵兽战斗加成配置
     const QUALITY_BONUS = {
       common: { atk: 0.05, hp: 0.05 },
@@ -926,7 +1018,7 @@ router.get('/battle-bonus', (req, res) => {
       legendary: { atk: 0.30, hp: 0.30 },
       mythical: { atk: 0.50, hp: 0.50 }
     };
-    
+
     // 计算加成
     const bonus = {
       atk_bonus: 0,
@@ -937,22 +1029,22 @@ router.get('/battle-bonus', (req, res) => {
       drop_rate_bonus: 0,
       special_effects: []
     };
-    
+
     // 激活灵兽加成
     if (activeBeast) {
       const qualityBonus = QUALITY_BONUS[activeBeast.quality] || QUALITY_BONUS.common;
       const affectionData = getAffectionLevel(activeBeast.affection);
       const moodBonus = BEAST_MOOD[activeBeast.mood]?.bonus || 1;
-      
+
       // 基础属性加成 = 品质加成 * 亲密度加成 * 心情加成
       bonus.atk_bonus = qualityBonus.atk * affectionData.bonus * moodBonus;
       bonus.hp_bonus = qualityBonus.hp * affectionData.bonus * moodBonus;
-      
+
       // 等级加成：每10级+1%
       const levelBonus = Math.floor(activeBeast.level / 10) * 0.01;
       bonus.atk_bonus += levelBonus;
       bonus.hp_bonus += levelBonus;
-      
+
       // 特殊效果
       const skillInfo = BEAST_SKILLS[activeBeast.skill];
       if (skillInfo) {
@@ -962,7 +1054,7 @@ router.get('/battle-bonus', (req, res) => {
           chance: skillInfo.effect_chance,
           description: getEffectDescription(skillInfo.effect)
         });
-        
+
         // 特殊效果额外加成
         if (skillInfo.effect === 'burn') {
           bonus.atk_bonus += 0.05;
@@ -975,18 +1067,18 @@ router.get('/battle-bonus', (req, res) => {
         }
       }
     }
-    
+
     // 所有灵兽收藏加成（根据拥有数量和品质）
     const beastCount = allBeasts.length;
     const rareBeastCount = allBeasts.filter(b => ['rare', 'epic', 'legendary', 'mythical'].includes(b.quality)).length;
     const legendaryBeastCount = allBeasts.filter(b => ['legendary', 'mythical'].includes(b.quality)).length;
-    
+
     // 收藏加成
     if (beastCount >= 3) bonus.spirit_rate_bonus += 0.05;
     if (beastCount >= 5) bonus.exp_rate_bonus += 0.05;
     if (rareBeastCount >= 3) bonus.drop_rate_bonus += 0.1;
     if (legendaryBeastCount >= 1) bonus.atk_bonus += 0.1;
-    
+
     res.json({
       success: true,
       data: {
@@ -1046,7 +1138,7 @@ router.get('/foods', (req, res) => {
       affection: f.affection,
       cost: f.cost
     }));
-    
+
     res.json({ success: true, data: foods });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1057,14 +1149,14 @@ router.get('/foods', (req, res) => {
 router.get('/slots/info', (req, res) => {
   try {
     const { player_id } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     const slotRecord = db.prepare('SELECT * FROM player_beast_slots WHERE player_id = ?').get(player_id);
     const currentSlots = slotRecord?.slots || 5;
-    
+
     // 获取所有升级选项
     const upgrades = [];
     for (const [slots, config] of Object.entries(BEAST_SLOT_UPGRADE)) {
@@ -1075,7 +1167,7 @@ router.get('/slots/info', (req, res) => {
         available: parseInt(slots) > currentSlots
       });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -1092,11 +1184,11 @@ router.get('/slots/info', (req, res) => {
 router.get('/battle-records', (req, res) => {
   try {
     const { player_id, limit = 20 } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     const records = db.prepare(`
       SELECT bbr.*, bt.name as beast_name, bt.icon
       FROM beast_battle_records bbr
@@ -1106,7 +1198,7 @@ router.get('/battle-records', (req, res) => {
       ORDER BY bbr.created_at DESC
       LIMIT ?
     `).all(player_id, parseInt(limit));
-    
+
     res.json({
       success: true,
       data: records.map(r => ({
@@ -1128,11 +1220,11 @@ router.get('/battle-records', (req, res) => {
 router.get('/capture-records', (req, res) => {
   try {
     const { player_id, limit = 20 } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     const records = db.prepare(`
       SELECT bcr.*, bt.name as beast_name, bt.icon, bt.quality
       FROM beast_capture_records bcr
@@ -1141,13 +1233,13 @@ router.get('/capture-records', (req, res) => {
       ORDER BY bcr.created_at DESC
       LIMIT ?
     `).all(player_id, parseInt(limit));
-    
+
     const stats = {
       total_attempts: records.length,
       success_count: records.filter(r => r.success).length,
       fail_count: records.filter(r => !r.success).length
     };
-    
+
     res.json({
       success: true,
       data: {
@@ -1172,43 +1264,43 @@ router.get('/capture-records', (req, res) => {
 router.post('/add-exp', (req, res) => {
   try {
     const { player_id, beast_id, exp, battle_type = 'dungeon' } = req.body;
-    
+
     if (!player_id || !beast_id || !exp) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beast_id, player_id);
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取灵兽模板
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(playerBeast.beast_id);
-    
+
     // 增加经验
     const newExp = playerBeast.exp + exp;
-    
+
     // 检查是否升级
     let newLevel = playerBeast.level;
     let remainingExp = newExp;
     const expNeeded = BEAST_EXP_CURVE(newLevel);
-    
+
     if (newExp >= expNeeded) {
       // 自动升级
       remainingExp = newExp - expNeeded;
       newLevel++;
     }
-    
+
     // 更新经验
     db.prepare('UPDATE player_beasts SET exp = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(remainingExp, beast_id);
-    
+
     // 记录战斗
     db.prepare(`
       INSERT INTO beast_battle_records (player_id, beast_id, battle_type, exp_gained)
       VALUES (?, ?, ?, ?)
     `).run(player_id, beast_id, battle_type, exp);
-    
+
     res.json({
       success: true,
       message: `${beastTemplate.name} 获得 ${exp} 经验`,
@@ -1231,16 +1323,16 @@ router.post('/add-exp', (req, res) => {
 router.post('/speedup', async (req, res) => {
   try {
     const { player_id, beast_id, hours } = req.body;
-    
+
     if (!player_id || !beast_id || !hours) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     const hoursInt = parseInt(hours, 10);
     if (hoursInt <= 0 || hoursInt > 24) {
       return res.status(400).json({ success: false, error: '加速时间必须在1-24小时之间' });
     }
-    
+
     // 加载playerStorage
     let playerStorage;
     try {
@@ -1249,57 +1341,57 @@ router.post('/speedup', async (req, res) => {
     } catch (e) {
       return res.status(500).json({ success: false, error: '无法加载存储模块' });
     }
-    
+
     const player = await playerStorage.getOrCreatePlayer(player_id);
-    
+
     // 加速费用：1小时 50 灵石
     const cost = hoursInt * 50;
-    
+
     // 检查灵石是否足够
     if (player.spirit_stones < cost) {
       return res.status(400).json({ success: false, error: `需要 ${cost} 灵石，当前只有 ${player.spirit_stones} 灵石` });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beast_id, player_id);
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取灵兽模板
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(playerBeast.beast_id);
-    
+
     // 计算加速获得的经验（每小时获得相当于1小时挂机收益）
     // 假设每小时获得 100 经验 * 灵兽等级
     const baseExpPerHour = 100;
     const speedupExp = baseExpPerHour * playerBeast.level * hoursInt;
-    
+
     // 扣除灵石
     await playerStorage.updateSpiritStones(player_id, -cost);
-    
+
     // 添加经验
     const newExp = playerBeast.exp + speedupExp;
     let newLevel = playerBeast.level;
     let remainingExp = newExp;
     let leveledUp = false;
-    
+
     // 检查升级
     while (remainingExp >= BEAST_EXP_CURVE(newLevel)) {
       remainingExp -= BEAST_EXP_CURVE(newLevel);
       newLevel++;
       leveledUp = true;
     }
-    
+
     // 更新灵兽经验和等级
     db.prepare('UPDATE player_beasts SET exp = ?, level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(remainingExp, newLevel, beast_id);
-    
+
     // 记录加速
     db.prepare(`
       INSERT INTO beast_battle_records (player_id, beast_id, battle_type, exp_gained)
       VALUES (?, ?, ?, ?)
     `).run(player_id, beast_id, 'speedup', speedupExp);
-    
+
     res.json({
       success: true,
       message: `⚡ ${beastTemplate.name} 加速成长 ${hoursInt} 小时，获得 ${speedupExp} 经验，消耗 ${cost} 灵石`,
@@ -1324,29 +1416,29 @@ router.post('/speedup', async (req, res) => {
 router.post('/release', (req, res) => {
   try {
     const { player_id, beast_id } = req.body;
-    
+
     if (!player_id || !beast_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beast_id, player_id);
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 获取灵兽模板
     const beastTemplate = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(playerBeast.beast_id);
-    
+
     // 传说及以上返还道具
     let reward = null;
     if (['legendary', 'mythical'].includes(beastTemplate.quality)) {
       reward = { type: 'beast_soul', amount: 1 };
     }
-    
+
     // 删除灵兽
     db.prepare('DELETE FROM player_beasts WHERE id = ?').run(beast_id);
-    
+
     res.json({
       success: true,
       message: `放生了${beastTemplate.name}，` + (reward ? `获得${reward.amount}个灵兽魂魄` : '灵兽重获自由'),
@@ -1447,7 +1539,7 @@ function initResonanceTables() {
       UNIQUE(player_id, bond_id)
     )
   `);
-  
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS player_beast_equipment (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1466,11 +1558,11 @@ function initResonanceTables() {
 router.get('/resonance/bonds', (req, res) => {
   try {
     const { player_id } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     // 获取玩家拥有的灵兽
     console.log('[resonance] player_id:', player_id, 'type:', typeof player_id);
     console.log('[resonance] db open:', !!db, 'db name:', db ? (db.name || 'unknown') : 'null');
@@ -1479,7 +1571,7 @@ router.get('/resonance/bonds', (req, res) => {
     ).all(player_id);
     console.log('[resonance] ownedBeasts:', JSON.stringify(ownedBeasts));
     const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
-    
+
     // 获取已激活的羁绊
     let activatedBonds;
     try {
@@ -1489,13 +1581,13 @@ router.get('/resonance/bonds', (req, res) => {
       return res.status(500).json({ success: false, error: e.message });
     }
     const activatedSet = new Set(activatedBonds.map(b => b.bond_id));
-    
+
     // 计算所有羁绊状态
     const bonds = Object.entries(RESONANCE_BONDS).map(([id, bond]) => {
       const owned = bond.beasts.filter(b => ownedIds.has(b));
       const canActivate = owned.length === bond.beasts.length;
       const isActive = activatedSet.has(id);
-      
+
       return {
         id: bond.id,
         name: bond.name,
@@ -1518,7 +1610,7 @@ router.get('/resonance/bonds', (req, res) => {
         is_active: isActive
       };
     });
-    
+
     // 计算当前激活的共鸣加成
     let totalBonus = { atk: 0, hp: 0, speed: 0, crit_rate: 0 };
     for (const bondId of activatedSet) {
@@ -1540,7 +1632,7 @@ router.get('/resonance/bonds', (req, res) => {
         }
       }
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -1564,16 +1656,16 @@ router.get('/resonance/bonds', (req, res) => {
 router.post('/resonance/activate', (req, res) => {
   try {
     const { player_id, bond_id } = req.body;
-    
+
     if (!player_id || !bond_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     const bond = RESONANCE_BONDS[bond_id];
     if (!bond) {
       return res.status(404).json({ success: false, error: '羁绊不存在' });
     }
-    
+
     // 检查是否已激活
     const existing = db.prepare(
       'SELECT * FROM player_resonance_bonds WHERE player_id = ? AND bond_id = ?'
@@ -1581,27 +1673,27 @@ router.post('/resonance/activate', (req, res) => {
     if (existing) {
       return res.status(400).json({ success: false, error: '该羁绊已经激活' });
     }
-    
+
     // 检查玩家是否拥有所有需要的灵兽
     const ownedBeasts = db.prepare(
       'SELECT beast_id FROM player_beasts WHERE player_id = ?'
     ).all(player_id);
     const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
-    
+
     const missingBeasts = bond.beasts.filter(b => !ownedIds.has(b));
     if (missingBeasts.length > 0) {
       const missingNames = missingBeasts.map(bid => BEAST_DATA[bid]?.name || bid).join('、');
-      return res.status(400).json({ 
-        success: false, 
-        error: `缺少灵兽: ${missingNames}，无法激活此羁绊` 
+      return res.status(400).json({
+        success: false,
+        error: `缺少灵兽: ${missingNames}，无法激活此羁绊`
       });
     }
-    
+
     // 激活羁绊
     db.prepare(
       'INSERT INTO player_resonance_bonds (player_id, bond_id) VALUES (?, ?)'
     ).run(player_id, bond_id);
-    
+
     res.json({
       success: true,
       message: `🎉 激活【${bond.name}】成功！${bond.bonus.name}`,
@@ -1622,17 +1714,17 @@ router.post('/resonance/activate', (req, res) => {
 router.post('/resonance/deactivate', (req, res) => {
   try {
     const { player_id, bond_id } = req.body;
-    
+
     if (!player_id || !bond_id) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     const bond = RESONANCE_BONDS[bond_id];
-    
+
     db.prepare(
       'DELETE FROM player_resonance_bonds WHERE player_id = ? AND bond_id = ?'
     ).run(player_id, bond_id);
-    
+
     res.json({
       success: true,
       message: `已取消【${bond?.name || bond_id}】羁绊`,
@@ -1649,25 +1741,25 @@ router.post('/resonance/deactivate', (req, res) => {
 router.get('/equipment/info', (req, res) => {
   try {
     const { player_id, beast_id } = req.query;
-    
+
     if (!player_id) {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = beast_id
       ? db.prepare('SELECT pb.*, bt.name, bt.icon FROM player_beasts pb JOIN beast_templates bt ON pb.beast_id = bt.id WHERE pb.id = ? AND pb.player_id = ?').get(beast_id, player_id)
       : db.prepare('SELECT pb.*, bt.name, bt.icon FROM player_beasts pb JOIN beast_templates bt ON pb.beast_id = bt.id WHERE pb.player_id = ? AND pb.is_active = 1').get(player_id);
-    
+
     if (!playerBeast) {
       return res.json({ success: true, data: { equipped: null, bonuses: {} } });
     }
-    
+
     // 获取装备
     const equipped = db.prepare(
       'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
     ).get(player_id, playerBeast.id);
-    
+
     res.json({
       success: true,
       data: {
@@ -1694,15 +1786,15 @@ router.get('/equipment/info', (req, res) => {
 router.post('/equipment/equip', (req, res) => {
   try {
     const { player_id, beast_id, slot, equipment_id } = req.body;
-    
+
     if (!player_id || !beast_id || !slot) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
-    
+
     if (!['gear', 'mount', 'accessory'].includes(slot)) {
       return res.status(400).json({ success: false, error: '无效的装备槽位' });
     }
-    
+
     // 获取玩家灵兽
     const playerBeast = db.prepare(
       'SELECT * FROM player_beasts WHERE id = ? AND player_id = ?'
@@ -1710,33 +1802,33 @@ router.post('/equipment/equip', (req, res) => {
     if (!playerBeast) {
       return res.status(404).json({ success: false, error: '灵兽不存在' });
     }
-    
+
     // 初始化装备记录
     const existing = db.prepare(
       'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
     ).get(player_id, beast_id);
-    
+
     if (!existing) {
       db.prepare(
         'INSERT INTO player_beast_equipment (player_id, beast_id) VALUES (?, ?)'
       ).run(player_id, beast_id);
     }
-    
+
     // 更新装备
     const colMap = { gear: 'gear_id', mount: 'mount_id', accessory: 'accessory_id' };
     const col = colMap[slot];
-    
+
     if (equipment_id) {
       db.prepare(`UPDATE player_beast_equipment SET ${col} = ?, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_id = ?`).run(equipment_id, player_id, beast_id);
     } else {
       db.prepare(`UPDATE player_beast_equipment SET ${col} = NULL, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND beast_id = ?`).run(player_id, beast_id);
     }
-    
+
     // 获取更新后的装备
     const updated = db.prepare(
       'SELECT * FROM player_beast_equipment WHERE player_id = ? AND beast_id = ?'
     ).get(player_id, beast_id);
-    
+
     res.json({
       success: true,
       message: equipment_id ? `装备成功` : '卸下成功',
