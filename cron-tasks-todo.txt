@@ -513,3 +513,26 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # [P2-B-50-2] beast_api.js: 完善灵兽捕捉 /beast/capture 和喂养 /beast/feed
 #  文件: server/backend/game/beast_api.js
+
+# [P1-B-29-1] beast_api.js: 确认 /capture 路由参数名 + 验证路径挂载
+#  后端期望: POST /api/beast/capture { player_id, beast_id }
+#  验证: curl -X POST http://localhost:3001/api/beast/capture -d '{"player_id":1,"beast_id":"spirit_fox"}'
+#  文件: server/game/beast_api.js | 2026-03-29
+
+# [P1-B-29-2] forge_api.js: 添加 /daily-claim 每日免费材料领取端点
+#  发放: iron_ingot×5, fire_crystal×1, jade×2
+#  防重复: 使用 redis 或 DB 记录 last_claim_date
+#  文件: server/game/forge_api.js | 2026-03-29
+
+# [P1-B-29-3] sect.js: 添加 POST /join 端点,允许玩家加入已有宗门
+#  参数: { sectId, playerId }
+#  检查:宗门人数未满,玩家未在其他宗门
+#  文件: server/backend/routes/sect.js | 2026-03-29
+
+# [P1-B-29-4] battle计算: 接入 GET /beast/battle-bonus 灵兽加成到战斗属性
+#  在伤害计算时: finalAtk += beastBonus.atk, finalHp += beastBonus.hp
+#  文件: server/backend/routes/battle.js 或对应战斗处理逻辑 | 2026-03-29
+
+# [P1-B-29-5] beast_api.js /capture: 添加保底进度记录
+#  累计90次未出神话则下次必出神话灵兽(混沌兽)
+#  文件: server/game/beast_api.js | 2026-03-29

@@ -1,5 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// 模块级 DB 连接（避免 TDZ）
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db = null;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+} catch (e) {
+  console.log('[sect] DB 连接失败:', e.message);
+}
 
 // 模拟数据
 let sect = {
@@ -204,18 +216,6 @@ router.get('/list', (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   
-  const path = require('path');
-  const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-  const DB_PATH = path.join(DATA_DIR, 'game.db');
-  
-  let db;
-  try {
-    const Database = require('better-sqlite3');
-    db = new Database(DB_PATH);
-  } catch (e) {
-    db = null;
-  }
-  
   if (db) {
     try {
       const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
@@ -259,6 +259,73 @@ router.get('/list', (req, res) => {
     sects: mockSects.slice(offset, offset + parseInt(limit)),
     pagination: { page: parseInt(page), limit: parseInt(limit), total: mockSects.length, totalPages: 1 }
   });
+});
+
+// POST /join - 玩家加入宗门
+router.post('/join', (req, res) => {
+  const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId) || 1;
+  const sectId = parseInt(req.body.sectId);
+
+  if (!sectId) {
+    return res.status(400).json({ success: false, message: '缺少 sectId 参数' });
+  }
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    // 检查玩家是否存在
+    const player = db.prepare('SELECT * FROM Users WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, message: '玩家不存在' });
+    }
+
+    // 检查玩家是否已在宗门
+    if (player.sectId) {
+      const currentSect = db.prepare('SELECT name FROM Sects WHERE id = ?').get(player.sectId);
+      return res.status(400).json({
+        success: false,
+        message: `你已在宗门「${currentSect?.name || '未知'}」中，请先退出再申请`
+      });
+    }
+
+    // 检查宗门是否存在
+    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    if (!sect) {
+      return res.status(404).json({ success: false, message: '宗门不存在' });
+    }
+
+    // 宗门人数上限（根据宗门等级：10 + level * 5，默认上限50）
+    const maxMembers = 10 + (sect.level || 1) * 5;
+    if ((sect.members || 1) >= maxMembers) {
+      return res.status(400).json({
+        success: false,
+        message: `宗门人数已满（${sect.members}/${maxMembers}），无法加入`
+      });
+    }
+
+    // 更新玩家宗门
+    db.prepare('UPDATE Users SET sectId = ?, updatedAt = datetime("now") WHERE id = ?').run(sectId, player_id);
+
+    // 宗门成员+1
+    db.prepare('UPDATE Sects SET members = members + 1, updatedAt = datetime("now") WHERE id = ?').run(sectId);
+
+    return res.json({
+      success: true,
+      message: `成功加入宗门「${sect.name}」！`,
+      data: {
+        sectId: sect.id,
+        sectName: sect.name,
+        sectLevel: sect.level,
+        memberCount: (sect.members || 0) + 1,
+        maxMembers
+      }
+    });
+  } catch (error) {
+    console.error('[sect] /join 错误:', error.message);
+    return res.status(500).json({ success: false, message: '加入宗门失败: ' + error.message });
+  }
 });
 
 module.exports = router;
