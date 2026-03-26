@@ -416,4 +416,129 @@ router.get('/equipped', (req, res) => {
   }
 });
 
+// ============================================================
+// 每日免费材料领取
+// POST /api/forge/daily-claim
+// 发放: iron_ingot×5, fire_essence×1, jade×2
+// 防重复: 使用 forge_daily_claims 表记录 last_claim_date (SQLite)
+// ============================================================
+router.post('/daily-claim', (req, res) => {
+  const db = getDb();
+  try {
+    const player_id = parseInt(req.body.player_id ?? req.body.userId ?? 1);
+
+    // 确保 forge_daily_claims 表存在
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS forge_daily_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        last_claim_date TEXT NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        UNIQUE(player_id, last_claim_date)
+      )
+    `);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // 检查今日是否已领取
+    const existing = db.prepare(
+      'SELECT last_claim_date FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
+    ).get(player_id, todayStr);
+
+    if (existing) {
+      // 已领取，计算下次可领取时间
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const remainingMs = tomorrow - now;
+      const hours = Math.floor(remainingMs / 3600000);
+      const minutes = Math.floor((remainingMs % 3600000) / 60000);
+
+      return res.json({
+        success: false,
+        error: '今日材料已领取',
+        next_claim_in: `${hours}小时${minutes}分钟`
+      });
+    }
+
+    // 发放材料：iron_ingot×5, fire_essence×1, jade×2
+    const rewards = [
+      { id: 'iron_ingot', name: '铁锭', quantity: 5 },
+      { id: 'fire_essence', name: '火精', quantity: 1 },
+      { id: 'jade', name: '玉石', quantity: 2 }
+    ];
+
+    for (const r of rewards) {
+      // 使用 INSERT OR REPLACE 处理已存在材料的情况
+      const existing = db.prepare(
+        'SELECT quantity FROM forge_materials WHERE player_id = ? AND material_key = ?'
+      ).get(player_id, r.id);
+
+      if (existing) {
+        db.prepare(
+          'UPDATE forge_materials SET quantity = quantity + ?, updated_at = strftime("%s","now") WHERE player_id = ? AND material_key = ?'
+        ).run(r.quantity, player_id, r.id);
+      } else {
+        db.prepare(
+          'INSERT INTO forge_materials (player_id, material_key, quantity, updated_at) VALUES (?, ?, ?, strftime("%s","now"))'
+        ).run(player_id, r.id, r.quantity);
+      }
+    }
+
+    // 记录每日领取（使用 INSERT OR IGNORE 处理并发重复领取）
+    try {
+      db.prepare(
+        'INSERT OR IGNORE INTO forge_daily_claims (player_id, last_claim_date) VALUES (?, ?)'
+      ).run(player_id, todayStr);
+    } catch (_) { /* 并发已领取 */ }
+
+    // 获取更新后的材料
+    const materials = db.prepare(
+      'SELECT material_key as id, quantity FROM forge_materials WHERE player_id = ?'
+    ).all(player_id);
+
+    res.json({
+      success: true,
+      message: '每日材料领取成功',
+      data: { rewards, materials }
+    });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  } finally {
+    db.close();
+  }
+});
+
+// 获取每日领取状态
+// GET /api/forge/daily-claim/status
+router.get('/daily-claim/status', (req, res) => {
+  const db = getDb();
+  try {
+    const player_id = parseInt(req.query.player_id ?? req.query.userId ?? 1);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const existing = db.prepare(
+      'SELECT last_claim_date FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
+    ).get(player_id, todayStr);
+
+    if (existing) {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const remainingMs = tomorrow - now;
+      const hours = Math.floor(remainingMs / 3600000);
+      const minutes = Math.floor((remainingMs % 3600000) / 60000);
+      return res.json({ success: true, claimed: true, next_claim_in: `${hours}小时${minutes}分钟` });
+    }
+
+    res.json({ success: true, claimed: false });
+  } catch (e) {
+    res.json({ success: true, claimed: false });
+  } finally {
+    db.close();
+  }
+});
+
 module.exports = router;
