@@ -606,8 +606,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - gacha.js已存在，/draw + /draw-ten端点完整，与[B-P0-5-2]为同一实现
 
 ### 2026-03-26 晚间批次
-[B-P0-6-1] WorldBoss HP=500M不可击杀 - 动态分级: bossId=ceil(level/10)，各BOSS HP调整为: ID1=10K, ID2=50K, ID3=200K, ID4=1M, ID5=5M # 新增 | 2026-03-26
+[B-P0-6-1] WorldBoss HP=500M不可击杀 - 动态分级: bossId=ceil(level/10)，各BOSS HP调整为: ID1=10K, ID2=50K, ID3=200K, ID4=1M, ID5=5M # 完成 | 2026-03-26 a513170
 文件: backend/routes/worldBoss.js
+  - HP值调整: 1M→10K, 5M→50K, 20M→200K, 100M→1M, 500M→5M（让各阶段玩家均可击杀）
 
 [B-P0-6-2] Arena rank JS错误: current未定义 - 第355行 current, 改为 currentRank, # 新增 | 2026-03-26
 文件: backend/routes/arena.js
