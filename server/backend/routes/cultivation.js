@@ -98,7 +98,6 @@ function getPlayer(userId) {
         name: user.nickname,
         level: user.level,
         realm: user.realm,
-        spirit_stones: user.lingshi,  // Users.lingshi → 统一字段名
         lingshi: user.lingshi
       };
     }
@@ -137,7 +136,7 @@ router.get('/', (req, res) => {
       player: {
         level: player.level,
         realm: player.realm,
-        spirit_stones: player.spirit_stones
+        lingshi: player.lingshi || 0
       }
     });
   } catch (err) {
@@ -173,7 +172,7 @@ router.get('/status', (req, res) => {
       player: {
         level: player.level,
         realm: player.realm,
-        spirit_stones: player.spirit_stones
+        lingshi: player.lingshi || 0
       }
     });
   } catch (err) {
@@ -194,7 +193,7 @@ router.post('/start', (req, res) => {
 
     // 每次修炼消耗 50 灵石
     const LINGSHI_COST = 50;
-    if (parseInt(player.spirit_stones) < LINGSHI_COST) {
+    if (parseInt(player.lingshi || 0) < LINGSHI_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
 

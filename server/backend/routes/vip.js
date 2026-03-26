@@ -122,7 +122,8 @@ function saveMonthlyCard(userId, state) {
 
 // 获取VIP信息（根路由）
 router.get('/', (req, res) => {
-  const userId = parseInt(req.query.userId) || 1;
+  // 兼容 player_id / userId / user_id 等多种参数名
+  const userId = parseInt(req.query.userId || req.query.player_id || req.query.user_id) || 1;
   try {
     let vipLevel = 1, vipPoints = 0;
 
@@ -245,7 +246,8 @@ router.post('/buy-month-card', (req, res) => {
 
 // 获取指定玩家的VIP信息（/:userId 端点）
 router.get('/:userId', (req, res) => {
-  const userId = parseInt(req.params.userId);
+  // 兼容 player_id / userId path 参数
+  const userId = parseInt(req.params.userId || req.params.player_id);
   if (!userId) return res.json({ success: false, error: '无效的玩家ID' });
 
   try {
