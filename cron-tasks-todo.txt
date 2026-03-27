@@ -761,9 +761,14 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   修复: 添加 if(req.body.type==='ten') 分发到十连逻辑
   截止: 2026-03-28
 
-[P1-B-N-2] Sect apply/leave/approve端点全缺失
+[P1-B-N-2] Sect apply/leave/approve端点全缺失  # 完成 | 2026-03-27 efb7d792
   问题: POST /sect/apply|leave|approve 全404
   修复: 添加完整宗门申请/离开/审批流程；sect/create改为写DB
+  - routes/sect.js: 添加 sect_applications 表 + POST /apply + GET /applications/:sectId + POST /approve + POST /leave
+  - POST /apply: 玩家提交加入申请（需无宗门、未申请过）
+  - GET /applications/:sectId: 掌门查看待处理申请列表
+  - POST /approve: 审批通过（approved=true）或拒绝（approved=false），自动加入宗门
+  - POST /leave: 玩家离开宗门（掌门需先转让）
   截止: 2026-03-28
 
 --- [B] P2 ---
