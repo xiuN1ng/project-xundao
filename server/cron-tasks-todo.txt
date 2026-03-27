@@ -656,12 +656,12 @@
 - tribulation参数名: 22+轮❗
 
 # === 2026-03-27 晨间版 (08:16) ===
-# P0-2701: cultivation.js 修炼系统重构
-# - cost改为动态（realm×10000）
-# - 添加realm突破逻辑（value>=cost时触发）
-# - 修复cultivationPower=0问题
-# - 添加离线修炼收益计算
-[B-P0-2701]
+# P0-2701: cultivation.js 修炼系统重构  # 完成 | 2026-03-27 f349bcd
+# - cost改为动态（realm×10000）✓
+# - 添加realm突破逻辑（value>=cost时触发）✓ 已存在
+# - 修复cultivationPower=0问题 ✓ 已使用||0兜底
+# - 添加离线修炼收益计算 ✓ GET /offline-rewards已实现
+[B-P0-2701] ✓ 完成 | 2026-03-27 f349bcd
 
 # P0-2702: eventBus驱动成就+日常任务
 # - 在chapter.js/arena.js/cultivation.js各complete路由末尾添加eventBus.emit()
@@ -669,10 +669,10 @@
 # - 实时更新对应achievement/dailyQuest的progress字段
 [B-P0-2702]
 
-# P0-2703: sect.js添加/missions和/dungeon/enter兼容路由
-# - GET /api/sect/missions → 代理到sect-missions/daily
-# - POST /api/sect/dungeon/enter → 代理到sect/dungeon/challenge
-[B-P0-2703]
+# P0-2703: sect.js添加/missions和/dungeon/enter兼容路由  # 完成 | 2026-03-27 f349bcd
+# - GET /api/sect/missions → 代理到sect-missions/daily ✓
+# - POST /api/sect/dungeon/enter → 代理到sect/dungeon/challenge ✓
+[B-P0-2703] ✓ 完成 | 2026-03-27 f349bcd
 
 # P1-2701: WorldBoss激活机制
 # - 每2小时自动激活BOSS（根据时间轮转bossList）
