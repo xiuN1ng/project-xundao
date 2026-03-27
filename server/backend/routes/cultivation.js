@@ -139,7 +139,7 @@ function getPlayer(userId) {
 
 // 获取修炼状态
 router.get('/', (req, res) => {
-  const userId = parseInt(req.query.userId) || 1;
+  const userId = req.userId || 1;
   try {
     const player = getPlayer(userId);
     if (!player) return res.json({ success: false, message: '玩家不存在' });
@@ -175,7 +175,7 @@ router.get('/', (req, res) => {
 
 // 获取修炼状态 (兼容 /status 路径)
 router.get('/status', (req, res) => {
-  const userId = parseInt(req.query.userId) || 1;
+  const userId = req.userId || 1;
   try {
     const player = getPlayer(userId);
     if (!player) return res.json({ success: false, message: '玩家不存在' });
@@ -211,7 +211,7 @@ router.get('/status', (req, res) => {
 
 // 开始修炼
 router.post('/start', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = req.userId || 1;
   const cult = getOrCreateCultivation(userId);
   const config = realmConfig[cult.realm] || realmConfig[1];
 
@@ -266,7 +266,7 @@ router.post('/start', (req, res) => {
 
 // 突破境界
 router.post('/breakthrough', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = req.userId || 1;
   const cult = getOrCreateCultivation(userId);
   const config = realmConfig[cult.realm] || realmConfig[1];
 
@@ -313,7 +313,7 @@ router.post('/breakthrough', (req, res) => {
 
 // 境界跃迁（与突破相同逻辑）
 router.post('/advance', (req, res) => {
-  const userId = parseInt(req.body.userId || req.body.player_id) || 1;
+  const userId = req.userId || 1;
   const cult = getOrCreateCultivation(userId);
   const config = realmConfig[cult.realm] || realmConfig[1];
 
@@ -357,7 +357,7 @@ router.post('/advance', (req, res) => {
 
 // 设置修炼效率
 router.post('/setPower', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = req.userId || 1;
   const { cultivationPower } = req.body;
 
   try {
@@ -374,7 +374,7 @@ router.post('/setPower', (req, res) => {
 // 逻辑：计算 now - last_logout，上限8小时，返回离线修炼收益
 // 收益公式：realm基础收益 × 离线时间（分钟）× 50%效率
 router.get('/offline-rewards', (req, res) => {
-  const userId = parseInt(req.query.userId) || 1;
+  const userId = req.userId || 1;
   const MAX_OFFLINE_MINUTES = 480; // 上限8小时
 
   try {
@@ -437,7 +437,7 @@ router.get('/offline-rewards', (req, res) => {
 
 // 记录离线（玩家下线时调用）
 router.post('/record-logout', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = req.userId || 1;
   try {
     db.prepare("UPDATE Users SET last_logout = datetime('now') WHERE id = ?").run(userId);
     res.json({ success: true, message: '离线时间已记录' });
