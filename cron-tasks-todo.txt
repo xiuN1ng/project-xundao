@@ -1227,14 +1227,16 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## [B] P0 — 2026-03-27
 
-[P0-B-58-1] 【B】shop/buy disk I/O error 修复
+[P0-B-58-1] 【B】shop/buy disk I/O error 修复 # 完成 | 2026-03-27 28631d33
   问题: shop.js 独立Database连接并发写入 game.db 失败
   根因: 两个better-sqlite3实例竞争同一SQLite文件写锁
-  任务:
-    1. 方案A（推荐）：通过app.locals共享主server.js的db连接
-    2. 方案B：shop.js的Database初始化后添加 pragma('busy_timeout=5000') + pragma('journal_mode=WAL')
-    3. 验证 shop/buy 扣除灵石成功、物品进入背包
-  文件: server/backend/routes/shop.js, server/backend/server.js
+  修复:
+    1. server.js: 添加 app.locals.db = db，共享主db实例给所有路由
+    2. shop.js: 重构 getDb(req) 优先使用 req.app.locals.db，降级用 sharedDb（已启用WAL+busy_timeout）
+    3. dailyQuest.js: 添加 const fs = require('fs')（根因：fs未导入导致buy时dailyQuest回调崩溃）
+    4. shop.js 初始化 player_items 表（购买物品写入背包）
+  验证: POST /api/shop/buy {"userId":1,"itemId":3} → {"success":true,"cost":50}，灵石445→395
+  文件: server/backend/routes/shop.js, server/backend/server.js, server/backend/routes/dailyQuest.js
   截止: 2026-03-28
 
 ## [B] P1 — 2026-03-27
