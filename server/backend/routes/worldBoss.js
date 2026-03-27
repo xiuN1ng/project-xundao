@@ -41,6 +41,17 @@ function initWorldBossTables() {
         UNIQUE(user_id, boss_id)
       )
     `);
+    // 每周击杀上限表（按周结算）
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS world_boss_weekly_kills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        boss_id INTEGER NOT NULL,
+        week_key TEXT NOT NULL,
+        kill_count INTEGER DEFAULT 0,
+        UNIQUE(user_id, boss_id, week_key)
+      )
+    `);
     console.log('[worldBoss] world_boss_damage/rewards 表初始化完成');
   } catch (e) {
     console.error('[worldBoss] 建表失败:', e.message);
@@ -101,14 +112,15 @@ router.get('/', (req, res) => {
   });
 });
 
-// 世界BOSS配置
+// 世界BOSS配置（奖励已压缩：基础=level*20，击杀上限3次/周）
+const MAX_WEEKLY_KILLS = 3;
 const bossConfig = {
   bosses: [
-    { id: 1, name: '上古蛟龙', level: 10, hp: 10000, attack: 5000, quality: 'rare', reward: { diamonds: 100, lingshi: 10000, magicCrystals: 5 } },
-    { id: 2, name: '远古巨龟', level: 20, hp: 50000, attack: 15000, quality: 'epic', reward: { diamonds: 300, lingshi: 30000, magicCrystals: 15 } },
-    { id: 3, name: '暗黑魔龙', level: 30, hp: 200000, attack: 50000, quality: 'legendary', reward: { diamonds: 500, lingshi: 50000, magicCrystals: 30 } },
-    { id: 4, name: '九尾妖狐', level: 40, hp: 1000000, attack: 200000, quality: 'legendary', reward: { diamonds: 1000, lingshi: 100000, magicCrystals: 60 } },
-    { id: 5, name: '仙帝残魂', level: 50, hp: 5000000, attack: 1000000, quality: 'mythical', reward: { diamonds: 5000, lingshi: 500000, magicCrystals: 200 } }
+    { id: 1, name: '上古蛟龙', level: 10, hp: 10000, attack: 5000, quality: 'rare', reward: { diamonds: 10, lingshi: 200, magicCrystals: 5 } },
+    { id: 2, name: '远古巨龟', level: 20, hp: 50000, attack: 15000, quality: 'epic', reward: { diamonds: 30, lingshi: 400, magicCrystals: 10 } },
+    { id: 3, name: '暗黑魔龙', level: 30, hp: 200000, attack: 50000, quality: 'legendary', reward: { diamonds: 50, lingshi: 600, magicCrystals: 20 } },
+    { id: 4, name: '九尾妖狐', level: 40, hp: 1000000, attack: 200000, quality: 'legendary', reward: { diamonds: 100, lingshi: 800, magicCrystals: 40 } },
+    { id: 5, name: '仙帝残魂', level: 50, hp: 5000000, attack: 1000000, quality: 'mythical', reward: { diamonds: 200, lingshi: 1000, magicCrystals: 100 } }
   ],
   refreshInterval: 3600000, // 1小时刷新
   maxDamageRecords: 100
@@ -266,17 +278,36 @@ router.post('/settle', (req, res) => {
     return res.json({ success: false, message: 'BOSS未死亡，无法结算' });
   }
 
+  const boss = worldBoss.currentBoss;
+  if (!boss) {
+    return res.json({ success: false, message: 'BOSS数据异常' });
+  }
+
+  // 检查每周击杀上限
+  const now = new Date();
+  const year = now.getFullYear();
+  const week = Math.ceil((now.getMonth() * 30 + now.getDate()) / 7);
+  const weekKey = `${year}-W${week}`;
+  let weeklyKills = 0;
+  if (db) {
+    try {
+      const wk = db.prepare('SELECT kill_count FROM world_boss_weekly_kills WHERE user_id = ? AND boss_id = ? AND week_key = ?').get(userId, boss.id, weekKey);
+      weeklyKills = wk ? wk.kill_count : 0;
+    } catch (e) { weeklyKills = 0; }
+  }
+  if (weeklyKills >= MAX_WEEKLY_KILLS) {
+    return res.json({ success: false, message: `本周该BOSS击杀次数已用尽（${MAX_WEEKLY_KILLS}次）` });
+  }
+
   // 从DB获取排名
   let myRecord = null;
   let myRank = 0;
-  if (db && worldBoss.currentBoss) {
-    const ranks = getDamageRankingFromDB(worldBoss.currentBoss.id, 1000);
+  if (db) {
+    const ranks = getDamageRankingFromDB(boss.id, 1000);
     myRecord = ranks.find(r => r.userId === userId);
     if (myRecord) myRank = myRecord.rank;
   }
-
   if (!myRecord) {
-    // 回退到内存数据
     const memRecord = worldBoss.damageRecords.find(r => r.userId === userId);
     if (!memRecord) {
       return res.json({ success: false, message: '您未参与本次BOSS战' });
@@ -285,23 +316,32 @@ router.post('/settle', (req, res) => {
     myRank = worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1;
   }
 
-  const boss = worldBoss.currentBoss;
-  const totalDamage = myRecord.damage; // Already from DB
-  const myDamageRatio = 1; // Already ranked, use fixed ratio based on rank
+  const totalDamage = myRecord.damage;
 
-  // 按排名分发奖励（Top 10）
-  const rankBonus = myRank <= 10 ? Math.floor(boss.reward.lingshi * (1 - myRank * 0.08)) : 0;
-  const expReward = Math.floor(boss.reward.lingshi * 0.1 * (1 / myRank));
-  const stoneReward = Math.floor(boss.reward.lingshi * (1 / myRank)) + rankBonus;
+  // 奖励公式重构：基础=level*20，按排名分配，上限500灵石/次
+  // 不再使用资产比例（导致通货膨胀）
+  const baseReward = boss.level * 20; // 200/400/600/800/1000
+  const rankBonus = myRank <= 3 ? Math.floor(baseReward * (0.3 - myRank * 0.05)) : 0; // Top3额外
+  const expReward = Math.max(1, Math.floor(baseReward * 0.1 / Math.max(myRank, 1)));
+  const stoneReward = Math.min(500, Math.floor(baseReward / Math.max(myRank, 1)) + rankBonus);
 
-  // 魔晶奖励：参与奖（按伤害比例）
+  // 魔晶奖励
   const baseMc = boss.reward.magicCrystals || 5;
-  const mcReward = Math.max(1, Math.floor(baseMc * (1 / myRank) * 0.5));
+  const mcReward = Math.max(1, Math.floor(baseMc * 0.5 / Math.max(myRank, 1)));
 
   // 最后一击额外魔晶
   const topRecord = worldBoss.damageRecords[0];
   const isKiller = topRecord?.userId === userId;
-  const killerBonus = isKiller ? Math.floor(baseMc * 0.5) : 0;
+  const killerBonus = isKiller ? Math.floor(baseMc * 0.3) : 0;
+
+  // 实际发放灵石到玩家账户
+  if (db && stoneReward > 0) {
+    try {
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(stoneReward, userId);
+    } catch (e) {
+      console.error('[worldBoss] 发放灵石失败:', e.message);
+    }
+  }
 
   // 写入结算记录
   if (db) {
@@ -311,6 +351,12 @@ router.post('/settle', (req, res) => {
         (user_id, boss_id, rank, reward_diamonds, reward_lingshi, reward_mc, settled_at)
         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
       `).run(userId, boss.id, myRank, 0, stoneReward, mcReward + killerBonus);
+      // 更新每周击杀计数
+      db.prepare(`
+        INSERT INTO world_boss_weekly_kills (user_id, boss_id, week_key, kill_count)
+        VALUES (?, ?, ?, 1)
+        ON CONFLICT(user_id, boss_id, week_key) DO UPDATE SET kill_count = kill_count + 1
+      `).run(userId, boss.id, weekKey);
     } catch (e) {
       console.error('[worldBoss] 写入结算记录失败:', e.message);
     }
