@@ -1,0 +1,59 @@
+
+## === 2026-03-27 策划提案任务追加 ===
+## 追加时间: 2026-03-27 08:56
+
+### [P0-27-1] Arena每日挑战次数超限(6>5)
+- 文件: routes/arena.js
+- 问题: challengesUsed=6 但 maxChallenges=5，每日次数超限
+- 修复: 在challenge handler中严格校验 remaining >= 1；统一使用Asia/Shanghai时区
+- 负责人: [B]
+- 截止: 2026-03-28
+
+### [P0-27-2] Achievement进度DB有记录但API全返回0
+- 文件: routes/achievement.js 第148-174行
+- 问题: DB有chapter_clear_1进度，但API返回所有achievement progress=0
+- 修复: achievementTemplates.map后查询achievement_progress表并合并数据
+- 负责人: [B]
+- 截止: 2026-03-28
+
+### [P1-27-1] Rank/combat 4轮未修复仍硬编码
+- 文件: routes/rank.js
+- 问题: 仍返回[{name:"test"},{name:"玩家2"...]，未从Users表读取
+- 修复: 从Users表SELECT id,nickname,combatPower ORDER BYcombatPower DESC
+- 负责人: [B]
+- 截止: 2026-03-29
+
+### [P1-27-2] 好友系统完全缺失
+- 文件: 新建 routes/friend.js
+- 问题: GET /api/friend/list → 404
+- 修复: 创建friends表和CRUD路由；实现list/add/delete/search端点
+- 负责人: [B]
+- 截止: 2026-03-30
+
+### [P1-27-3] 世界BOSS无活跃boss
+- 文件: routes/worldboss.js 或定时任务
+- 问题: hasBoss=false, currentBoss=null
+- 修复: 添加定时刷新逻辑，每小时检查并激活boss
+- 负责人: [B]
+- 截止: 2026-03-30
+
+### [P2-27-1] Arena highest_rank永为0
+- 文件: routes/arena.js
+- 问题: 玩家打了6场但highestRank=0
+- 修复: challenge结算后比较并更新highest_rank
+- 负责人: [B]
+- 截止: 2026-04-02
+
+### [P2-27-2] 离线挂机收益完全不工作
+- 文件: routes/cultivation.js, 数据库migrations
+- 问题: 关闭客户端后修炼停止，无离线补偿
+- 修复: Cultivations表添加last_cultivation_at；登录时计算离线收益（上限8小时）
+- 负责人: [B]
+- 截止: 2026-04-05
+
+### [NF-27-1] 挂机收益离线结算系统
+- 文件: cultivation.js + 前端配合
+- 问题: 当前必须保持在线
+- 修复: 登录时结算离线收益=min(离线秒数/3600,8)*速率*0.5；前端显示弹窗
+- 负责人: [B]+[F]
+- 截止: 2026-04-02

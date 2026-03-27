@@ -1,0 +1,41 @@
+{
+  "1": {
+    "owned": [
+      {
+        "id": 1,
+        "type": "angel",
+        "name": "天使翅膀",
+        "rarity": "common",
+        "level": 1,
+        "exp": 0,
+        "atkBonus": 10,
+        "defBonus": 5,
+        "hpBonus": 20,
+        "active": true,
+        "skills": [
+          "护盾 I"
+        ],
+        "acquiredAt": "2026-03-27T02:16:48.776Z"
+      },
+      {
+        "id": 1774577814307,
+        "templateId": 2,
+        "type": "flame",
+        "name": "烈焰翅膀",
+        "rarity": "rare",
+        "level": 1,
+        "exp": 0,
+        "atkBonus": 25,
+        "defBonus": 10,
+        "hpBonus": 50,
+        "active": false,
+        "skills": [
+          "护盾 III",
+          "疾风 II",
+          "闪避 I"
+        ],
+        "acquiredAt": "2026-03-27T02:16:54.307Z"
+      }
+    ]
+  }
+}

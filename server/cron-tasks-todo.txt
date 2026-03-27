@@ -698,3 +698,56 @@
 # - 灵石消耗 = 50×(1+realm×0.3)
 # - realm突破逻辑（筑基→金丹需累计10000+5000灵石）
 [B-NF-2701]
+
+# === 2026-03-27 深度版（10:16）新增 ===
+# 提案: /docs/PROPOSALS/2026-03-27-deep.md
+
+## P0（2个）
+[P0-B-0327-10] rank/combat hardcode替换
+- routes/rank.js 第7-25行hardcode "test/玩家2-5" 替换为实时DB查询
+- SQL: SELECT u.id AS userId, u.nickname AS name, (u.attack*u.hp/100+u.level*10) AS value FROM Users u ORDER BY value DESC
+- 负责人: [B]
+- 截止: 2026-03-28
+
+[P0-B-0327-11] sect/my 硬编码修复
+- routes/sect.js 第19-22行 mockSect = {name:'青云宗', members:28} 替换为DB查询
+- 从 Sects + SectMembers 表查询真实数据
+- 负责人: [B]
+- 截止: 2026-03-28
+
+## P1（3个）
+[P1-B-0327-7] 创建 eventBus + achievement_trigger_service.js
+- 创建 game/eventBus.js 中央事件总线
+- 创建 game/achievement_trigger_service.js 监听事件：cultivation:progress, chapter:complete, arena:challenge, forge:make
+- 在 cultivation.js/chapter.js/arena.js/forge.js 关键节点 emit 事件
+- 将 progress 写入 achievement_progress 和 daily_quest_progress 表
+- 负责人: [B]
+- 截止: 2026-03-29
+
+[P1-B-0327-8] MeridianPanel/TribulationPanel/AlchemyPanel 后端API
+- MeridianPanel: /api/meridian/list 返回灵脉数据和实时效果百分比
+- TribulationPanel: /api/tribulation/types 返回境界信息
+- AlchemyPanel: /api/pill/list + /api/pill/make
+- 负责人: [B]
+- 截止: 2026-03-29
+
+[P1-B-0327-9] tribulation/attempt 境界判断修正
+- 当前所有境界都返回"已达到最高境界"
+- 修正: 只有 realm>=10 才返回最高境界
+- 筑基(2)→金丹(3)应可渡劫，baseSuccessRate=0.8
+- 负责人: [B]
+- 截止: 2026-03-29
+
+## P2（2个）
+[P2-B-0327-5] chapter HP 硬上限修复
+- 删除 500,000 硬上限
+- 使用 hp = 100 * Math.pow(1.75, chapterId) 动态曲线
+- 负责人: [B]
+- 截止: 2026-04-01
+
+[P2-B-0327-6] API参数名统一
+- 所有 POST 端点同时接受 camelCase 和 snake_case
+- chapter/battle: chapterId || chapter_id
+- forge/make: recipeId || recipe_id
+- 负责人: [B]
+- 截止: 2026-04-01

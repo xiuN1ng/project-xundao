@@ -950,3 +950,86 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   现状：sect.js 第372行已有 UPDATE Users SET sectId = ? WHERE id = ?
 
 [NF-27-N-10-1] 境界跃迁后端：跃迁奖励逻辑 + 境界配置表 [P1]
+
+## === 2026-03-27 0900 — 游戏策划 Agent 新增任务 ===
+
+[P0-0327-1] cultivation.js所有路由从JWT token读取userId [CRITICAL] [B]
+  根因: cultivation.js使用parseInt(req.query.userId)||1而非req.user?.id
+  修复: 所有路由应用authMiddleware，从req.user.id取userId
+  截止: 2026-03-27
+
+[P0-0327-2] arena.js所有路由从JWT token读取userId [CRITICAL] [B]
+  根因: arena各路由使用req.body.userId||1
+  修复: authMiddleware应用 + req.user.id
+  截止: 2026-03-27
+
+[P0-0327-3] sect/info路由修复 [CRITICAL] [B]
+  根因: sect/info返回空，前端调用方式不匹配
+  修复: 返回当前playerId对应的宗门
+  截止: 2026-03-27
+
+[P1-0327-1] dungeon/status等路由修复 [P1] [B]
+  现状: /api/dungeon/status 404
+  修复: dungeon.js补充完整路由
+  截止: 2026-04-01
+
+[P1-0327-2] adventure.js新路由（奇遇事件系统） [P1] [B]
+  背景: AdventurePanel.vue 392行零API
+  修复: 新建adventure路由+事件库+触发逻辑
+  截止: 2026-04-03
+
+[P1-0327-3] rank/combat从arena_player表读取真实数据 [P1] [B]
+  现状: rank.js返回固定mock数组
+  修复: SELECT real data from arena_player + Users
+  截止: 2026-04-02
+
+[P2-0327-1] 所有认证路由统一从JWT取userId [P2] [B]
+  背景: 大量路由依赖前端传player_id
+  修复: authMiddleware应用到所有/api/*路由（除health等公开路由）
+  截止: 2026-04-03
+
+[P2-0327-2] Game.vue tab与实际路由映射表 [P2] [B]
+  现状: 20+tab但路由未全部实现
+  修复: 整理映射表，stub路由标注"开发中"
+  截止: 2026-04-05
+
+[NF-0327-1] 灵兽系统后端完善 [P1] [B]
+  背景: BeastPanel有UI但API缺player_id
+  修复: 捕捉逻辑+培养逻辑+参战加成
+  截止: 2026-04-05
+
+## === 2026-03-27 10:04 新增 ===
+[P1-0327-4] Paradise 后端路由实现 [P1] [B]
+  面板: ParadisePanel.vue
+  问题: 3个API调用 /api/paradise/types|info|claim-reward 无任何后端路由
+  修复: 新建 routes/paradise.js，接入 welfare/cultivation/sect 数据
+  截止: 2026-04-03
+
+[P1-0327-5] Tribulation 境界锁死修复 [P1] [B]
+  面板: TribulationPanel.vue
+  问题: tribulation/attempt 返回"已达到最高境界"，高境界玩家无法参与
+  修复: 移除拦截，改为开放更高难度挑战（天魔劫等）
+  截止: 2026-04-05
+
+[P1-0327-6] DailyQuest/Achievement Progress 写入 [P1] [B]
+  面板: DailyQuestPanel.vue, AchievementPanel.vue
+  问题: 所有 progress 全为0，cultivation/chapter 完成未触发写入
+  修复: cultivation.js、chapter.js 等完成后写入 daily_quest_progress 表
+  截止: 2026-04-02
+
+[P2-0327-3] WorldBoss attack 路由 [P2] [B]
+  面板: WorldBossPanel.vue
+  问题: worldboss/status 有数据但无战斗入口
+  修复: 新建 worldboss/attack 接口
+  截止: 2026-04-07
+
+[P2-0327-4] Meridian breakthrough 接口 [P2] [B]
+  面板: MeridianPanel.vue
+  问题: 120点经脉无消耗目标，无意义积累
+  修复: /api/meridian/breakthrough，消耗点数打通穴位增加属性
+  截止: 2026-04-10
+
+[NF-0327-3] 宗门篝火聊天系统 [P1] [B]
+  背景: sect.js仅创建/列表，无社交聊天
+  修复: 新建 /api/sect/chat 路由，宗门成员闲聊+活跃度统计
+  截止: 2026-04-10
