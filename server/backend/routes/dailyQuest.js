@@ -7,6 +7,7 @@ const fs = require('fs');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 let db;
+let userQuests = {}; // 在 loadFromDB 之前声明，避免 TDZ 问题
 try {
   const Database = require('better-sqlite3');
   db = new Database(DB_PATH);
@@ -201,8 +202,7 @@ const questTemplates = [
   { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 1500, exp: 750 }, difficulty: 2 }
 ];
 
-// 用户任务进度（内存）
-let userQuests = {};
+// 用户任务进度（内存）- 已移至文件顶部避免 TDZ
 
 // 初始化用户每日任务
 // 获取上海时间日期字符串
