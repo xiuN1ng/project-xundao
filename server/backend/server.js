@@ -185,7 +185,7 @@ try {
     TRIBULATION_TYPES: tribulationSystem.TRIBULATION_TYPES,
     DIFFICULTY_CONFIG,
     PROTECTION_ITEMS,
-    REALMS: Object.keys(tribulationSystem.REALM_DATA),
+    REALMS: Object.values(tribulationSystem.REALM_DATA),
     db: null  // db 由 tribulationStorage 自己管理
   });
 } catch(e) {

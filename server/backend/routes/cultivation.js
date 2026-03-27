@@ -159,7 +159,7 @@ router.get('/', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: cult.cultivationPower || 0
+        cultivationPower: Math.floor(parseInt(cult.value) * 0.1 * (1 + config.realm_level * 0.05))
       },
       player: {
         level: player.level,
@@ -195,7 +195,7 @@ router.get('/status', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: cult.cultivationPower || 0
+        cultivationPower: Math.floor(parseInt(cult.value) * 0.1 * (1 + config.realm_level * 0.05))
       },
       player: {
         level: player.level,
