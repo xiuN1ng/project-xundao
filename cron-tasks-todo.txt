@@ -1619,12 +1619,74 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   数据库: fishing_records, fishing_fish_types
   截止: 2026-04-08
 
-[P1-B-61-2] heartDemon/list服务器错误
+[P1-B-61-2] heartDemon/list服务器错误  # 完成 | 2026-03-28 be14995a
   文件: routes/heart_demon.js
   问题: /list端点运行时错误，检查SQL查询
+  修复: 添加extractUserId()统一处理userId/playerId参数
   截止: 2026-03-29
 
 [P1-B-61-3] fashion.js添加/list端点
   文件: routes/fashion.js
   端点: GET /list (所有时装列表)
   截止: 2026-04-03
+
+# ========== 2026-03-28 02:57 追加（来自第62轮策划）============
+
+## P0 — 紧急
+[P0-B-62-1] Paradise /status端点缺失
+  文件: routes/paradise.js
+  问题: 前端ParadisePanel调用/api/paradise/status但路由不存在
+  修复: 添加router.get('/status', ...) 返回玩家探索状态
+  截止: 2026-04-03
+
+[P0-B-62-2] Sect青云宗硬编码假数据
+  文件: routes/sect.js + database
+  问题: sect.js第38/474行硬编码青云宗，Users.sectId=1但Sects表无id=1记录
+  修复: 将青云宗INSERT到Sects表，并补齐SectMembers记录
+  截止: 2026-03-29
+
+## P1 — 本周
+[P1-B-62-1] heartDemon/list playerId参数错误  # 完成 | 2026-03-28 be14995a
+  文件: routes/heart_demon.js (第229行)
+  问题: const { userId } = req.query 但前端用playerId，导致500错误
+  修复: extractUserId()兼容userId/playerId，应用于12个端点
+  截止: 2026-04-03
+
+[P1-B-62-2] Achievement进度事件从未触发
+  文件: routes/cultivation.js + routes/achievement.js
+  问题: 境界突破/升级等事件均未触发成就更新
+  修复: 在cultivation突破时emit player:realm_up，achievement.js监听并更新
+  截止: 2026-04-05
+
+[P1-B-62-3] Arena匹配失衡（玩家1350 vs AI 19000）
+  文件: routes/arena.js
+  问题: /opponents/:playerId无战力筛选，对手强度与玩家差距40倍
+  修复: 添加combatPower±30%筛选；新手保护期前3次不扣分
+  截止: 2026-04-05
+
+[P1-B-62-4] Ladder排位赛路由新建
+  文件: routes/ladder.js (新建)
+  端点: GET /rankings, POST /match, GET /season
+  段位: 凡人→炼气→筑基→金丹→元婴→化神→炼虚→大乘→渡劫→真仙
+  截止: 2026-04-10
+
+## P2 — 本月
+[P2-B-62-1] 排名系统假数据 → 动态DB查询
+  文件: routes/rank.js
+  端点: GET /rank/combat → SELECT id,nickname,level,combat_power FROM Users ORDER BY combat_power DESC
+  截止: 2026-04-10
+
+[P2-B-62-2] Deity封神系统路由新建
+  文件: routes/deity.js (新建)
+  端点: GET /gods, POST /worship
+  截止: 2026-04-15
+
+[P2-B-62-3] Alchemy炼丹路由新建
+  文件: routes/alchemy.js (新建)
+  端点: GET /recipes, POST /refine, GET /materials
+  截止: 2026-04-20
+
+[P2-B-62-4] 宗门贡献商店
+  文件: routes/sect.js + sect_shop_storage.js (新建)
+  端点: GET /api/sect/shop, POST /api/sect/shop/buy
+  截止: 2026-04-15
