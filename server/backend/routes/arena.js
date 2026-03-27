@@ -161,9 +161,12 @@ try {
   ArenaSystem = null;
 }
 
-// 工具函数：获取日期字符串
+// 工具函数：获取上海时区日期字符串 (YYYY-MM-DD)
 function getDateString() {
-  return new Date().toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
 }
 
 // 工具函数：获取或创建玩家竞技场数据
