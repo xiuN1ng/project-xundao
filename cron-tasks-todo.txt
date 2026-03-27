@@ -967,9 +967,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   修复: 所有路由应用authMiddleware，从req.user.id取userId（全局中间件已设置req.userId）
   截止: 2026-03-27
 
-[P0-0327-2] arena.js所有路由从JWT token读取userId [CRITICAL] [B]
+[P0-0327-2] arena.js所有路由从JWT token读取userId [CRITICAL] [B] # 完成 | 2026-03-28 d62830de
   根因: arena各路由使用req.body.userId||1
-  修复: authMiddleware应用 + req.user.id
+  修复: authMiddleware应用 + req.user.id，5个端点已添加req.userId优先fallback
   截止: 2026-03-27
 
 [P0-0327-3] sect/info路由修复 [CRITICAL] [B]
@@ -1435,3 +1435,157 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-67-2] 修复worldBoss user_id空写入bug: NOT NULL constraint failed: world_boss_damage.user_id
   文件: server/services/boss_api.js 或 server/backend/routes/worldboss.js
   截止: 2026-03-30
+
+# ========== 来自策划提案 2026-03-28-deep — 第58轮分发 ==========
+# 分发时间: 2026-03-27 23:53
+
+# === P0 阻断级 ===
+[P0-58-1] realm-dungeon 添加 /status + /challenge + /claim 端点
+  文件: server/backend/routes/realm_dungeon.js
+  截止: 2026-03-29
+  - GET /status/:playerId → 进度/已通关/奖励领取状态
+  - POST /challenge → 验证境界等级，扣除体力/灵石，判定胜负
+  - POST /claim → 领取通关奖励
+  - 难度曲线: dungeon_level <= realm_level * 10
+
+[P0-58-2] DailyQuest奖励领取逻辑：progress读取 + claim API
+  文件: server/backend/routes/dailyQuest.js
+  截止: 2026-03-29
+  - GET /progress → 读 daily_quest_progress 表
+  - POST /claim → 验证progress>=target，发放奖励，写入 rewards 表
+  - eventBus 驱动: cultivation/chapter/arena 成功后 emit 事件更新进度
+
+# === P1 重要 ===
+[P1-58-1] Chat系统路由挂载（677行UI已存在，缺后端）
+  文件: server/server.js + chat路由文件
+  截止: 2026-03-29
+  - GET /api/chat/history/:channel → 聊天历史（分页）
+  - POST /api/chat/send → 发送消息
+  - GET /api/chat/online → 在线玩家列表
+  - SQLite表: chat_messages(id, player_id, channel, content, created_at)
+
+[P1-58-2] Arena每日挑战次数重置机制
+  文件: server/backend/routes/arena.js
+  截止: 2026-03-29
+  - 检查 last_reset !== today 则重置 challenge_times=5
+  - ALTER TABLE arena_player ADD COLUMN last_reset TEXT(若不存在)
+  - 实现 POST /api/arena/buy-challenge（灵石购买额外次数）
+
+[P1-58-3] eventBus事件总线 + achievement事件驱动
+  文件: server/services/event_bus.js
+  截止: 2026-03-29
+  - 创建 eventBus = new EventEmitter()
+  - cultivation成功 → eventBus.emit('cultivation:start', {playerId})
+  - chapter battle胜利 → eventBus.emit('chapter:win', {playerId, chapterId})
+  - arena challenge → eventBus.emit('arena:challenge', {playerId})
+  - dailyQuest.js 监听上述事件更新进度
+
+# === P2 ===
+[P2-58-1] Market集市挂单/购买API
+  文件: server/backend/routes/market.js
+  截止: 2026-04-02
+  - POST /api/market/list → 挂单
+  - POST /api/market/buy → 购买
+  - GET /api/market/my-listings/:playerId
+  - 每笔交易5%灵石税
+
+[P2-58-2] Tower锁妖塔战斗逻辑完善 + 掉落展示
+  文件: server/backend/routes/tower.js
+  截止: 2026-04-03
+  - 每层敌人: level=ceil(floor*5), HP=1000*floor, ATK=100*floor
+  - 3回合内击败=通关，首通给灵石×floor×10
+  - 每10层首通给装备图纸
+
+# ========== 2026-03-28 00:30 追加（来自第59轮策划）============
+
+## P0 — 立即实现
+[P0-B-59-1] Auction后端完整实现
+  文件: server/backend/routes/auction.js (重写)
+  表: Auctions(id, seller_id, item_id, item_name, icon, current_price, buyout_price, bidder_id, end_time, status)
+  端点: GET /api/auction, POST /api/auction/list, POST /api/auction/bid, POST /api/auction/buyout, GET /api/auction/my
+  截止: 2026-04-05
+
+## P1 — 本周实现
+[P1-B-59-1] 宗门篝火聊天后端
+  文件: server/backend/server/src/social/campfire-system.js (新建)
+  表: campfire_messages(id, sect_id, player_id, player_name, content, created_at)
+  端点: GET /api/campfire/:sectId, POST /api/campfire/send
+  截止: 2026-04-07
+
+[P1-B-59-2] Mall珍宝阁后端
+  文件: server/backend/routes/mall.js (新建)
+  表: mall_items(id, name, icon, price_lingshi, price_diamond, category, stock, limit_per_day)
+  端点: GET /api/mall/items, POST /api/mall/buy
+  截止: 2026-04-10
+
+# ========== 2026-03-28 00:40 追加（来自第60轮策划）============
+
+## P0 — 立即实现
+[P0-B-60-1] 聊天系统后端（世界+宗门+私聊）
+  文件: server/backend/routes/chat.js (新建)
+  表: chat_messages(id, sender_id, sender_name, type, target_id, content, created_at)
+  表: player_mutes(id, player_id, muted_until)
+  端点: GET /api/chat/history, GET /api/chat/sect, POST /api/chat/send
+  消耗: 世界频道10灵石/条，宗门/私聊免费
+  截止: 2026-04-03
+
+[P0-B-60-2] 奇遇系统后端
+  文件: server/backend/routes/adventure.js (新建)
+  表: player_adventures, adventure_types
+  端点: GET /api/adventure/types, POST /api/adventure/enter, POST /api/adventure/complete, POST /api/adventure/claim
+  截止: 2026-04-05
+
+## P1 — 本周实现
+[P1-B-60-1] 钓鱼系统后端重写（替代6行stub）
+  文件: server/backend/routes/fishing.js (重写)
+  表: fishing_records, fishing_fish_types(id, name, rarity, probability)
+  端点: GET /api/fishing/types, GET /api/fishing/status, POST /api/fishing/cast, POST /api/fishing/reel
+  截止: 2026-04-08
+
+[P1-B-60-2] 琴棋书画后端
+  文件: server/backend/routes/art.js (新建)
+  表: player_art(player_id, art_type, level, exp, total_points)
+  端点: GET /api/art/info, POST /api/art/performance, POST /api/art/chess, POST /api/art/calligraphy, POST /api/art/painting
+  截止: 2026-04-10
+
+## 继续等待（已有后端，等前端对接）
+[P1-B-59-1] 宗门篝火后端（sect.js + campfire-system.js）— 截止2026-04-07
+[P1-B-59-2] Mall珍宝阁后端（mall.js）— 截止2026-04-10
+
+## P0-28-N（2026-03-28深夜轮追加）
+[P0-28-N-1] Arena每日重置改用上海时区 [CRITICAL]
+  文件: routes/arena.js — 替换 toISOString().split('T')[0] 为上海时区 dayjs().tz('Asia/Shanghai')
+  截止: 2026-03-28
+
+[P1-28-N-1] VIP查询崩溃：ALTER TABLE Users ADD COLUMN vipPoints INTEGER DEFAULT 0
+  文件: routes/vip.js 第132/296行 + DB迁移
+  截止: 2026-03-28
+
+[P1-28-N-2] Lottery十连：POST /api/lottery/ten-draw（含保底逻辑）
+  文件: routes/lottery.js
+  截止: 2026-04-05
+
+[P1-28-N-3] DailyQuest进度事件驱动：cultivation/chapter/arena/forge完成后eventBus.emit
+  文件: routes/cultivation.js, routes/chapter.js, routes/arena.js, routes/forge.js
+  截止: 2026-04-03
+
+[P0-28-N-2] Fishing完整重写（已有队列任务，优化规格）
+  补充: status/types/reel端点 + 渔具/鱼种稀有度 + 积分商店
+  截止: 2026-04-08
+
+[P0-28-N-3] Adventure路由新建
+  文件: routes/adventure.js（新建）
+  端点: GET /types, GET /status, POST /travel, POST /claim
+  截止: 2026-04-10
+
+[P2-28-N-1] HeartDemon心魔试炼：修复无效层数+层数推进+扫荡
+  文件: routes/heart_demon.js + heart_demon_storage.js
+  截止: 2026-04-07
+
+[P2-28-N-2] Market挂单/购买逻辑
+  端点: POST /api/market/list, POST /api/market/buy
+  截止: 2026-04-12
+
+[NF-28-N-2] Paradise仙界探索API
+  端点: GET /api/paradise/status, POST /api/paradise/explore
+  截止: 2026-04-12
