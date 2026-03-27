@@ -36,6 +36,7 @@ try {
 }
 
 const app = express();
+app.locals.db = db; // 共享主数据库实例给所有路由，防止多实例写锁冲突
 const PORT = 3001;
 
 app.use(cors());

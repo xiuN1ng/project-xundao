@@ -1224,3 +1224,58 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - POST /api/cave/collect（领取并清空产出）
   - 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/cave.js
   - 截止: 2026-04-06
+
+## [B] P0 — 2026-03-27
+
+[P0-B-58-1] 【B】shop/buy disk I/O error 修复
+  问题: shop.js 独立Database连接并发写入 game.db 失败
+  根因: 两个better-sqlite3实例竞争同一SQLite文件写锁
+  任务:
+    1. 方案A（推荐）：通过app.locals共享主server.js的db连接
+    2. 方案B：shop.js的Database初始化后添加 pragma('busy_timeout=5000') + pragma('journal_mode=WAL')
+    3. 验证 shop/buy 扣除灵石成功、物品进入背包
+  文件: server/backend/routes/shop.js, server/backend/server.js
+  截止: 2026-03-28
+
+## [B] P1 — 2026-03-27
+
+[P1-B-58-1] 【B】排行榜 player 表缺失真实玩家数据
+  问题: rank/combat/level/wealth 全部返回空，真实玩家不在player表
+  任务:
+    1. 在每次修改玩家属性的API成功后同步到player表
+    2. INSERT OR REPLACE INTO player (user_id, level, realm, attack, defense, hp, spirit_stones)
+       SELECT id, level, realm, attack, defense, hp, lingshi FROM Users WHERE id = ?
+    3. 或实现每5分钟批量同步的cron任务
+  文件: server/backend/routes/rank.js, 相关属性修改路由
+  截止: 2026-03-29
+
+[P1-B-58-2] 【B】拍卖行完整实现 # 完成 | 2026-03-27 a7c0719 (commit OK, push需重试)
+  - auction_items + auction_bids 双表 + WAL模式
+  - GET /api/auction (分页/过滤) + GET /my + GET /:id (详情+出价历史)
+  - POST /publish (上架) + POST /bid (竞价+灵石扣减) + POST /cancel (下架) + POST /claim (领取)
+  - 自动结算: 过期拍卖自动发货/退款，settleExpiredAuctions() 每次查询触发
+  文件: server/backend/routes/auction.js
+  截止: 2026-03-30
+
+## [B] P2 — 2026-03-27
+
+[P2-B-58-1] 【B】密室系统完整实现
+  问题: routes/secret.js 仅5行stub，前后端均为hardcode
+  任务:
+    1. 创建 secret_dungeon 表（player_id, unlocked, best_floor, history）
+    2. POST /api/secret/unlock — 解锁（扣灵石）
+    3. POST /api/secret/enter — 进入密室战斗
+    4. 战斗胜利发放奖励，更新记录
+    5. 添加每周重置机制
+  文件: server/backend/routes/secret.js
+  截止: 2026-03-31
+
+[P2-B-58-2] 【B】论道系统接入玩家
+  问题: lundao_player 表无player_id=1记录，所有数值均为0
+  任务:
+    1. GET /api/lundao 首次访问时自动创建玩家记录
+    2. 实现 GET /api/lundao/question — 随机返回修仙知识题
+    3. 实现 POST /api/lundao/answer — 验证答案，更新分数/连胜
+    4. 接入每日任务（答对N题）
+  文件: server/backend/routes/lundao.js
+  截止: 2026-03-31
