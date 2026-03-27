@@ -50,6 +50,23 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../src/index.html'));
 });
 
+// 全局鉴权中间件
+const { requireAuth } = require('./routes/auth');
+
+// 公共路径（不需要身份验证）
+const PUBLIC_PREFIXES = [
+  '/api/auth', '/api/health', '/api/announcement', '/api/broadcast',
+  '/api/giftcode', '/api/analytics', '/api/ticket', '/api/hotupdate',
+];
+
+// 全局中间件：从 Authorization header 验证 token，设置 req.userId
+// skipIfNoToken: true — 旧版前端未发送 Authorization 时不阻断，降级到 body.player_id
+// 前端修复后（发送 Bearer token）此中间件提供真正的数据隔离
+app.use((req, res, next) => {
+  if (PUBLIC_PREFIXES.some(p => req.path.startsWith(p))) return next();
+  requireAuth({ skipIfNoToken: true })(req, res, next);
+});
+
 // 中间件
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/payment', require('./routes/payment'));
@@ -129,6 +146,14 @@ app.use('/api/lingdao', require('./routes/lingdao'));
 app.use('/api/welfare', require('../game/welfare_api'));
 app.use('/api/daily-dungeon', require('../game/daily_dungeon'));
 app.use('/api/gongfa', require('./routes/gongfa'));
+
+// 引导系统
+try {
+  app.use('/api/guide', require('./routes/guide'));
+  console.log('✓ 引导系统路由已加载');
+} catch(e) {
+  console.log('[guide] 引导路由加载失败:', e.message);
+}
 
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 

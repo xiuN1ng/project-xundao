@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 
 const JWT_SECRET = 'game-secret-2026';
@@ -48,15 +49,93 @@ let users = [
 ];
 let idCounter = 2;
 
-function generateToken(u){return 'token_'+u.id}
+function generateToken(u){
+  // 使用 JWT 代替简单的 'token_'+id，防止伪造
+  return jwt.sign({ userId: u.id, username: u.username }, JWT_SECRET, { expiresIn: '7d' });
+}
+
+// 兼容旧版简单 token 的验证
+function verifySimpleToken(token) {
+  if (token && token.startsWith('token_')) {
+    const id = parseInt(token.replace('token_', ''));
+    return users.find(u => u.id === id) || null;
+  }
+  return null;
+}
 
 function auth(req,res,next){
   const token = req.headers.authorization;
   if(!token) return res.json({success:false,message:'请先登录'});
-  const user = users.find(u=>'token_'+u.id === token);
+  // 优先尝试 JWT 验证
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = users.find(u => u.id === decoded.userId);
+    if (user) { req.user = user; return next(); }
+  } catch(e) {}
+  // 兼容旧版简单 token
+  const user = verifySimpleToken(token);
   if(!user) return res.json({success:false,message:'登录过期'});
   req.user = user;
   next();
+}
+
+/**
+ * 全局鉴权中间件 — 验证 JWT token 并设置 req.userId
+ * 受保护的游戏路由必须通过此中间件
+ *
+ * 前端登录后需做两件事：
+ * 1. 保存返回的 token → 后续请求 header: Authorization: Bearer <token>
+ * 2. 保存返回的 user.id → 后续请求 header: X-User-Id: <id>
+ *
+ * 此中间件同时支持旧版 Authorization: <token>（无 Bearer 前缀）兼容
+ */
+function requireAuth(options) {
+  const opts = options || {};
+  const skipIfNoToken = opts.skipIfNoToken !== undefined ? opts.skipIfNoToken : false;
+
+  return function(req, res, next) {
+    const authHeader = req.headers.authorization;
+
+    // 优先从 X-User-Id header 读取（前端必须传）
+    let userId = parseInt(req.get('X-User-Id')) || parseInt(req.get('x-user-id')) || 0;
+
+    if (authHeader) {
+      // Authorization header 存在：必须成功验证，否则返回 401
+      try {
+        let token = authHeader;
+        if (token.startsWith('Bearer ')) token = token.slice(7);
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded.userId) userId = decoded.userId;
+      } catch(e) {
+        // JWT 失败，尝试旧版简单 token
+        try {
+          const user = verifySimpleToken(authHeader);
+          if (user) userId = user.id;
+        } catch(e2) {}
+      }
+    }
+
+    if (!userId || userId <= 0) {
+      if (skipIfNoToken) return next();
+      return res.status(401).json({ success: false, message: '未授权：缺少有效身份凭证，请重新登录' });
+    }
+
+    // 验证用户存在于 DB 或内存
+    const user = users.find(u => u.id === userId);
+    if (!user && db) {
+      try {
+        const dbUser = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+        if (dbUser) { users.push(dbUser); }
+        else { if (!skipIfNoToken) return res.status(401).json({ success: false, message: '用户不存在' }); }
+      } catch(e) {
+        if (!skipIfNoToken) return res.status(401).json({ success: false, message: '身份验证失败' });
+      }
+    }
+
+    req.userId = userId;
+    req.user = user || users.find(u => u.id === userId) || null;
+    next();
+  };
 }
 
 // 从DB加载所有用户到内存
@@ -148,4 +227,6 @@ router.post('/login',async(req,res)=>{
 
 router.get('/me',auth,(req,res)=>{res.json({success:true,data:req.user});});
 
-module.exports=router;
+module.exports = router;
+module.exports.requireAuth = requireAuth;
+module.exports.generateToken = generateToken;
