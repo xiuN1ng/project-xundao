@@ -540,9 +540,9 @@ router.get('/records/:userId', (req, res) => {
 // ============================================
 router.post('/challenge', (req, res) => {
   try {
-    // 支持 player_id / userId 双别名
-    const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId);
-    const target_id = parseInt(req.body.target_id) || parseInt(req.body.targetId);
+    // 支持 JWT(req.userId) / player_id / userId 三级兼容
+    const player_id = req.userId || parseInt(req.body.player_id) || parseInt(req.body.userId);
+    const target_id = parseInt(req.body.target_id) || parseInt(req.body.targetId) || parseInt(req.body.opponentId);
     const use_items = req.body.use_items;
 
     if (!player_id || !target_id) {
@@ -758,7 +758,7 @@ router.post('/challenge', (req, res) => {
 // ============================================
 router.get('/rewards', (req, res) => {
   try {
-    const { player_id } = req.query;
+    const player_id = req.userId || parseInt(req.query.player_id);
 
     if (!ArenaSystem) {
       return res.json({ success: true, data: { rewards: [] } });
@@ -798,7 +798,8 @@ router.get('/rewards', (req, res) => {
 // ============================================
 router.post('/claim-reward', (req, res) => {
   try {
-    const { player_id, season_id, rank_id } = req.body;
+    const player_id = req.userId || req.body.player_id;
+    const { season_id, rank_id } = req.body;
 
     if (!player_id || !season_id || rank_id === undefined) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -859,7 +860,7 @@ router.post('/claim-reward', (req, res) => {
 // ============================================
 router.get('/info', (req, res) => {
   try {
-    const userId = parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
+    const userId = req.userId || parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
 
     if (!db || !ArenaSystem) {
       return res.json({
@@ -923,7 +924,7 @@ router.get('/info', (req, res) => {
 // ============================================
 router.post('/match', (req, res) => {
   try {
-    const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+    const userId = req.userId || parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
 
     if (!db || !ArenaSystem) {
       return res.status(500).json({ success: false, error: '系统不可用' });
