@@ -84,6 +84,7 @@ app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
+app.use('/api/market', require('./routes/market'));
 app.use('/api/beast', require('../game/beast_api'));
 app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/spirit-artifact', require('../game/spirit_artifact_api'));
