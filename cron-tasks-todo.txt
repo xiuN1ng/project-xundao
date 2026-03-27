@@ -1110,14 +1110,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ## [B] 后端任务
 
 ### P0 - 需立即修复
-[B-P0-70-1] tribulation "已达最高境界" 错误修复
-  - tribulation.js begin/attempt 端点 realm 判断逻辑错误
-  - player.realm=2（筑基）被错误判定为"已达最高境界"
-  - realm=2 应允许选择「木劫: 筑基→金丹」
-  - 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/tribulation.js
+[B-P0-70-1] tribulation "已达最高境界" 错误修复  # 完成 | 2026-03-27 db8a6a9
+  - server.js: Object.keys(REALM_DATA) → Object.values(REALM_DATA)，REALMS现在是realm对象数组（可按数字索引）
+  - 根因: REALMS[realm_level] 返回字符串名而非对象，导致 .next === undefined 误判最高境界
+  - 文件: /root/.openclaw/workspace/xundao-server/server/backend/server.js
   - 截止: 2026-03-28
 
-[B-P0-70-2] cultivationPower 永久=0（连续5+轮未修！）
+[B-P0-70-2] cultivationPower 永久=0（连续5+轮未修！）# 完成 | 2026-03-27 db8a6a9
   - cultivation status 端点未调用 cultivation-effects.js 计算
   - 公式: cultivationPower = Math.floor(value * 0.1 + realmLevel * 50)
   - 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/cultivation.js
