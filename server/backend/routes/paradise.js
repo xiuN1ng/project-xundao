@@ -115,9 +115,9 @@ router.get('/types', (req, res) => {
   }
 });
 
-// ========== GET /api/paradise/info ==========
+// ========== GET /api/paradise/info & /status ==========
 // 返回玩家探索数据
-router.get('/info', (req, res) => {
+const paradiseInfoHandler = (req, res) => {
   try {
     const userId = req.user?.id || req.query.userId || req.query.player_id || 1;
     const db = getDb();
@@ -212,7 +212,10 @@ router.get('/info', (req, res) => {
     console.error('[Paradise] /info error:', e.message);
     res.status(500).json({ error: e.message });
   }
-});
+};
+
+router.get('/info', paradiseInfoHandler);
+router.get('/status', paradiseInfoHandler); // 兼容前端 /paradise/status 调用
 
 // ========== POST /api/paradise/types ==========
 // 开始探索福地
