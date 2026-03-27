@@ -654,3 +654,47 @@
 - welfare/status 404: 22+轮❗
 - ladder路由未挂载: 多轮❗
 - tribulation参数名: 22+轮❗
+
+# === 2026-03-27 晨间版 (08:16) ===
+# P0-2701: cultivation.js 修炼系统重构
+# - cost改为动态（realm×10000）
+# - 添加realm突破逻辑（value>=cost时触发）
+# - 修复cultivationPower=0问题
+# - 添加离线修炼收益计算
+[B-P0-2701]
+
+# P0-2702: eventBus驱动成就+日常任务
+# - 在chapter.js/arena.js/cultivation.js各complete路由末尾添加eventBus.emit()
+# - 在achievement.js和dailyQuest.js中注册事件监听器
+# - 实时更新对应achievement/dailyQuest的progress字段
+[B-P0-2702]
+
+# P0-2703: sect.js添加/missions和/dungeon/enter兼容路由
+# - GET /api/sect/missions → 代理到sect-missions/daily
+# - POST /api/sect/dungeon/enter → 代理到sect/dungeon/challenge
+[B-P0-2703]
+
+# P1-2701: WorldBoss激活机制
+# - 每2小时自动激活BOSS（根据时间轮转bossList）
+# - POST /api/worldboss/refresh 管理员手动刷新
+# - 激活时设置hasBoss=true和currentBoss数据
+[B-P1-2701]
+
+# P1-2702: tower/challenge支持省略floor参数
+# - 若未传floor，自动使用currentFloor
+[B-P1-2702]
+
+# P2-2701: 章节HP曲线重设计
+# - 删除chapter HP硬上限500000
+# - 实现hp = 100 * (1.8 ^ chapterId) 动态曲线
+[B-P2-2701]
+
+# P2-2702: sect dungeon默认floor
+# - challenge路由若未传floor用已解锁最低层
+[B-P2-2702]
+
+# NF-2701: 修炼系统大改版（跨B/F）
+# - 修炼时段挂机模式（cultivationPower × 时间）
+# - 灵石消耗 = 50×(1+realm×0.3)
+# - realm突破逻辑（筑基→金丹需累计10000+5000灵石）
+[B-NF-2701]
