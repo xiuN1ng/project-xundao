@@ -8595,6 +8595,15 @@ try {
   Logger.warn('⚠ 装备路由加载失败:', e.message);
 }
 
+// ==================== 引导系统路由 ====================
+try {
+  const guideApi = require('./backend/routes/guide');
+  app.use('/api/guide', guideApi);
+  Logger.info('✓ 引导系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 引导路由加载失败:', e.message);
+}
+
 // 导出db实例供其他模块使用
 module.exports = app;
 module.exports.db = db;
