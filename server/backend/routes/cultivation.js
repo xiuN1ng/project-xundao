@@ -57,8 +57,8 @@ for (const [realm, base] of Object.entries(REALM_BASE_CONFIG)) {
   };
 }
 
-// 境界消耗灵石（修炼一次）
-const getCultivationCost = (realm) => Math.floor(50 * (1 + parseInt(realm) * 0.3));
+// 境界消耗灵石（修炼一次，固定10灵石）
+const getCultivationCost = () => 10;
 
 // Mock玩家数据（当数据库无玩家时使用）
 const mockPlayer = {

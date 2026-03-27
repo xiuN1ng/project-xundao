@@ -510,7 +510,7 @@ router.post('/challenge', (req, res) => {
   let data = getPlayerTowerData(playerId);
   data = checkDailyReset(data);
 
-  // 检查是否可以从当前层挑战（不能跳层挑战）
+  // 检查是否可以从当前层挑战（不能跳层挑战，只能挑战当前层或更低层）
   if (floor > data.currentFloor) {
     return res.status(400).json({
       success: false,
