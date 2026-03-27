@@ -1340,3 +1340,47 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
     3. 添加活动状态自动更新（进行中/已结束/未开始）
   文件: server/server.js, backend/data/game.db
   截止: 2026-03-30
+
+# ========== 从策划提案分发 — 2026-03-27 v16 ==========
+# 分发时间: 2026-03-27 20:50
+
+# === P0 致命 ===
+[P0-NEW-1] VIP系统致命漏洞：vip.js第133/184/251行||1默认值导致全体玩家默认VIP1。 # 完成 | 2026-03-27 a58ad0e9
+  修复：改为||0，VIP激活需payment_records验证
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/vip.js
+  截止: 2026-03-28
+
+# === P1 重要 ===
+[P1-NEW-1] Gem系统完全stub：routes/gem.js仅15行hardcode。需创建player_gems表+equipment.gem_slots字段+embed API真实实现
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/gem.js
+  截止: 2026-03-30
+  # 完成 | 2026-03-27 c817cdfa
+  - 重写 gem.js (439行)，创建 player_gems + equipment_gems 双表
+  - API端点: GET /, GET /templates, POST /acquire, POST /embed, POST /unequip, POST /combine, GET /shop
+  - 10种宝石模板(normal/rare/epic/legendary)，属性计算公式，宝石合成系统，镶嵌加成应用到Equipment属性
+
+[P1-NEW-2] Fashion系统完全stub：routes/fashion.js仅10行内存数据。需创建player_fashions表+fashion_templates表+buy/equip API
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/fashion.js
+  截止: 2026-03-30 | 完成 | 2026-03-27 21:55 | 9cb11ebe
+  - 重写 fashion.js (250+行)，创建 player_fashions + fashion_templates 表
+  - API端点: GET /api/fashion (玩家时装列表+拥有状态), POST /api/fashion/equip (穿戴/卸下)
+  - shop.js: 添加时装商品到 shop_items (IDs 16/17/18)，添加 FRONTEND_FASHION_ID_MAP (12→16, 13→17, 14→18)
+  - 购买时自动写入 player_fashions，shop_items.fashion_id 字段映射到时装模板ID
+  - 12种时装模板(common/rare/epic/legendary)，装备后提供 ATK/DEF/HP/SPD 加成
+
+[P1-NEW-3] Friend系统stub：routes/friend.js返回假数据+add/accept空操作。创建friendships表+真实add/accept/list
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/friend.js
+  截止: 2026-03-31
+
+[P1-NEW-3] Quest系统stub：routes/quest.js返回内存假数据。创建quests表+player_quest_progress+claim逻辑
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/quest.js
+  截止: 2026-03-31
+
+# === P2 ===
+[P2-NEW-1] Lingdao报0灵石：lingdao.js用req.query.player_id而非req.userId，永远查到0
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/lingdao.js
+  截止: 2026-03-31
+
+[P2-NEW-2] Mount系统硬编码：routes/mount.js第278行speed=100，第370行999999门槛。替换为player表查询
+  文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/mount.js
+  截止: 2026-03-31
