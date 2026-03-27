@@ -125,13 +125,22 @@ router.get('/', (req, res) => {
   // 兼容 player_id / userId / user_id 等多种参数名
   const userId = parseInt(req.query.userId || req.query.player_id || req.query.user_id) || 1;
   try {
-    let vipLevel = 1, vipPoints = 0;
+    let vipLevel = 0, vipPoints = 0;
 
-    // 使用内存中的玩家数据（不再查不存在的 player 数据库表）
-    const playerData = getPlayerData(userId);
-    if (playerData) {
-      vipLevel = playerData.vipLevel || playerData.vip_level || 1;
-      vipPoints = playerData.vipPoints || playerData.vip_points || 0;
+    // 优先从 Users 表读取真实 VIP 数据（VIP0 = 普通玩家，无任何特权）
+    if (db) {
+      const user = db.prepare('SELECT vipLevel, vipPoints FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        vipLevel = user.vipLevel || 0;
+        vipPoints = user.vipPoints || 0;
+      }
+    } else {
+      // 后备：使用内存中的玩家数据
+      const playerData = getPlayerData(userId);
+      if (playerData) {
+        vipLevel = playerData.vipLevel || playerData.vip_level || 0;
+        vipPoints = playerData.vipPoints || playerData.vip_points || 0;
+      }
     }
 
     const card = loadMonthlyCard(userId);
@@ -181,7 +190,7 @@ router.post('/buy', (req, res) => {
     if (!playerData) return res.json({ success: false, error: '玩家不存在' });
 
     const targetLevel = VIP_LEVELS[level];
-    const currentLevel = playerData.vipLevel || playerData.vip_level || 1;
+    const currentLevel = playerData.vipLevel || playerData.vip_level || 0;
 
     if (level <= currentLevel) {
       return res.json({ success: false, error: '当前VIP等级已更高' });
@@ -248,7 +257,8 @@ router.post('/buy-month-card', (req, res) => {
 router.get('/info', (req, res) => {
   const userId = parseInt(req.query.userId || req.query.player_id || req.query.user_id) || 1;
   const playerData = getPlayerData(userId);
-  const vipLevel = playerData?.vipLevel || playerData?.vip_level || 1;
+  // VIP0 = 普通玩家（不再默认 VIP1），必须通过支付或月卡才能激活 VIP
+  const vipLevel = playerData?.vipLevel || playerData?.vip_level || 0;
   const vipPoints = playerData?.vipPoints || playerData?.vip_points || 0;
   const card = loadMonthlyCard(userId);
   const now = Date.now();
