@@ -5,3 +5,7 @@ node_modules/
 .DS_Store
 .vite/
 dist/
+*.db-wal
+*.db-shm
+*.db-wal
+*.db-shm
