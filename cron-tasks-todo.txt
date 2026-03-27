@@ -1753,16 +1753,16 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   截止: 2026-03-29
 
 # ========== 2026-03-28 晨间提案（v2）==========
-[P0-28-AM-1] 【B】服务器重启
+[P0-28-AM-1] 【B】服务器重启  # 完成 | 2026-03-28 已重启 (PID 1198494)
   kill 1183637 && cd /root/.openclaw/workspace/xundao-server/server/backend && nohup node server.js > /tmp/server.log 2>&1 &
   截止: 2026-03-28（即时）
 
-[P0-28-AM-2] 【B】修复 cultivationPower 正反馈爆炸漏洞
+[P0-28-AM-2] 【B】修复 cultivationPower 正反馈爆炸漏洞  # 完成 | 2026-03-28 a373f957
   修改 routes/cultivation.js:
   1. powerBonus 封顶：min(baseGain * 5, baseGain * currentCultivationPower / 100)
   2. LINGSHI_COST 动态化：10 + floor(cultivationPower / 500) * 5
   3. 添加每日100次上限（凌晨重置）
-  截止: 2026-03-29
+  截止: 2026-03-29 | 验证: lingshiCost=30(动态), powerBonus capped at baseGain*5, dailyLimit=100
 
 [P1-28-AM-1] 【B】Guide 路由参数修复
   修改 routes/guide.js: GET /current 无需 userId 参数（从 req.userId 获取）
