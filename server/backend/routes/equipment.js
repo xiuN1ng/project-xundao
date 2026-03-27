@@ -64,33 +64,79 @@ router.post('/unequip', (req, res) => {
 // POST /refine - 强化装备
 router.post('/refine', (req, res) => {
   const { userId, equipId } = req.body;
-  const equip = userEquipments.find(e => e.id === equipId);
+  const uid = userId || 1;
+  const equip = userEquipments.find(e => e.id == equipId);
   if (!equip) return res.json({ success: false, message: '装备不存在' });
-  
-  equip.enhanceLevel += 1;
+
+  const level = equip.enhanceLevel || 0;
+  const spiritCost = Math.floor(500 * Math.pow(1.5, level));
+  const materialCost = 1 + Math.floor(level / 3);
+
+  const resources = playerResources[uid] || playerResources[1];
+  if ((resources.spiritStones || 0) < spiritCost) {
+    return res.json({ success: false, message: `灵石不足！需要${spiritCost}灵石，当前${resources.spiritStones}灵石`, code: 'INSUFFICIENT_SPIRIT' });
+  }
+  if ((resources.refineStones || 0) < materialCost) {
+    return res.json({ success: false, message: `强化石不足！需要${materialCost}个，当前${resources.refineStones}个`, code: 'INSUFFICIENT_MATERIAL' });
+  }
+
+  // 扣除资源
+  resources.spiritStones -= spiritCost;
+  resources.refineStones -= materialCost;
+
+  equip.enhanceLevel = level + 1;
   const bonus = equip.enhanceLevel * 10;
   equip.attack = (equip.attack || 0) + bonus;
   equip.defense = (equip.defense || 0) + bonus;
-  
-  res.json({ success: true, message: `强化成功！+${equip.enhanceLevel}`, equip });
+
+  res.json({
+    success: true,
+    message: `强化成功！+${equip.enhanceLevel}`,
+    equip,
+    remainingStones: resources.spiritStones,
+    remainingRefineStones: resources.refineStones,
+    spiritCost,
+    materialCost
+  });
 });
 
 // POST /augment - 增幅装备
 router.post('/augment', (req, res) => {
   const { userId, equipId } = req.body;
-  const equip = userEquipments.find(e => e.id === equipId);
+  const uid = userId || 1;
+  const equip = userEquipments.find(e => e.id == equipId);
   if (!equip) return res.json({ success: false, message: '装备不存在' });
-  
+
+  const spiritCost = 5000;
+  const ticketCost = 1;
+  const resources = playerResources[uid] || playerResources[1];
+
+  if ((resources.spiritStones || 0) < spiritCost) {
+    return res.json({ success: false, message: `灵石不足！需要${spiritCost}灵石，当前${resources.spiritStones}灵石`, code: 'INSUFFICIENT_SPIRIT' });
+  }
+  if ((resources.augmentTickets || 0) < ticketCost) {
+    return res.json({ success: false, message: `增幅券不足！`, code: 'INSUFFICIENT_TICKET' });
+  }
+
+  resources.spiritStones -= spiritCost;
+  resources.augmentTickets -= ticketCost;
+
   const bonusType = ['attack', 'defense', 'hp'][Math.floor(Math.random() * 3)];
   const bonusValue = Math.floor(Math.random() * 10) + 1;
   if (!equip.augment) equip.augment = {};
   equip.augment[bonusType] = (equip.augment[bonusType] || 0) + bonusValue;
-  
+
   const record = { equipId, bonusType, bonusValue, time: new Date() };
   augmentHistory.unshift(record);
   if (augmentHistory.length > 20) augmentHistory.pop();
-  
-  res.json({ success: true, message: `${bonusType}增幅+${bonusValue}`, equip });
+
+  res.json({
+    success: true,
+    message: `${bonusType}增幅+${bonusValue}`,
+    equip,
+    remainingStones: resources.spiritStones,
+    remainingTickets: resources.augmentTickets
+  });
 });
 
 // POST /socket/add - 打孔
