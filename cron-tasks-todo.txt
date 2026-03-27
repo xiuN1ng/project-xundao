@@ -1286,3 +1286,57 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
     4. 接入每日任务（答对N题）
   文件: server/backend/routes/lundao.js
   截止: 2026-03-31
+
+## [B] P0-STILL — 2026-03-27 晚间
+
+[P0-STILL-1] 【B】全局数据隔离失效 [CRITICAL]
+  问题: window.gamePlayerId从未设置 + authenticateToken未设req.userId
+  任务:
+    1. server.js: authenticateToken中添加 req.userId = user.id
+    2. 统一所有路由的userId提取: const userId = req.userId || parseInt(req.body.player_id) || parseInt(req.query.player_id) || 1
+  文件: server/server.js, backend/routes/cultivation.js等
+  截止: 2026-03-28
+
+[P0-STILL-2] 【B】Chapter材料掉落不持久化
+  问题: rollMaterialDrops独立DB连接导致INSERT失败，try/catch吞掉错误
+  任务:
+    1. 移除chapter.js中的独立Database实例，改用共享连接
+    2. 所有DB初始化后添加 db.pragma('busy_timeout=5000') + db.pragma('journal_mode=WAL')
+  文件: backend/routes/chapter.js
+  截止: 2026-03-28
+
+[P1-NEW-1] 【B】WorldBoss奖励经济崩溃  # 完成 | 2026-03-27 1573e5b8
+  问题: 击杀一次得30000灵石（玩家总资产才1035），严重通货膨胀
+  修复: boss奖励压缩至level*20(200~1000灵石)，结算上线500灵石，添加world_boss_weekly_kills表(每周3次上限)，实际写入Users.lingshi
+  文件: backend/routes/worldBoss.js
+  截止: 2026-03-29
+
+[P1-NEW-2] 【B】Activity API 500错误
+  问题: getActivityStatus函数定义在app.get调用之后，TDZ导致未定义
+  任务: 将getActivityStatus函数定义移到app.get('/api/activity/list')之前
+  文件: server/server.js (第6100行附近)
+  截止: 2026-03-29
+
+[P1-NEW-3] 【B】论道系统是纯stub
+  问题: /api/lundao永远返回全0，无题库无API
+  任务:
+    1. 创建lundao_questions表，填充50+修仙知识题
+    2. 实现/api/lundao/question和/api/lundao/answer
+    3. 答题触发dailyquest进度更新
+  文件: backend/routes/lundao.js, backend/data/game.db
+  截止: 2026-03-30
+
+[P2-NEW-1] 【B】Meridian属性加成全是0%
+  问题: totalEffect中attack/critRate等全是"0.0%"格式
+  任务: 检查经脉激活是否正确写入player_meridians表，修复百分比计算公式
+  文件: backend/routes/meridian.js
+  截止: 2026-03-31
+
+[NF-NEW-1] 【B】运营活动系统修复
+  问题: activity/list 500错误 + 活动数量少
+  任务:
+    1. 修复getActivityStatus TDZ
+    2. 创建activities表并预置5个核心活动
+    3. 添加活动状态自动更新（进行中/已结束/未开始）
+  文件: server/server.js, backend/data/game.db
+  截止: 2026-03-30
