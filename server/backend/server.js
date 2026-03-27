@@ -89,6 +89,7 @@ app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/spirit-artifact', require('../game/spirit_artifact_api'));
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
+app.use('/api/lundao', require('./routes/lundao'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/equipmentDismantle', require('./routes/equipment_dismantle'));
 app.use('/api/forge', require('./routes/forge'));
