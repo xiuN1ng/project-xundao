@@ -667,7 +667,14 @@
 # - 在chapter.js/arena.js/cultivation.js各complete路由末尾添加eventBus.emit()
 # - 在achievement.js和dailyQuest.js中注册事件监听器
 # - 实时更新对应achievement/dailyQuest的progress字段
-[B-P0-2702]
+[B-P0-2702] ✓ 完成 | 2026-03-28 af30b903
+  - 创建 server/game/eventBus.js 中央事件总线
+  - arena.js: 添加成就(onCombatWin)+每日任务触发(battle)，之前完全缺失
+  - cultivation.js: /start和/breakthrough emit事件
+  - chapter.js: /complete和/battle emit事件
+  - forge.js: /make和/strengthen emit事件
+  - achievement.js: 6个事件监听器(cultivation:breakthrough/chapter:complete等)
+  - dailyQuest.js: 7个事件监听器(cultivation:start/chapter:battle/arena:challenge等)
 
 # P0-2703: sect.js添加/missions和/dungeon/enter兼容路由  # 完成 | 2026-03-27 f349bcd
 # - GET /api/sect/missions → 代理到sect-missions/daily ✓
