@@ -10,6 +10,15 @@ try {
   console.log('[shop] dailyQuest 路由加载失败:', e.message);
 }
 
+// 时装系统集成
+let addFashionToPlayer = null;
+try {
+  const fashionModule = require('./fashion');
+  addFashionToPlayer = fashionModule.addFashionToPlayer;
+} catch (e) {
+  console.log('[shop] fashion 路由加载失败:', e.message);
+}
+
 // 数据库路径 (统一使用 backend/data/game.db)
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
@@ -35,7 +44,8 @@ try {
       stock INTEGER DEFAULT -1,
       vip_level_required INTEGER DEFAULT 0,
       level_required INTEGER DEFAULT 1,
-      sort_order INTEGER DEFAULT 0
+      sort_order INTEGER DEFAULT 0,
+      fashion_id INTEGER DEFAULT NULL
     )
   `);
   // 初始化 player_items 表（如果不存在）
@@ -70,13 +80,17 @@ try {
       { name: '召唤令', icon: '📜', price: 5000, category: 'special', type: 'special', sort: 12 },
       { name: '强化石', icon: '🔨', price: 200, category: 'material', type: 'material', sort: 13 },
       { name: '洗练石', icon: '💧', price: 300, category: 'material', type: 'material', sort: 14 },
-      { name: '天元丹', icon: '🌟', price: 5000, category: 'potion', type: 'potion', sort: 15 }
+      { name: '天元丹', icon: '🌟', price: 5000, category: 'potion', type: 'potion', sort: 15 },
+      // 时装类商品 (sort 16-18)
+      { name: '青云弟子服', icon: '⚪', price: 2000, category: 'fashion', type: 'fashion', sort: 16, fashion_id: 8 },
+      { name: '霓裳羽衣', icon: '👗', price: 4500, category: 'fashion', type: 'fashion', sort: 17, fashion_id: 9 },
+      { name: '浪子行头', icon: '🎭', price: 1800, category: 'fashion', type: 'fashion', sort: 18, fashion_id: 10 },
     ];
-    const insert = sharedDb.prepare('INSERT INTO shop_items (name, icon, price, category, item_type, sort_order) VALUES (?,?,?,?,?,?)');
+    const insert = sharedDb.prepare('INSERT INTO shop_items (name, icon, price, category, item_type, sort_order, fashion_id) VALUES (?,?,?,?,?,?,?)');
     for (const item of seedItems) {
-      insert.run(item.name, item.icon, item.price, item.category, item.type, item.sort);
+      insert.run(item.name, item.icon, item.price, item.category, item.type || item.item_type, item.sort, item.fashion_id || null);
     }
-    console.log('[shop] 15件商品初始化完成');
+    console.log('[shop] 18件商品初始化完成（含时装）');
   }
 } catch (err) {
   console.log('[shop] 数据库连接失败:', err.message);
@@ -102,7 +116,7 @@ const fallbackGoods = [
 function getShopItems(dbInstance) {
   if (!dbInstance) return fallbackGoods;
   try {
-    return dbInstance.prepare('SELECT id, name, icon, price, category, item_type as type, description, stock, vip_level_required, level_required FROM shop_items ORDER BY sort_order').all();
+    return dbInstance.prepare('SELECT id, name, icon, price, category, item_type as type, description, stock, vip_level_required, level_required, fashion_id FROM shop_items ORDER BY sort_order').all();
   } catch (e) {
     console.error('[shop] getShopItems错误:', e.message);
     return fallbackGoods;
@@ -120,8 +134,18 @@ router.get('/list', (req, res) => {
 
 router.post('/buy', (req, res) => {
   const userId = req.body.userId ?? req.body.player_id ?? 1;
-  const itemId = req.body.itemId ?? req.body.item_id;
+  let itemId = req.body.itemId ?? req.body.item_id;
   const count = req.body.count ?? req.body.quantity ?? 1;
+
+  // 前端时装商品ID映射 (前端ID → 后端shop商品ID)
+  const FRONTEND_FASHION_ID_MAP = {
+    12: 16, // 青云弟子服 (shop item id 16, fashion template id 8)
+    13: 17, // 霓裳羽衣 (shop item id 17, fashion template id 9)
+    14: 18, // 浪子行头 (shop item id 18, fashion template id 10)
+  };
+  if (FRONTEND_FASHION_ID_MAP[itemId]) {
+    itemId = FRONTEND_FASHION_ID_MAP[itemId];
+  }
 
   const db = getDb(req);
   const items = getShopItems(db);
@@ -155,6 +179,18 @@ router.post('/buy', (req, res) => {
         INSERT INTO player_items (user_id, item_id, item_name, item_type, count, icon, source, created_at)
         VALUES (?, ?, ?, ?, ?, ?, 'shop', CURRENT_TIMESTAMP)
       `).run(userId, good.id, itemName, good.type || good.category, count, good.icon);
+
+      // 时装物品：直接写入 player_fashions
+      if (addFashionToPlayer && (good.category === 'fashion' || good.type === 'fashion')) {
+        try {
+          // good.fashion_id 是时装模板ID（如8=青云弟子服），good.id是商城商品ID（如16）
+          const fashionId = good.fashion_id || good.id;
+          addFashionToPlayer(userId, fashionId);
+          console.log(`[shop] 时装 ${good.name}(fashion_id:${fashionId}) 已添加到玩家 ${userId} 的衣橱`);
+        } catch (e) {
+          console.error('[shop] 时装添加失败:', e.message);
+        }
+      }
 
       // 触发每日任务：消费灵石
       if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
