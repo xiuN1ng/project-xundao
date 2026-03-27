@@ -84,6 +84,12 @@ const HEART_ARTIFACTS = {
 const playerCache = new Map();
 const CACHE_TTL = 5000;
 
+// 统一从请求中提取 userId（兼容 userId / playerId 参数）
+function extractUserId(req) {
+  const raw = req.query?.userId || req.query?.playerId || req.body?.userId || req.body?.playerId;
+  return parseInt(raw) || 1;
+}
+
 function getCachedPlayer(userId) {
   const cached = playerCache.get(userId);
   if (cached && (Date.now() - cached.ts) < CACHE_TTL) return cached.data;
@@ -161,8 +167,7 @@ function generateEncounters(floorConfig, heartDemonEnergy = 0) {
 
 // GET / - 心魔幻境概览
 router.get('/', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.json({ success: false, message: 'userId 不能为空' });
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -194,8 +199,7 @@ router.get('/', async (req, res) => {
 
 // GET /config - 获取完整配置
 router.get('/config', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.json({ success: false, message: 'userId 不能为空' });
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -227,7 +231,7 @@ router.get('/config', async (req, res) => {
 
 // GET /list - 副本列表
 router.get('/list', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
     const dungeons = FLOOR_CONFIG.map(f => ({
@@ -269,7 +273,7 @@ router.get('/info', async (req, res) => {
 
 // GET /floors - 楼层详情
 router.get('/floors', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
     const floors = FLOOR_CONFIG.map(f => ({
@@ -524,7 +528,7 @@ router.post('/claim', async (req, res) => {
 
 // POST /defeat - 退出副本
 router.post('/defeat', async (req, res) => {
-  const { userId } = req.body;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     player.currentFloor = Math.min(player.currentFloor, player.maxFloor);
@@ -538,7 +542,8 @@ router.post('/defeat', async (req, res) => {
 
 // POST /clear - 清除心魔（消耗灵石或道具）
 router.post('/clear', async (req, res) => {
-  const { userId, method } = req.body;
+  const userId = extractUserId(req);
+  const { method } = req.body;
   // method: 'spirit_stones' (灵石清除) | 'purify_charm' (心魔净化符道具) | 'heart_pearl' (心魔珠道具)
   if (!method) return res.json({ success: false, message: '请指定清除方式 method(spirit_stones/purify_charm/heart_pearl)' });
 
@@ -617,7 +622,7 @@ router.post('/clear', async (req, res) => {
 
 // GET /clear - 获取清除心魔的选项和消耗
 router.get('/clear', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     const energy = player.heartDemonEnergy || 0;
@@ -664,7 +669,7 @@ router.get('/clear', async (req, res) => {
 
 // GET /sweep - 获取扫荡信息
 router.get('/sweep', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -783,7 +788,7 @@ router.post('/sweep/batch', async (req, res) => {
 
 // GET /shop - 心魔商店
 router.get('/shop', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -856,7 +861,7 @@ router.post('/shop/buy', async (req, res) => {
 
 // GET /artifacts - 心魔装备图鉴
 router.get('/artifacts', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -871,7 +876,7 @@ router.get('/artifacts', async (req, res) => {
 
 // GET /materials - 材料背包
 router.get('/materials', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
@@ -887,7 +892,7 @@ router.get('/materials', async (req, res) => {
 
 // GET /weekly-reward - 周奖励信息
 router.get('/weekly-reward', async (req, res) => {
-  const { userId } = req.query;
+  const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
     setCachedPlayer(userId, player);
