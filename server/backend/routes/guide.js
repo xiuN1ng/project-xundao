@@ -293,10 +293,10 @@ router.post('/reset', (req, res) => {
   }
 });
 
-// 获取当前引导状态
-router.get('/current/:userId', (req, res) => {
+// 获取当前引导状态（兼容：优先从 req.userId 获取，fallback 到 path 参数）
+router.get('/current/:userId?', (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.userId || parseInt(req.params.userId) || 1;
     const allProgress = loadProgress();
     const userProgress = allProgress[userId];
     
