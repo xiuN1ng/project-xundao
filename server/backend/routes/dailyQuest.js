@@ -71,10 +71,10 @@ function saveQuestToDB(userId, questId, progress, completed, claimed) {
 
 // 每日任务配置（奖励提升3-5倍）
 const questTemplates = [
-  // 修炼类
-  { id: 1, type: 'cultivate', name: '修炼时长', desc: '修炼10分钟', target: 10, unit: '分钟', reward: { lingshi: 500, exp: 200 }, difficulty: 1 },
-  { id: 2, type: 'cultivate', name: '专注修炼', desc: '修炼30分钟', target: 30, unit: '分钟', reward: { lingshi: 1500, exp: 600 }, difficulty: 2 },
-  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '修炼60分钟', target: 60, unit: '分钟', reward: { lingshi: 3000, exp: 1200 }, difficulty: 3 },
+  // 修炼类（target改为次数，delta=1对应1次修炼）
+  { id: 1, type: 'cultivate', name: '修炼时长', desc: '完成1次修炼', target: 1, unit: '次', reward: { lingshi: 500, exp: 200 }, difficulty: 1 },
+  { id: 2, type: 'cultivate', name: '专注修炼', desc: '完成3次修炼', target: 3, unit: '次', reward: { lingshi: 1500, exp: 600 }, difficulty: 2 },
+  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '完成6次修炼', target: 6, unit: '次', reward: { lingshi: 3000, exp: 1200 }, difficulty: 3 },
 
   // 战斗类
   { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 200, exp: 100 }, difficulty: 1 },
