@@ -7756,9 +7756,9 @@ app.post('/api/arena/challenge', (req, res) => {
     const defenderRank = arenaSystem.arenaSystem.getRank(defenderArena.rank_id);
     
     let attackerPointsGain = attackerWin ? attackerRank.winPoints : 0;
-    let attackerPointsLoss = !attackerWin ? attackerRank.losePoints : 0;
+    let attackerPointsLoss = !attackerWin ? Math.max(attackerRank.losePoints, 5) : 0;
     let defenderPointsGain = !attackerWin ? defenderRank.winPoints : 0;
-    let defenderPointsLoss = attackerWin ? defenderRank.losePoints : 0;
+    let defenderPointsLoss = attackerWin ? Math.max(defenderRank.losePoints, 5) : 0;
     
     // 更新双方数据
     const today = getDateString();
@@ -7796,18 +7796,23 @@ app.post('/api/arena/challenge', (req, res) => {
       player_id
     );
     
-    // 更新防守者数据
+    // 更新防守者数据（无论输赢都要记录）
     db.prepare(`
       UPDATE arena_player 
       SET arena_points = ?, 
           rank_id = ?, 
           rank_name = ?,
+          win_count = win_count + ?,
+          lose_count = lose_count + ?,
+          total_battles = total_battles + 1,
           updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
     `).run(
       newDefenderPoints,
       newDefenderRank.id,
       newDefenderRank.name,
+      !attackerWin ? 1 : 0,
+      attackerWin ? 1 : 0,
       target_id
     );
     
@@ -7842,7 +7847,7 @@ app.post('/api/arena/challenge', (req, res) => {
       rewards = { spiritStones: rewardSpiritStones };
     } else {
       // 失败惩罚：减少少量灵石
-      const penaltySpiritStones = Math.max(10, attackerRank.losePoints * 5);
+      const penaltySpiritStones = Math.max(10, attackerPointsLoss * 5);
       const playerAfter = db.prepare('SELECT spirit_stones FROM player WHERE id = ?').get(player_id);
       if (playerAfter && playerAfter.spirit_stones >= penaltySpiritStones) {
         db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(penaltySpiritStones, player_id);

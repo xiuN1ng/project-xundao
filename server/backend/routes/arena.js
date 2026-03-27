@@ -607,9 +607,10 @@ router.post('/challenge', (req, res) => {
     const defenderRank = ArenaSystem.getRank(defenderArena.rank_id);
 
     const attackerPointsGain = attackerWin ? attackerRank.winPoints : 0;
-    const attackerPointsLoss = !attackerWin ? attackerRank.losePoints : 0;
+    // 败者扣分：青铜/白银/黄金(losePoints=0)设置最低5分惩罚，高分段按losePoints扣
+    const attackerPointsLoss = !attackerWin ? Math.max(attackerRank.losePoints, 5) : 0;
     const defenderPointsGain = !attackerWin ? defenderRank.winPoints : 0;
-    const defenderPointsLoss = attackerWin ? defenderRank.losePoints : 0;
+    const defenderPointsLoss = attackerWin ? Math.max(defenderRank.losePoints, 5) : 0;
 
     // 更新数据
     const today = getDateString();
@@ -646,18 +647,23 @@ router.post('/challenge', (req, res) => {
       player_id
     );
 
-    // 更新防守者数据
+    // 更新防守者数据（无论输赢都要记录）
     db.prepare(`
       UPDATE arena_player
       SET arena_points = ?,
           rank_id = ?,
           rank_name = ?,
+          win_count = win_count + ?,
+          lose_count = lose_count + ?,
+          total_battles = total_battles + 1,
           updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
     `).run(
       newDefenderPoints,
       newDefenderRank.id,
       newDefenderRank.name,
+      !attackerWin ? 1 : 0,   // defender wins when attacker loses
+      attackerWin ? 1 : 0,    // defender loses when attacker wins
       target_id
     );
 
@@ -698,17 +704,24 @@ router.post('/challenge', (req, res) => {
       defenderPower
     );
 
-    // 计算奖励（胜利：积分+灵石；失败：战败安慰奖）
+    // 计算奖励（胜利：积分+灵石；失败：战败惩罚灵石）
     const reward = attackerWin
       ? { arenaPoints: attackerRank.winPoints, spiritStones: 100, dailyPoints: 10 }
-      : { arenaPoints: 0, spiritStones: 30, dailyPoints: 5, consolation: true };
+      : { arenaPoints: 0, spiritStones: -Math.max(attackerPointsLoss * 2, 10), dailyPoints: 0, penalty: true };
 
-    // 发放灵石奖励（无论胜败都有）
-    if (reward.spiritStones > 0) {
+    // 发放灵石奖励（胜利得灵石，失败扣灵石）
+    if (reward.spiritStones !== 0) {
       try {
-        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.spiritStones, player_id);
+        if (reward.spiritStones > 0) {
+          db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.spiritStones, player_id);
+        } else {
+          const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(player_id);
+          if (player && player.lingshi >= Math.abs(reward.spiritStones)) {
+            db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.spiritStones, player_id);
+          }
+        }
       } catch (e) {
-        Logger.warn('灵石奖励发放失败:', e.message);
+        Logger.warn('灵石处理失败:', e.message);
       }
     }
 
@@ -722,7 +735,7 @@ router.post('/challenge', (req, res) => {
         reward: {
         ...reward,
         spiritStones: reward.spiritStones,
-        consolation: reward.consolation || false
+        penalty: reward.penalty || false
       },
         ranking: {
           newPoints: newAttackerPoints,

@@ -13,6 +13,9 @@ Before doing anything else:
 1. Read `SOUL.md` — this is who you are
 2. Read `USER.md` — this is who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+5. Read `/root/.openclaw/workspace/PROJECT_REGISTRY.md` — project paths and status
+6. Read `/root/.openclaw/workspace/AGENT_BULLETIN.md` — what other agents are doing
+7. Read `/root/.openclaw/workspace/SHARED_RULES.md` — avoid repeated mistakes
 4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
 Don't ask permission. Just do it.
