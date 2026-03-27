@@ -1,96 +1,203 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
 
-// 排行榜数据
-let rankData = {
-  combat: [
-    { rank: 1, userId: 1, name: 'test', value: 5000 },
-    { rank: 2, userId: 2, name: '玩家2', value: 4500 },
-    { rank: 3, userId: 3, name: '玩家3', value: 4000 },
-    { rank: 4, userId: 4, name: '玩家4', value: 3500 },
-    { rank: 5, userId: 5, name: '玩家5', value: 3000 }
-  ],
-  level: [
-    { rank: 1, userId: 1, name: 'test', value: 50 },
-    { rank: 2, userId: 2, name: '玩家2', value: 45 },
-    { rank: 3, userId: 3, name: '玩家3', value: 40 }
-  ],
-  wealth: [
-    { rank: 1, userId: 1, name: 'test', value: 1000000 },
-    { rank: 2, userId: 2, name: '玩家2', value: 500000 },
-    { rank: 3, userId: 3, name: '玩家3', value: 300000 }
-  ],
-  chapter: [
-    { rank: 1, userId: 1, name: 'test', value: 50 },
-    { rank: 2, userId: 2, name: '玩家2', value: 30 },
-    { rank: 3, userId: 3, name: '玩家3', value: 20 }
-  ]
-};
+// DB path: server/backend/data/game.db
+const DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
+let db;
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+} catch (e) {
+  console.error('[rank] DB连接失败:', e.message);
+}
+
+// 计算战斗力的公式（与 arena.js 保持一致）
+function calcCombatPower(p) {
+  if (!p) return 0;
+  // 基于等级/境界/属性综合计算
+  const level = p.level || 1;
+  const realm = p.realm || 1;
+  const atk = p.attack || 100;
+  const def = p.defense || 50;
+  const hp = p.hp || 1000;
+  return Math.floor(atk * 10 + def * 5 + hp / 10 + level * 500 + realm * 2000);
+}
+
+// 获取战力榜（从 player 表实时查询）
+function getCombatRank(limit = 50) {
+  if (!db) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT p.user_id as userId,
+             COALESCE(u.nickname, u.username, '玩家') as name,
+             p.level,
+             p.realm,
+             p.attack,
+             p.defense,
+             p.hp,
+             (p.attack * 10 + p.defense * 5 + p.hp / 10) as combatPower
+      FROM player p
+      LEFT JOIN Users u ON u.id = p.user_id
+      ORDER BY combatPower DESC
+      LIMIT ?
+    `).all(limit);
+    return rows.map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      name: r.name,
+      level: r.level,
+      realm: r.realm,
+      combatPower: Math.floor(r.combatPower)
+    }));
+  } catch (e) {
+    console.error('[rank] combat查询失败:', e.message);
+    return [];
+  }
+}
+
+// 获取等级榜
+function getLevelRank(limit = 50) {
+  if (!db) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT p.user_id as userId,
+             COALESCE(u.nickname, u.username, '玩家') as name,
+             p.level,
+             p.realm
+      FROM player p
+      LEFT JOIN Users u ON u.id = p.user_id
+      ORDER BY p.level DESC, p.realm DESC
+      LIMIT ?
+    `).all(limit);
+    return rows.map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      name: r.name,
+      level: r.level,
+      realm: r.realm,
+      value: r.level
+    }));
+  } catch (e) {
+    console.error('[rank] level查询失败:', e.message);
+    return [];
+  }
+}
+
+// 获取财富榜
+function getWealthRank(limit = 50) {
+  if (!db) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT id as userId,
+             COALESCE(nickname, username, '玩家') as name,
+             lingshi as spiritStones,
+             diamonds
+      FROM Users
+      ORDER BY lingshi DESC
+      LIMIT ?
+    `).all(limit);
+    return rows.map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      name: r.name,
+      value: r.spiritStones,
+      spiritStones: r.spiritStones,
+      diamonds: r.diamonds || 0
+    }));
+  } catch (e) {
+    console.error('[rank] wealth查询失败:', e.message);
+    return [];
+  }
+}
+
+// 获取章节/爬塔榜（基于 tower_progress.highest_floor）
+function getChapterRank(limit = 50) {
+  if (!db) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT tp.player_id as userId,
+             COALESCE(u.nickname, u.username, '玩家') as name,
+             tp.highest_floor as floor,
+             tp.total_wins as wins
+      FROM tower_progress tp
+      LEFT JOIN Users u ON u.id = tp.player_id
+      ORDER BY tp.highest_floor DESC, tp.total_wins DESC
+      LIMIT ?
+    `).all(limit);
+    return rows.map((r, i) => ({
+      rank: i + 1,
+      userId: parseInt(r.userId),
+      name: r.name,
+      floor: r.floor,
+      value: r.floor,
+      wins: r.wins
+    }));
+  } catch (e) {
+    console.error('[rank] chapter查询失败:', e.message);
+    return [];
+  }
+}
 
 // 获取所有排行榜概览（根路径）
 router.get('/', (req, res) => {
-  res.json({
-    combat: { type: 'combat', label: '战力榜', count: rankData.combat.length },
-    level: { type: 'level', label: '等级榜', count: rankData.level.length },
-    wealth: { type: 'wealth', label: '财富榜', count: rankData.wealth.length },
-    chapter: { type: 'chapter', label: '章节榜', count: rankData.chapter.length }
-  });
+  try {
+    const combat = getCombatRank(100);
+    const level = getLevelRank(100);
+    const wealth = getWealthRank(100);
+    const chapter = getChapterRank(100);
+    res.json({
+      combat: { type: 'combat', label: '战力榜', count: combat.length },
+      level: { type: 'level', label: '等级榜', count: level.length },
+      wealth: { type: 'wealth', label: '财富榜', count: wealth.length },
+      chapter: { type: 'chapter', label: '章节榜', count: chapter.length }
+    });
+  } catch (e) {
+    console.error('[rank] / 错误:', e.message);
+    res.json({ combat: { type: 'combat', label: '战力榜', count: 0 }, level: { type: 'level', label: '等级榜', count: 0 }, wealth: { type: 'wealth', label: '财富榜', count: 0 }, chapter: { type: 'chapter', label: '章节榜', count: 0 } });
+  }
 });
 
 // 获取各类排行榜
 router.get('/:type', (req, res) => {
   const { type } = req.params;
   const { limit } = req.query;
-  
-  const list = rankData[type] || [];
-  const result = list.slice(0, parseInt(limit) || 50);
-  
+  const n = Math.min(parseInt(limit) || 50, 100);
+
+  let result;
+  switch (type) {
+    case 'combat': result = getCombatRank(n); break;
+    case 'level':  result = getLevelRank(n);  break;
+    case 'wealth': result = getWealthRank(n); break;
+    case 'chapter': result = getChapterRank(n); break;
+    default:
+      return res.json({ error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+  }
+
   res.json(result);
 });
 
-// 获取玩家排名
+// 获取玩家在指定排行榜的排名
 router.get('/:type/:userId', (req, res) => {
   const { type, userId } = req.params;
-  const list = rankData[type] || [];
-  
-  const player = list.find(r => r.userId === parseInt(userId));
-  
-  if (!player) {
-    return res.json({ rank: list.length + 1 });
-  }
-  
-  res.json(player);
-});
+  const uid = parseInt(userId);
 
-// 更新排行榜
-router.post('/update', (req, res) => {
-  const { type, userId, name, value } = req.body;
-  
-  if (!rankData[type]) {
-    rankData[type] = [];
+  let list;
+  switch (type) {
+    case 'combat': list = getCombatRank(200); break;
+    case 'level':  list = getLevelRank(200);  break;
+    case 'wealth': list = getWealthRank(200); break;
+    case 'chapter': list = getChapterRank(200); break;
+    default:
+      return res.json({ error: '未知排行榜类型' });
   }
-  
-  const existing = rankData[type].find(r => r.userId === userId);
-  
-  if (existing) {
-    existing.value = value;
-    existing.name = name;
-  } else {
-    rankData[type].push({
-      rank: rankData[type].length + 1,
-      userId,
-      name,
-      value
-    });
+
+  const player = list.find(r => r.userId === uid);
+  if (!player) {
+    return res.json({ rank: list.length + 1, userId: uid, type });
   }
-  
-  // 排序
-  rankData[type].sort((a, b) => b.value - a.value);
-  
-  // 更新排名
-  rankData[type].forEach((r, i) => r.rank = i + 1);
-  
-  res.json({ success: true });
+  res.json(player);
 });
 
 module.exports = router;
