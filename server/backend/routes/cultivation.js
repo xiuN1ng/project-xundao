@@ -226,17 +226,22 @@ router.post('/start', (req, res) => {
     }
 
     // 修炼获得灵气值（基础 + 效率加成）
+    // cultivationPower 必须从当前 value 提前计算并持久化，否则 powerBonus 永远为 0
     const baseGain = Math.floor(Math.random() * 100) + 50;
-    const powerBonus = cult.cultivationPower ? Math.floor(baseGain * cult.cultivationPower / 100) : 0;
+    const realmLevel = config.realm_level || 1;
+    const currentCultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const powerBonus = currentCultivationPower > 0 ? Math.floor(baseGain * currentCultivationPower / 100) : 0;
     const gain = baseGain + powerBonus;
 
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
+    // 同步修炼值 + cultivationPower（永久写入DB，解决永久=0问题）
+    const finalCultivationPower = Math.floor(newValue * 0.1 + realmLevel * 50);
 
     // 扣除灵石（写入 Users.lingshi，权威数据源）
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
-    // 同步修炼值
-    db.prepare('UPDATE Cultivations SET value = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, userId);
+    // 同步修炼值 + cultivationPower
+    db.prepare('UPDATE Cultivations SET value = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, finalCultivationPower, userId);
     // 增加玩家经验（1次修炼 = 10 exp）
     const expGain = 10;
 
@@ -245,7 +250,7 @@ router.post('/start', (req, res) => {
       try {
         dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
       } catch (e) {
-        console.error('[cultivation] 每日任务更新失败:', e.message);
+        Logger.error('每日任务更新失败:', e.message);
       }
     }
 
@@ -255,6 +260,8 @@ router.post('/start', (req, res) => {
       lingshiCost: LINGSHI_COST,
       newValue,
       progress: newProgress,
+      cultivationPower: finalCultivationPower,
+      powerBonus,
       expGain,
       maxed: newValue >= config.cost
     });

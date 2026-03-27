@@ -57,9 +57,21 @@ function loadFromDB() {
 }
 
 function saveQuestToDB(userId, questId, progress, completed, claimed) {
+  fs.writeFileSync('/tmp/sdq_trace', 'saveQuestToDB: uid=' + userId + ' qid=' + questId + ' p=' + progress);
+  // 同时更新内存缓存，确保 /daily 等读取接口能拿到最新数据
+  const today = getShanghaiDate();
+  if (!userQuests[userId]) {
+    userQuests[userId] = { date: today, quests: {} };
+  }
+  if (!userQuests[userId].quests[questId]) {
+    userQuests[userId].quests[questId] = { questId, progress: 0, completed: false, claimed: false };
+  }
+  userQuests[userId].quests[questId].progress = progress;
+  userQuests[userId].quests[questId].completed = !!completed;
+  userQuests[userId].quests[questId].claimed = !!claimed;
+
   if (!db) return;
   try {
-    const today = getShanghaiDate();
     db.prepare(`
       INSERT OR REPLACE INTO daily_quest_progress (user_id, quest_id, progress, completed, claimed, quest_date)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -104,8 +116,10 @@ let userQuests = {};
 // 初始化用户每日任务
 // 获取上海时间日期字符串
 function getShanghaiDate() {
-  const d = new Date(Date.now() + 8 * 3600000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
 }
 
 function initDailyQuests(userId) {
@@ -142,7 +156,7 @@ function initDailyQuests(userId) {
 }
 
 // 事件驱动：更新任务进度（供外部调用）
-function updateDailyQuestProgress(userId, type, delta) {
+function updateDailyQuestProgress(userId, type, delta) { fs.writeFileSync("/tmp/udp_enter", "uid=" + userId + " type=" + type + " delta=" + delta);
   const data = initDailyQuests(userId);
   const relatedQuests = questTemplates.filter(q => q.type === type);
   let updated = false;
