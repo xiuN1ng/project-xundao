@@ -1156,11 +1156,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/dailyQuest.js (questTemplates)
   - 截止: 2026-04-02
 
-[B-P1-71-2] 成就trigger映射重写（数字ID对齐）
+[B-P1-71-2] 成就trigger映射重写（数字ID对齐） # 完成 | 2026-03-27 b1809c81
   - ACHIEVEMENT_DEFINITIONS key 改为数字（1,2,3...与achievement/list API一致）
   - triggerAchievement('realm_breakthrough', realm) 需映射到正确数字成就ID
   - 文件: /root/.openclaw/workspace/xundao-server/server/game/achievement_trigger_service.js
-  - 截止: 2026-04-03
+  - 截止: 2026-04-03 | 验证: realm_breakthrough(3)触发ID 1/2并写入DB
 
 [B-P1-71-3] 经脉点数来源实现
   - 境界突破时奖励: meridianPoints += 10 + realm * 2
