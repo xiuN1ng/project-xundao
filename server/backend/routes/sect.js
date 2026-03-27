@@ -32,6 +32,46 @@ try {
   console.log('[sect] sect_applications 表初始化:', e.message);
 }
 
+// 初始化 SectMembers 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS SectMembers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      sectId INTEGER NOT NULL,
+      role TEXT DEFAULT '成员' CHECK(role IN ('掌门','长老','成员')),
+      contribution INTEGER DEFAULT 0,
+      joinedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(userId, sectId)
+    )
+  `);
+} catch (e) {
+  console.log('[sect] SectMembers 表初始化:', e.message);
+}
+
+// 初始化默认宗门「青云宗」到 Sects 表（如不存在则插入）
+try {
+  const existingSect = db.prepare('SELECT id FROM Sects WHERE id = 1').get();
+  if (!existingSect) {
+    const now = new Date().toISOString();
+    // 青云宗：id=1, level=8, members=1, contribution=0, rank=1
+    db.prepare(`
+      INSERT INTO Sects (id, name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
+      VALUES (1, '青云宗', 1, 8, 1, 0, 1, ?, ?)
+    `).run(now, now);
+
+    // 初始化 SectMembers：掌门真人(id=1)作为掌门
+    db.prepare(`
+      INSERT INTO SectMembers (userId, sectId, role, contribution, joinedAt)
+      VALUES (1, 1, '掌门', 0, ?)
+    `).run(now);
+
+    console.log('[sect] 青云宗初始化完成');
+  }
+} catch (e) {
+  console.log('[sect] 青云宗初始化:', e.message);
+}
+
 // 模拟数据
 let sect = {
   id: 1,
@@ -206,10 +246,61 @@ router.get('/list', (req, res) => {
   }
 });
 
-// /info - 宗门详细信息
+// /info - 宗门详细信息（按 playerId 查询其所属宗门）
 router.get('/info', (req, res) => {
-  const playerId = parseInt(req.query.player_id) || 1;
-  res.json({ success: true, sect, memberCount: members.length });
+  const playerId = parseInt(req.query.player_id) || parseInt(req.query.userId) || 1;
+
+  if (!db) {
+    return res.json({ success: false, message: '数据库未连接' });
+  }
+
+  try {
+    // 先查玩家所属宗门
+    const user = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!user || !user.sectId) {
+      return res.json({ success: true, sect: null, inSect: false, message: '未加入宗门' });
+    }
+
+    // 从 DB 查询宗门信息
+    const sectInfo = db.prepare(`
+      SELECT s.*, u.nickname as leaderName
+      FROM Sects s
+      LEFT JOIN Users u ON u.id = s.leaderId
+      WHERE s.id = ?
+    `).get(user.sectId);
+
+    if (!sectInfo) {
+      return res.json({ success: true, sect: null, inSect: false, message: '宗门不存在' });
+    }
+
+    // 查询宗门成员数量（SectMembers 表）
+    let memberCount = 1;
+    try {
+      const cnt = db.prepare('SELECT COUNT(*) as c FROM SectMembers WHERE sectId = ?').get(user.sectId);
+      memberCount = cnt ? cnt.c : memberCount;
+    } catch (e) { /* SectMembers 可能不存在 */ }
+
+    return res.json({
+      success: true,
+      inSect: true,
+      sect: {
+        id: sectInfo.id,
+        name: sectInfo.name,
+        level: sectInfo.level,
+        icon: '🏯',
+        members: sectInfo.members,
+        memberCount: memberCount,
+        contribution: sectInfo.contribution,
+        rank: sectInfo.rank,
+        leaderId: sectInfo.leaderId,
+        leaderName: sectInfo.leaderName || '未知',
+        createdAt: sectInfo.createdAt
+      }
+    });
+  } catch (e) {
+    console.error('[sect] /info 错误:', e.message);
+    return res.json({ success: false, message: '获取宗门信息失败: ' + e.message });
+  }
 });
 
 // /my - 获取当前玩家所属宗门
@@ -389,6 +480,16 @@ router.post('/create', (req, res) => {
 
     // 更新玩家的 sectId
     db.prepare('UPDATE Users SET sectId = ? WHERE id = ?').run(newSectId, creatorId);
+
+    // 插入 SectMembers（创始人作为掌门）
+    try {
+      db.prepare(`
+        INSERT INTO SectMembers (userId, sectId, role, contribution, joinedAt)
+        VALUES (?, ?, '掌门', 0, ?)
+      `).run(creatorId, newSectId, now);
+    } catch (e) {
+      console.log('[sect] create SectMembers 插入:', e.message);
+    }
 
     const newSect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(newSectId);
 
