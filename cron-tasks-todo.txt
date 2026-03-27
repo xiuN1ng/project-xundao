@@ -1769,18 +1769,21 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   修复: router.get('/current/:userId?') + const userId = req.userId || parseInt(req.params.userId) || 1
   截止: 2026-03-29
 
-[P1-28-AM-2] 【B】补全缺失路由
-  - cultivation/info (GET)
-  - dungeon/list (GET)
-  - friend/list (GET)
-  - story/list (GET)
-  - quest/list (GET)
+[P1-28-AM-2] 【B】补全缺失路由  # 完成 | 2026-03-28 c8281931
+  - cultivation/info (GET) - cultivation.js 添加 /info 端点  # 2026-03-28
+  - dungeon/list (GET) - dungeon.js 添加 /list 端点  # 2026-03-28
+  - friend/list (GET) - friend.js 添加 /list 端点  # 2026-03-28
+  - story/list (GET) - story.js 添加 /list 端点  # 2026-03-28
+  - quest/list (GET) - quest.js 添加 /list 端点  # 2026-03-28
   截止: 2026-03-30
 
 [P1-28-AM-3] 【B】Paradise 低境界福地
   添加 minRealm=1 的「灵田福地」或降低现有福地境界要求
   截止: 2026-03-30
 
-[P2-28-AM-1] 【B】Clan 路由重建
-  创建 /api/clan/* 路由：create/list/join/info
+[P2-28-AM-1] 【B】Clan 路由重建  # 完成 | 2026-03-28 c8281931
+  创建 /api/clan/* 路由：create/list/join/info  # 2026-03-28
+  - clan.js 完整实现： clans表 + clan_members表 + 8个宗门模板  # 2026-03-28
+  - 端点: GET /(列表) + GET /list + GET /info + POST /create + POST /join + POST /leave + GET /:id  # 2026-03-28
+  - server.js 注册 /api/clan 路由  # 2026-03-28
   截止: 2026-04-05
