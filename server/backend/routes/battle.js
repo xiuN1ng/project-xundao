@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
 
+// 每日任务集成
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  console.log('[battle] dailyQuest 路由加载失败:', e.message);
+}
+
 // 模拟数据
 let arena = {
   playerId: 1,
@@ -45,6 +53,11 @@ router.post('/challenge', (req, res) => {
   if (win) {
     arena.winCount += 1;
     arena.streak += 1;
+    // 触发每日任务：战斗胜利
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      const playerId = req.body.player_id || req.body.userId || req.body.playerId || 1;
+      dailyQuestRouter.updateDailyQuestProgress(playerId, 'battle', 1);
+    }
   } else {
     arena.streak = 0;
   }

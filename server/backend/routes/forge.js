@@ -3,6 +3,14 @@ const router = express.Router();
 const path = require('path');
 const Database = require('better-sqlite3');
 
+// 每日任务集成
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  console.log('[forge] dailyQuest 路由加载失败:', e.message);
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -355,6 +363,10 @@ router.post('/strengthen', (req, res) => {
         bonusStats[stat] = Math.floor(value * 0.1 * newLevel);
       }
       db.prepare('UPDATE forge_equipment SET strengthen_level=?, bonus_stats=? WHERE id=?').run(newLevel, JSON.stringify(bonusStats), equipmentId);
+      // 触发每日任务：装备强化
+      if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+        dailyQuestRouter.updateDailyQuestProgress(playerId, 'equipment', 1);
+      }
       res.json({ success: true, level: newLevel, message: `强化成功！等级提升至${newLevel}` });
     } else {
       res.json({ success: false, level, message: '强化失败，但装备不会降级' });

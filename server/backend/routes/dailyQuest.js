@@ -222,6 +222,42 @@ router.post('/update', (req, res) => {
   res.json({ success: true, quests: data.quests });
 });
 
+// 统一事件入口：将游戏事件映射到任务进度
+router.post('/event', (req, res) => {
+  const { userId, event, value } = req.body;
+  if (!userId || !event) {
+    return res.json({ success: false, message: '缺少 userId 或 event 参数' });
+  }
+
+  // 事件 → 任务类型 + delta 映射表
+  const eventMap = {
+    'cultivation_complete': { type: 'cultivate', delta: 1 },
+    'battle_win':           { type: 'battle',    delta: 1 },
+    'chapter_complete':     { type: 'chapter',   delta: 1 },
+    'shop_buy':             { type: 'shop',      delta: value || 1 },
+    'equipment_enhance':    { type: 'equipment', delta: 1 },
+    'friend_add':           { type: 'friend',     delta: 1 },
+  };
+
+  const mapping = eventMap[event];
+  if (!mapping) {
+    return res.json({ success: false, message: `未知事件: ${event}` });
+  }
+
+  const updated = updateDailyQuestProgress(userId, mapping.type, mapping.delta);
+  const data = initDailyQuests(userId);
+
+  // 返回当前事件相关的任务进度
+  const relatedQuests = questTemplates
+    .filter(q => q.type === mapping.type)
+    .map(q => {
+      const uq = data.quests[q.id] || { progress: 0, completed: false, claimed: false };
+      return { id: q.id, name: q.name, progress: uq.progress, target: q.target, completed: uq.completed, claimed: uq.claimed };
+    });
+
+  res.json({ success: true, event, type: mapping.type, delta: mapping.delta, updated, relatedQuests });
+});
+
 // 更新任务进度 (update-progress 别名)
 router.post('/update-progress', (req, res) => {
   const { userId, type, amount } = req.body;

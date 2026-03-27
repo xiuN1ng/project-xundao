@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 每日任务集成
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  console.log('[shop] dailyQuest 路由加载失败:', e.message);
+}
+
 // 数据库路径 (统一使用 backend/data/game.db)
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
@@ -129,7 +137,12 @@ router.post('/buy', (req, res) => {
         INSERT INTO player_items (user_id, item_id, item_name, item_type, count, icon, source, created_at)
         VALUES (?, ?, ?, ?, ?, ?, 'shop', CURRENT_TIMESTAMP)
       `).run(userId, good.id, itemName, good.type || good.category, count, good.icon);
-      
+
+      // 触发每日任务：消费灵石
+      if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+        dailyQuestRouter.updateDailyQuestProgress(userId, 'shop', totalCost);
+      }
+
       res.json({ success: true, item: good, count, cost: totalCost });
     } catch (e) {
       console.error('[shop] buy错误:', e.message);
