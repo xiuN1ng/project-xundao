@@ -1261,7 +1261,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## [B] P2 — 2026-03-27
 
-[P2-B-58-1] 【B】密室系统完整实现
+[P2-B-58-1] 【B】密室系统完整实现 # 完成 | 2026-03-27 153a5a7e
   问题: routes/secret.js 仅5行stub，前后端均为hardcode
   任务:
     1. 创建 secret_dungeon 表（player_id, unlocked, best_floor, history）
