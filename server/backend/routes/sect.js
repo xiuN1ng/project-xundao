@@ -533,4 +533,48 @@ router.post('/join', (req, res) => {
   }
 });
 
+// ========== P0-2703: 兼容路由 ==========
+
+// GET /api/sect/missions → 宗门每日任务（代理到 sect-missions/daily）
+router.get('/missions', (req, res) => {
+  const { playerId, userId } = req.query;
+  const targetId = parseInt(playerId) || parseInt(userId) || 1;
+  try {
+    const sectMissionRouter = require('./sect-missions');
+    const mockReq = Object.assign({}, req, { query: { playerId: targetId }, body: {} });
+    const mockRes = {
+      json: (data) => res.json(data),
+      status: (code) => ({ json: (d) => res.status(code).json(d) })
+    };
+    // 找到 sect-missions 的 /daily 处理器并调用
+    const dailyLayer = sectMissionRouter.stack.find(l => l.route && l.route.path === '/daily');
+    if (dailyLayer) {
+      dailyLayer.route.stack[0].handle(mockReq, mockRes, () => {});
+    } else {
+      res.status(500).json({ success: false, message: '宗门任务模块未就绪' });
+    }
+  } catch (e) {
+    res.status(500).json({ success: false, message: '宗门任务加载失败: ' + e.message });
+  }
+});
+
+// POST /api/sect/dungeon/enter → 宗门副本挑战（兼容路由，代理到 dungeon/challenge）
+router.post('/dungeon/enter', (req, res) => {
+  const { playerId, userId, sectId, floor } = req.body;
+  const targetId = parseInt(playerId) || parseInt(userId) || 1;
+  const mockReq = Object.assign({}, req, {
+    body: { playerId: targetId, sectId, floor }
+  });
+  const mockRes = {
+    json: (data) => res.json(data),
+    status: (code) => ({ json: (d) => res.status(code).json(d) })
+  };
+  const challengeLayer = router.stack.find(l => l.route && l.route.path === '/dungeon/challenge');
+  if (challengeLayer) {
+    challengeLayer.route.stack[0].handle(mockReq, mockRes, () => {});
+  } else {
+    res.status(404).json({ success: false, message: '宗门副本未开放' });
+  }
+});
+
 module.exports = router;

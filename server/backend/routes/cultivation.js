@@ -36,17 +36,29 @@ try {
   };
 }
 
-// 境界配置
-const realmConfig = {
-  1: { name: '练气', cost: 1000,  icon: '🧘', realm_level: 1 },
-  2: { name: '筑基', cost: 10000, icon: '🔮', realm_level: 2 },
-  3: { name: '金丹', cost: 100000, icon: '🌟', realm_level: 3 },
-  4: { name: '元婴', cost: 1000000, icon: '👼', realm_level: 4 },
-  5: { name: '化神', cost: 10000000, icon: '✨', realm_level: 5 },
-  6: { name: '炼虚', cost: 50000000, icon: '💫', realm_level: 6 },
-  7: { name: '大乘', cost: 200000000, icon: '🔥', realm_level: 7 },
-  8: { name: '飞升', cost: 1000000000, icon: '🌈', realm_level: 8 },
+// 境界基础配置
+const REALM_BASE_CONFIG = {
+  1: { name: '练气', icon: '🧘', realm_level: 1 },
+  2: { name: '筑基', icon: '🔮', realm_level: 2 },
+  3: { name: '金丹', icon: '🌟', realm_level: 3 },
+  4: { name: '元婴', icon: '👼', realm_level: 4 },
+  5: { name: '化神', icon: '✨', realm_level: 5 },
+  6: { name: '炼虚', icon: '💫', realm_level: 6 },
+  7: { name: '大乘', icon: '🔥', realm_level: 7 },
+  8: { name: '飞升', icon: '🌈', realm_level: 8 },
 };
+
+// 动态境界配置（cost = realm × 10000）
+const realmConfig = {};
+for (const [realm, base] of Object.entries(REALM_BASE_CONFIG)) {
+  realmConfig[realm] = {
+    ...base,
+    cost: parseInt(realm) * 10000
+  };
+}
+
+// 境界消耗灵石（修炼一次）
+const getCultivationCost = (realm) => Math.floor(50 * (1 + parseInt(realm) * 0.3));
 
 // Mock玩家数据（当数据库无玩家时使用）
 const mockPlayer = {
@@ -207,8 +219,8 @@ router.post('/start', (req, res) => {
     const player = getPlayer(userId);
     if (!player) return res.json({ success: false, message: '玩家不存在' });
 
-    // 每次修炼消耗 50 灵石
-    const LINGSHI_COST = 50;
+    // 每次修炼消耗灵石（根据境界动态计算）
+    const LINGSHI_COST = getCultivationCost(cult.realm);
     if (parseInt(player.lingshi || 0) < LINGSHI_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
