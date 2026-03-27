@@ -957,9 +957,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## === 2026-03-27 0900 — 游戏策划 Agent 新增任务 ===
 
-[P0-0327-1] cultivation.js所有路由从JWT token读取userId [CRITICAL] [B]
+[P0-0327-1] cultivation.js所有路由从JWT token读取userId [CRITICAL] [B] # 完成 | 2026-03-27 3f67efc
   根因: cultivation.js使用parseInt(req.query.userId)||1而非req.user?.id
-  修复: 所有路由应用authMiddleware，从req.user.id取userId
+  修复: 所有路由应用authMiddleware，从req.user.id取userId（全局中间件已设置req.userId）
   截止: 2026-03-27
 
 [P0-0327-2] arena.js所有路由从JWT token读取userId [CRITICAL] [B]
