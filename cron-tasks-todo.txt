@@ -1187,7 +1187,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # ========== 2026-03-27 下午版 ==========
 [P0] 【B】论道系统 - 创建 routes/lundao.js，战斗+排行榜+赛季机制 # 完成 | 2026-03-27 52b6a800
-[P0] 【B】每日任务事件追踪 - 创建 /api/dailyQuest/event 端点，在所有行为处调用
+[P0] 【B】每日任务事件追踪 - 创建 /api/dailyQuest/event 端点，在所有行为处调用 # 完成 | 2026-03-27 84398422
 [P1] 【B】竞技场挑战修复 - last_challenge_date → last_challenge_reset（2处UPDATE+1处SELECT）
 [P1] 【B】宗门持久化 - sect_api.js create写DB，/api/sect/list从DB读取
 [P1] 【B】章节HP/ATK曲线重构 - 11章后连续增长，每10章精英层，BOSS层×3HP
