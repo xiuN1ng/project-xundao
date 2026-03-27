@@ -1389,20 +1389,22 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # 分发时间: 2026-03-27 22:23
 
 # === P0 致命 ===
-[P0-67-1] 挂载 friend_api.js → /api/friends (friend系统全404)
-  文件: server/server.js (添加 require + app.use)
+[P0-67-1] 挂载 friend_api.js → /api/friends (friend系统全404)  # 完成 | 2026-03-27 43f73561
+  文件: server/backend/routes/friend.js (完全重写，431行SQLite持久化)
+  完成: GET / (好友列表) + /requests (待处理请求) + POST /add + /accept + /reject + DELETE /:id + /block + /search + /stats
   截止: 2026-03-28
 
-[P0-67-2] 挂载 quest_api.js → /api/quest (quest系统全404)
-  文件: server/server.js
+[P0-67-2] 挂载 quest_api.js → /api/quest (quest系统全404)  # 完成 | 2026-03-27 43f73561
+  文件: server/backend/routes/quest.js (完全重写，349行SQLite持久化)
+  完成: GET / (任务列表) + /info + POST /accept + /update-progress + /claim + GET /templates
   截止: 2026-03-28
 
-[P0-67-3] welfare签到数据持久化到DB（POST claim-sign-in成功但GET sign-in数据归零）
+[P0-67-3] welfare签到数据持久化到DB（POST claim-sign-in成功但GET sign-in数据归零）  # 已确认完成 | welfare_storage.js使用welfare_sign_in DB表
   根因: signInData是内存对象，重启/并发时数据丢失
   文件: server/services/welfare_api.js, server/services/welfare_storage.js
   截止: 2026-03-28
 
-[P0-67-4] cultivation/chapter完成后触发achievement+DailyQuest进度更新
+[P0-67-4] cultivation/chapter完成后触发achievement+DailyQuest进度更新  # 已确认完成 | cultivation.js:249/251调用dailyQuestRouter + 299/343调用achievementTrigger
   根因: cultivation.js独立运行，从不调用achievement_trigger或dailyquest update
   文件: server/backend/routes/cultivation.js, server/backend/routes/chapter.js
   截止: 2026-03-28
