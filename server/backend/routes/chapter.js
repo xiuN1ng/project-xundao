@@ -31,6 +31,15 @@ try {
   console.log('[chapter] 每日任务模块未找到:', e.message);
 }
 
+// 事件总线
+let eventBus;
+try {
+  eventBus = require('../../game/eventBus');
+} catch (e) {
+  console.log('[chapter] eventBus加载失败:', e.message);
+  eventBus = null;
+}
+
 // ========== 锻造材料掉落表 ==========
 // 格式: material_key -> { baseChance, chapterBonus, minQuantity, maxQuantity }
 const MATERIAL_DROP_TABLE = {
@@ -342,6 +351,11 @@ router.post('/complete', (req, res) => {
     }
   }
 
+  // ========== 事件总线触发：章节通关 ==========
+  if (eventBus) {
+    eventBus.emit('chapter:complete', { userId, chapterId });
+  }
+
   // ========== 锻造材料掉落 ==========
   let materialDrops = [];
   if (db) {
@@ -462,6 +476,11 @@ router.post('/battle', (req, res) => {
     } catch (e) {
       console.error('[chapter] 每日任务更新失败:', e.message);
     }
+  }
+
+  // ========== 事件总线触发：章节战斗胜利 ==========
+  if (eventBus) {
+    eventBus.emit('chapter:battle', { userId, chapterId });
   }
 
   // 锻造材料掉落

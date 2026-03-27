@@ -68,6 +68,32 @@ function initArenaTables() {
 
 initArenaTables();
 
+// ========== 成就 + 每日任务触发器 ==========
+let achievementTrigger = null;
+try {
+  achievementTrigger = require('../../game/achievement_trigger_service');
+  Logger.info('成就触发服务加载成功');
+} catch (e) {
+  Logger.warn('成就触发服务加载失败:', e.message);
+}
+
+let dailyQuestRouter = null;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+  Logger.info('每日任务路由加载成功');
+} catch (e) {
+  Logger.warn('每日任务路由加载失败:', e.message);
+}
+
+// 事件总线
+let eventBus = null;
+try {
+  eventBus = require('../../game/eventBus');
+  Logger.info('eventBus 加载成功');
+} catch (e) {
+  Logger.warn('eventBus 加载失败:', e.message);
+}
+
 // AI机器人池（8个，分低/中/高三层）
 // tier: 1=低阶, 2=中阶, 3=高阶
 const AI_BOTS = [
@@ -747,6 +773,33 @@ router.post('/challenge', (req, res) => {
         remainingChallenges: dailyChallengeCount - dailyInfo.challengesUsed - 1
       }
     });
+
+    // ========== 成就 + 每日任务触发 ==========
+    // 触发成就：战斗胜利（combat_win）
+    if (attackerWin && achievementTrigger) {
+      try {
+        achievementTrigger.onCombatWin(player_id, attackerPower);
+        const notifications = achievementTrigger.popNotifications(player_id);
+        if (notifications && notifications.length > 0) {
+          Logger.info(`[成就通知] 用户${player_id}在竞技场挑战中达成:`, notifications.map(n => n.achievementName).join(', '));
+        }
+      } catch (e) {
+        Logger.warn('[arena] 成就触发失败:', e.message);
+      }
+    }
+    // 触发每日任务：竞技场战斗（battle类型=1次）
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(player_id, 'battle', 1);
+      } catch (e) {
+        Logger.warn('[arena] 每日任务更新失败:', e.message);
+      }
+    }
+
+    // ========== 事件总线触发：竞技场挑战 ==========
+    if (eventBus) {
+      eventBus.emit('arena:challenge', { userId: player_id, win: attackerWin, combatPower: attackerPower });
+    }
   } catch (error) {
     Logger.error('POST /challenge 错误:', error);
     res.status(500).json({ success: false, error: error.message });

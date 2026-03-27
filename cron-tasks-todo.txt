@@ -1589,3 +1589,41 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [NF-28-N-2] Paradise仙界探索API
   端点: GET /api/paradise/status, POST /api/paradise/explore
   截止: 2026-04-12
+
+# ========== 2026-03-28 01:48 追加（来自第61轮策划）============
+
+## P0 — 紧急
+[P0-B-61-1] DailyQuest进度不更新
+  文件: routes/dailyQuest.js
+  问题: updateDailyQuestProgress写DB但GET /daily读内存，两套存储不同步
+  修复: GET /daily优先从DB读取，或在update后同步写内存
+  截止: 2026-04-02
+
+[P0-B-61-2] realm_dungeon HTTP路由
+  文件: routes/realm_dungeon.js (新建)
+  封装: server/game/realm_dungeon_system.js
+  端点: GET /status/:playerId, GET /list/:realm, POST /enter, POST /battle, POST /claim
+  截止: 2026-04-05
+
+[P0-B-61-3] adventure HTTP路由
+  文件: routes/adventure.js (新建)
+  封装: server/backend/server/systems/adventure_system.js
+  端点: GET /status/:playerId, GET /types, POST /explore, POST /encounter/:id, POST /claim/:id
+  截止: 2026-04-07
+
+## P1 — 本周
+[P1-B-61-1] fishing.js完整重写
+  文件: routes/fishing.js (重写)
+  端点: GET /status, GET /types, POST /cast, POST /reel, GET /shop, POST /buy-rod
+  数据库: fishing_records, fishing_fish_types
+  截止: 2026-04-08
+
+[P1-B-61-2] heartDemon/list服务器错误
+  文件: routes/heart_demon.js
+  问题: /list端点运行时错误，检查SQL查询
+  截止: 2026-03-29
+
+[P1-B-61-3] fashion.js添加/list端点
+  文件: routes/fashion.js
+  端点: GET /list (所有时装列表)
+  截止: 2026-04-03

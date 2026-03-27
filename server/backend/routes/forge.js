@@ -11,6 +11,15 @@ try {
   console.log('[forge] dailyQuest 路由加载失败:', e.message);
 }
 
+// 事件总线
+let eventBus;
+try {
+  eventBus = require('../../game/eventBus');
+} catch (e) {
+  console.log('[forge] eventBus加载失败:', e.message);
+  eventBus = null;
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -218,6 +227,11 @@ router.post('/forge', (req, res) => {
       } catch(e) {}
     }
 
+    // ========== 事件总线触发：锻造完成 ==========
+    if (eventBus) {
+      eventBus.emit('forge:make', { userId: playerId, recipeId: recipe.id, quality: recipe.quality });
+    }
+
     res.json({ success: true, equipment, achievements: achievementResults.length > 0 ? achievementResults : undefined });
   } catch(e) {
     res.json({ success: false, message: e.message });
@@ -266,6 +280,20 @@ router.post('/make', (req, res) => {
           console.log(`[成就通知] 用户${playerId}达成成就:`, notifications.map(n => n.achievementName).join(', '));
         }
       } catch(e) {}
+    }
+
+    // ========== 事件总线触发：锻造完成 ==========
+    if (eventBus) {
+      eventBus.emit('forge:make', { userId: playerId, recipeId: recipe.id, quality: recipe.quality });
+    }
+
+    // ========== 每日任务触发：装备锻造 ==========
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(playerId, 'equipment', 1);
+      } catch (e) {
+        console.warn('[forge] 每日任务更新失败:', e.message);
+      }
     }
 
     res.json({ success: true, equipment, achievements: achievementResults.length > 0 ? achievementResults : undefined });
@@ -366,6 +394,10 @@ router.post('/strengthen', (req, res) => {
       // 触发每日任务：装备强化
       if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
         dailyQuestRouter.updateDailyQuestProgress(playerId, 'equipment', 1);
+      }
+      // ========== 事件总线触发：装备强化 ==========
+      if (eventBus) {
+        eventBus.emit('forge:strengthen', { userId: playerId, equipId: equipmentId, newLevel });
       }
       res.json({ success: true, level: newLevel, message: `强化成功！等级提升至${newLevel}` });
     } else {

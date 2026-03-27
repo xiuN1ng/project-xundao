@@ -87,6 +87,85 @@ try {
   achievementTrigger = null;
 }
 
+// 事件总线监听器（可选：作为直接调用的补充）
+let eventBus;
+try {
+  eventBus = require('../../game/eventBus');
+} catch (e) {
+  console.log('[achievement] eventBus加载失败:', e.message);
+  eventBus = null;
+}
+
+// 注册事件总线监听器（松耦合方式）
+if (eventBus && achievementTrigger) {
+  eventBus.on('cultivation:breakthrough', ({ userId, newRealm }) => {
+    try {
+      achievementTrigger.onRealmBreakthrough(userId, newRealm);
+      const notifications = achievementTrigger.popNotifications(userId);
+      if (notifications && notifications.length > 0) {
+        console.log(`[成就通知] 用户${userId}境界突破达成:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.warn('[achievement] cultivation:breakthrough 事件处理失败:', e.message);
+    }
+  });
+
+  eventBus.on('chapter:complete', ({ userId, chapterId }) => {
+    try {
+      achievementTrigger.onChapterClear(userId, chapterId);
+      const notifications = achievementTrigger.popNotifications(userId);
+      if (notifications && notifications.length > 0) {
+        console.log(`[成就通知] 用户${userId}章节通关达成:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.warn('[achievement] chapter:complete 事件处理失败:', e.message);
+    }
+  });
+
+  eventBus.on('chapter:battle', ({ userId, chapterId }) => {
+    try {
+      achievementTrigger.onChapterClear(userId, chapterId);
+    } catch (e) {
+      console.warn('[achievement] chapter:battle 事件处理失败:', e.message);
+    }
+  });
+
+  eventBus.on('arena:challenge', ({ userId, win, combatPower }) => {
+    if (!win) return;
+    try {
+      achievementTrigger.onCombatWin(userId, combatPower);
+      const notifications = achievementTrigger.popNotifications(userId);
+      if (notifications && notifications.length > 0) {
+        console.log(`[成就通知] 用户${userId}竞技场战斗达成:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.warn('[achievement] arena:challenge 事件处理失败:', e.message);
+    }
+  });
+
+  eventBus.on('forge:make', ({ userId, recipeId, quality }) => {
+    try {
+      achievementTrigger.onEquipmentObtain(userId, recipeId, quality);
+      const notifications = achievementTrigger.popNotifications(userId);
+      if (notifications && notifications.length > 0) {
+        console.log(`[成就通知] 用户${userId}锻造装备达成:`, notifications.map(n => n.achievementName).join(', '));
+      }
+    } catch (e) {
+      console.warn('[achievement] forge:make 事件处理失败:', e.message);
+    }
+  });
+
+  eventBus.on('forge:strengthen', ({ userId, equipId, newLevel }) => {
+    try {
+      achievementTrigger.onEquipmentObtain(userId, equipId, null);
+    } catch (e) {
+      console.warn('[achievement] forge:strengthen 事件处理失败:', e.message);
+    }
+  });
+
+  console.log('[achievement] 事件总线监听器注册完成');
+}
+
 // 成就配置
 const achievementTemplates = [
   // 修炼成就

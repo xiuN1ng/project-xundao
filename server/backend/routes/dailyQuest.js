@@ -17,6 +17,96 @@ try {
   db = null;
 }
 
+// 事件总线
+let eventBus;
+try {
+  eventBus = require('../../game/eventBus');
+} catch (e) {
+  console.log('[dailyQuest] eventBus加载失败:', e.message);
+  eventBus = null;
+}
+
+// 注册事件总线监听器（松耦合方式，补充直接调用）
+if (eventBus) {
+  // cultivation:start → cultivate类型任务
+  eventBus.on('cultivation:start', ({ userId, gain }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] cultivation:start 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  // cultivation:breakthrough → 可触发境界类任务
+  eventBus.on('cultivation:breakthrough', ({ userId, newRealm }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] cultivation:breakthrough 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  // chapter:complete → chapter类型任务
+  eventBus.on('chapter:complete', ({ userId, chapterId }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'chapter', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] chapter:complete 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  // chapter:battle → chapter类型任务
+  eventBus.on('chapter:battle', ({ userId, chapterId }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'chapter', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] chapter:battle 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  // arena:challenge → battle类型任务
+  eventBus.on('arena:challenge', ({ userId, win, combatPower }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'battle', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] arena:challenge 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  // forge:make / forge:strengthen → equipment类型任务
+  eventBus.on('forge:make', ({ userId, recipeId, quality }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'equipment', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] forge:make 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  eventBus.on('forge:strengthen', ({ userId, equipId, newLevel }) => {
+    if (router.updateDailyQuestProgress) {
+      try {
+        router.updateDailyQuestProgress(userId, 'equipment', 1);
+      } catch (e) {
+        console.warn('[dailyQuest] forge:strengthen 事件处理失败:', e.message);
+      }
+    }
+  });
+
+  console.log('[dailyQuest] 事件总线监听器注册完成');
+}
+
 function initDB() {
   if (!db) return;
   try {

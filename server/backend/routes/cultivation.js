@@ -15,6 +15,15 @@ try {
   Logger.info('dailyQuest 路由未找到:', e.message);
 }
 
+// 事件总线
+let eventBus;
+try {
+  eventBus = require('../../game/eventBus');
+} catch (e) {
+  Logger.info('eventBus 加载失败:', e.message);
+  eventBus = null;
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -254,6 +263,11 @@ router.post('/start', (req, res) => {
       }
     }
 
+    // ========== 事件总线触发：修炼开始 ==========
+    if (eventBus) {
+      eventBus.emit('cultivation:start', { userId, gain });
+    }
+
     res.json({
       success: true,
       gain,
@@ -304,6 +318,11 @@ router.post('/breakthrough', (req, res) => {
       }
     }
 
+    // ========== 事件总线触发：境界突破 ==========
+    if (eventBus) {
+      eventBus.emit('cultivation:breakthrough', { userId, newRealm: nextRealm });
+    }
+
     res.json({
       success: true,
       newRealm: nextRealm,
@@ -346,6 +365,11 @@ router.post('/advance', (req, res) => {
       } catch (e) {
         console.error('[cultivation] 成就触发失败:', e.message);
       }
+    }
+
+    // ========== 事件总线触发：境界突破 ==========
+    if (eventBus) {
+      eventBus.emit('cultivation:breakthrough', { userId, newRealm: nextRealm });
     }
 
     res.json({
