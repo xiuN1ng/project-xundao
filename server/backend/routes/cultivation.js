@@ -66,8 +66,57 @@ for (const [realm, base] of Object.entries(REALM_BASE_CONFIG)) {
   };
 }
 
-// 境界消耗灵石（修炼一次，固定10灵石）
-const getCultivationCost = () => 10;
+// 境界消耗灵石（修炼一次，动态计算）
+// 基础10灵石，随cultivationPower增长，每500点+5灵石，上限105
+const getCultivationCost = (cultivationPower) => {
+  const extra = Math.floor(cultivationPower / 500) * 5;
+  return Math.min(10 + extra, 105);
+};
+
+// 辅助：获取上海时区日期字符串
+const getShanghaiDateStr = () => {
+  const now = new Date(Date.now() + 8 * 3600000);
+  return now.toISOString().substring(0, 10);
+};
+
+// 初始化每日修炼次数表
+const initCultivationDailyTable = () => {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cultivation_daily (
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        times INTEGER DEFAULT 0,
+        PRIMARY KEY (user_id, date)
+      )
+    `);
+  } catch (e) {
+    Logger.error('cultivation_daily 表初始化失败:', e.message);
+  }
+};
+initCultivationDailyTable();
+
+// 辅助：获取今日修炼次数
+const getDailyCultivationTimes = (userId) => {
+  try {
+    const today = getShanghaiDateStr();
+    const row = db.prepare('SELECT times FROM cultivation_daily WHERE user_id = ? AND date = ?').get(userId, today);
+    return row ? row.times : 0;
+  } catch (e) {
+    return 0;
+  }
+};
+
+// 辅助：增加今日修炼次数
+const incrementDailyCultivationTimes = (userId) => {
+  try {
+    const today = getShanghaiDateStr();
+    db.prepare(`INSERT INTO cultivation_daily (user_id, date, times) VALUES (?, ?, 1)
+      ON CONFLICT(user_id, date) DO UPDATE SET times = times + 1`).run(userId, today);
+  } catch (e) {
+    Logger.error('incrementDailyCultivationTimes 失败:', e.message);
+  }
+};
 
 // Mock玩家数据（当数据库无玩家时使用）
 const mockPlayer = {
@@ -156,6 +205,9 @@ router.get('/', (req, res) => {
     const cult = getOrCreateCultivation(userId);
     const config = realmConfig[cult.realm] || realmConfig[1];
     const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
+    const dailyTimes = getDailyCultivationTimes(userId);
+    const realmLevel = config.realm_level || 1;
+    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
 
     res.json({
       success: true,
@@ -168,12 +220,17 @@ router.get('/', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: Math.floor(parseInt(cult.value) * 0.1 * (1 + config.realm_level * 0.05))
+        cultivationPower
       },
       player: {
         level: player.level,
         realm: player.realm,
         lingshi: player.lingshi || 0
+      },
+      dailyCultivation: {
+        times: dailyTimes,
+        limit: 100,
+        lingshiCost: getCultivationCost(cultivationPower)
       }
     });
   } catch (err) {
@@ -192,6 +249,9 @@ router.get('/status', (req, res) => {
     const cult = getOrCreateCultivation(userId);
     const config = realmConfig[cult.realm] || realmConfig[1];
     const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
+    const dailyTimes = getDailyCultivationTimes(userId);
+    const realmLevel = config.realm_level || 1;
+    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
 
     res.json({
       success: true,
@@ -204,12 +264,17 @@ router.get('/status', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower: Math.floor(parseInt(cult.value) * 0.1 * (1 + config.realm_level * 0.05))
+        cultivationPower
       },
       player: {
         level: player.level,
         realm: player.realm,
         lingshi: player.lingshi || 0
+      },
+      dailyCultivation: {
+        times: dailyTimes,
+        limit: 100,
+        lingshiCost: getCultivationCost(cultivationPower)
       }
     });
   } catch (err) {
@@ -228,8 +293,19 @@ router.post('/start', (req, res) => {
     const player = getPlayer(userId);
     if (!player) return res.json({ success: false, message: '玩家不存在' });
 
-    // 每次修炼消耗灵石（根据境界动态计算）
-    const LINGSHI_COST = getCultivationCost(cult.realm);
+    // ========== 每日100次上限检查 ==========
+    const dailyTimes = getDailyCultivationTimes(userId);
+    const DAILY_LIMIT = 100;
+    if (dailyTimes >= DAILY_LIMIT) {
+      return res.json({ success: false, message: `今日修炼次数已用完（${DAILY_LIMIT}/${DAILY_LIMIT}），每天凌晨重置` });
+    }
+
+    // 先计算 currentCultivationPower，再计算动态灵石消耗
+    const realmLevel = config.realm_level || 1;
+    const currentCultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const LINGSHI_COST = getCultivationCost(currentCultivationPower);
+
+    // 灵石不足检查
     if (parseInt(player.lingshi || 0) < LINGSHI_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
@@ -237,9 +313,10 @@ router.post('/start', (req, res) => {
     // 修炼获得灵气值（基础 + 效率加成）
     // cultivationPower 必须从当前 value 提前计算并持久化，否则 powerBonus 永远为 0
     const baseGain = Math.floor(Math.random() * 100) + 50;
-    const realmLevel = config.realm_level || 1;
-    const currentCultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
-    const powerBonus = currentCultivationPower > 0 ? Math.floor(baseGain * currentCultivationPower / 100) : 0;
+    // powerBonus 封顶：最多 baseGain * 5（防止指数爆炸）
+    const powerBonus = currentCultivationPower > 0
+      ? Math.min(baseGain * 5, Math.floor(baseGain * currentCultivationPower / 100))
+      : 0;
     const gain = baseGain + powerBonus;
 
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
@@ -251,6 +328,8 @@ router.post('/start', (req, res) => {
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
     // 同步修炼值 + cultivationPower
     db.prepare('UPDATE Cultivations SET value = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, finalCultivationPower, userId);
+    // 增加今日修炼次数
+    incrementDailyCultivationTimes(userId);
     // 增加玩家经验（1次修炼 = 10 exp）
     const expGain = 10;
 
@@ -277,7 +356,9 @@ router.post('/start', (req, res) => {
       cultivationPower: finalCultivationPower,
       powerBonus,
       expGain,
-      maxed: newValue >= config.cost
+      maxed: newValue >= config.cost,
+      dailyTimes: dailyTimes + 1,
+      dailyLimit: DAILY_LIMIT
     });
   } catch (err) {
     Logger.error('POST /start error:', err.message);
