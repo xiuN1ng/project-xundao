@@ -13,6 +13,25 @@ try {
   console.log('[sect] DB 连接失败:', e.message);
 }
 
+// 初始化 sect_applications 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sect_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      message TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at DATETIME,
+      reviewer_id INTEGER,
+      UNIQUE(sect_id, player_id)
+    )
+  `);
+} catch (e) {
+  console.log('[sect] sect_applications 表初始化:', e.message);
+}
+
 // 模拟数据
 let sect = {
   id: 1,
@@ -574,6 +593,236 @@ router.post('/dungeon/enter', (req, res) => {
     challengeLayer.route.stack[0].handle(mockReq, mockRes, () => {});
   } else {
     res.status(404).json({ success: false, message: '宗门副本未开放' });
+  }
+});
+
+// ========== 宗门申请审批系统 ==========
+
+// POST /leave - 玩家离开宗门
+router.post('/leave', (req, res) => {
+  const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId) || 1;
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    const player = db.prepare('SELECT * FROM Users WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, message: '玩家不存在' });
+    }
+    if (!player.sectId) {
+      return res.status(400).json({ success: false, message: '你不在任何宗门中' });
+    }
+
+    const sectId = player.sectId;
+
+    // 掌门不能直接离开宗门
+    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    if (sect && sect.leaderId === player_id) {
+      return res.status(400).json({
+        success: false,
+        message: '掌门不能直接离开宗门，请先转让掌门权'
+      });
+    }
+
+    // 更新玩家 sectId
+    db.prepare("UPDATE Users SET sectId = NULL, updatedAt = datetime('now') WHERE id = ?").run(player_id);
+    // 宗门成员-1
+    db.prepare("UPDATE Sects SET members = MAX(0, members - 1), updatedAt = datetime('now') WHERE id = ?").run(sectId);
+
+    // 尝试从 SectMembers 删除记录（如果表存在）
+    try {
+      db.prepare('DELETE FROM SectMembers WHERE userId = ?').run(player_id);
+    } catch (e) { /* 静默忽略 */ }
+
+    return res.json({
+      success: true,
+      message: `已离开宗门「${sect?.name || '宗门'}」`
+    });
+  } catch (error) {
+    console.error('[sect] /leave 错误:', error.message);
+    return res.status(500).json({ success: false, message: '离开宗门失败: ' + error.message });
+  }
+});
+
+// POST /apply - 玩家申请加入宗门
+router.post('/apply', (req, res) => {
+  const player_id = parseInt(req.body.player_id) || parseInt(req.body.userId) || 1;
+  const sectId = parseInt(req.body.sectId);
+  const message = req.body.message || '';
+
+  if (!sectId) {
+    return res.status(400).json({ success: false, message: '缺少 sectId 参数' });
+  }
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    // 检查玩家是否存在
+    const player = db.prepare('SELECT * FROM Users WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, message: '玩家不存在' });
+    }
+
+    // 检查玩家是否已在宗门
+    if (player.sectId) {
+      return res.status(400).json({
+        success: false,
+        message: '你已在宗门中，请先退出当前宗门'
+      });
+    }
+
+    // 检查宗门是否存在
+    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    if (!sect) {
+      return res.status(404).json({ success: false, message: '宗门不存在' });
+    }
+
+    // 检查是否已有待处理的申请
+    const existingApp = db.prepare(
+      "SELECT * FROM sect_applications WHERE sect_id = ? AND player_id = ? AND status = 'pending'"
+    ).get(sectId, player_id);
+    if (existingApp) {
+      return res.status(400).json({ success: false, message: '已有待处理的申请，请等待审批' });
+    }
+
+    // 插入申请记录
+    db.prepare(
+      "INSERT INTO sect_applications (sect_id, player_id, message, status, created_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+    ).run(sectId, player_id, message);
+
+    return res.json({
+      success: true,
+      message: `已提交加入「${sect.name}」的申请，请等待审批`
+    });
+  } catch (error) {
+    // UNIQUE 约束冲突（已有申请）
+    if (error.message.includes('UNIQUE')) {
+      return res.status(400).json({ success: false, message: '已有待处理的申请，请等待审批' });
+    }
+    console.error('[sect] /apply 错误:', error.message);
+    return res.status(500).json({ success: false, message: '申请失败: ' + error.message });
+  }
+});
+
+// GET /applications/:sectId - 查看宗门的待处理申请（掌门/长老）
+router.get('/applications/:sectId', (req, res) => {
+  const sectId = parseInt(req.params.sectId);
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    const applications = db.prepare(`
+      SELECT sa.*, u.nickname as player_name, u.level as player_level
+      FROM sect_applications sa
+      LEFT JOIN Users u ON u.id = sa.player_id
+      WHERE sa.sect_id = ? AND sa.status = 'pending'
+      ORDER BY sa.created_at ASC
+    `).all(sectId);
+
+    return res.json({
+      success: true,
+      applications: applications.map(a => ({
+        id: a.id,
+        playerId: a.player_id,
+        playerName: a.player_name || '玩家' + a.player_id,
+        playerLevel: a.player_level || 1,
+        message: a.message || '',
+        status: a.status,
+        createdAt: a.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('[sect] /applications 错误:', error.message);
+    return res.status(500).json({ success: false, message: '查询失败: ' + error.message });
+  }
+});
+
+// POST /approve - 审批申请（approve=true通过，approve=false拒绝）
+router.post('/approve', (req, res) => {
+  const approver_id = parseInt(req.body.approver_id) || parseInt(req.body.userId) || 1;
+  const applicationId = parseInt(req.body.applicationId);
+  const approved = req.body.approved !== false; // 默认为 true（通过）
+
+  if (!applicationId) {
+    return res.status(400).json({ success: false, message: '缺少 applicationId 参数' });
+  }
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    // 查找申请
+    const application = db.prepare('SELECT * FROM sect_applications WHERE id = ?').get(applicationId);
+    if (!application) {
+      return res.status(404).json({ success: false, message: '申请不存在' });
+    }
+    if (application.status !== 'pending') {
+      return res.status(400).json({ success: false, message: '该申请已处理' });
+    }
+
+    const sectId = application.sect_id;
+    const player_id = application.player_id;
+
+    // 检查审批人是否是宗门掌门
+    const approver = db.prepare('SELECT * FROM Users WHERE id = ?').get(approver_id);
+    if (!approver || approver.sectId !== sectId) {
+      return res.status(403).json({ success: false, message: '只有宗门成员可以审批' });
+    }
+
+    // 检查宗门人数上限
+    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    if (!sect) {
+      return res.status(404).json({ success: false, message: '宗门不存在' });
+    }
+    const maxMembers = 10 + (sect.level || 1) * 5;
+    if ((sect.members || 0) >= maxMembers) {
+      return res.status(400).json({ success: false, message: `宗门人数已满（${sect.members}/${maxMembers}）` });
+    }
+
+    if (approved) {
+      // 通过：更新 Users.sectId + Sects.members
+      db.prepare("UPDATE Users SET sectId = ?, updatedAt = datetime('now') WHERE id = ?").run(sectId, player_id);
+      db.prepare("UPDATE Sects SET members = members + 1, updatedAt = datetime('now') WHERE id = ?").run(sectId);
+
+      // 更新申请状态
+      db.prepare(
+        "UPDATE sect_applications SET status = 'approved', reviewed_at = datetime('now'), reviewer_id = ? WHERE id = ?"
+      ).run(approver_id, applicationId);
+
+      // 尝试将申请者写入 SectMembers 表（如果该表存在）
+      try {
+        db.prepare(
+          "INSERT INTO SectMembers (userId, sectId, role, joinedAt) VALUES (?, ?, '成员', datetime('now'))"
+        ).run(player_id, sectId);
+      } catch (e) {
+        // SectMembers 表可能不存在，静默忽略
+      }
+
+      return res.json({
+        success: true,
+        message: `已批准玩家「${approver.nickname || '玩家' + player_id}」加入宗门`
+      });
+    } else {
+      // 拒绝
+      db.prepare(
+        "UPDATE sect_applications SET status = 'rejected', reviewed_at = datetime('now'), reviewer_id = ? WHERE id = ?"
+      ).run(approver_id, applicationId);
+
+      return res.json({
+        success: true,
+        message: '已拒绝该申请'
+      });
+    }
+  } catch (error) {
+    console.error('[sect] /approve 错误:', error.message);
+    return res.status(500).json({ success: false, message: '审批失败: ' + error.message });
   }
 });
 
