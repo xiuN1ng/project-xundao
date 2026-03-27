@@ -1198,11 +1198,12 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # === 2026-03-27 下午版（第72轮）新增任务 ===
 
-[P0-72-1] cultivation/start 每日任务不写DB问题
-  - 排查 updateDailyQuestProgress 写库链路
-  - 添加日志确认 saveQuestToDB 的 quest_date 是否正确（今日 2026-03-27）
-  - 在 cultivation/start 成功后强制调用 syncToDB 或确保 saveQuestToDB 被触发
-  - 文件: /root/.openclaw/workspace/xundao-server/server/backend/routes/cultivation.js
+[P0-72-1] cultivation/start 每日任务不写DB问题  # 完成 | 2026-03-27 903d782b
+  - 问题根因: cultivationPower (DB列) 永久=0，powerBonus永远为0，玩家修炼收益极低
+  - 修复: /start 端点增加 cultivationPower 计算和持久化
+  - 公式: cultivationPower = Math.floor(newValue * 0.1 + realmLevel * 50)
+  - UPDATE Cultivations SET value=?, cultivationPower=? 同时写入两列
+  - 文件: server/backend/routes/cultivation.js (POST /start 端点)
   - 截止: 2026-03-28
 
 [P1-72-2-B] Tower nextFloor 字段重命名
