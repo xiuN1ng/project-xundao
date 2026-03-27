@@ -128,6 +128,7 @@ app.use('/api/activity', require('./routes/activity'));
 app.use('/api/lottery', require('./routes/lottery'));
 app.use('/api/gacha', require('./routes/gacha'));
 app.use('/api/dungeon', require('./routes/dungeon'));
+app.use('/api/realm-dungeon', require('./routes/realm_dungeon'));
 app.use('/api/bag', require('./routes/bag'));
 app.use('/api/mount', require('./routes/mount'));
 app.use('/api/wing', require('./routes/wing'));
