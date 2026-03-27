@@ -283,6 +283,50 @@ router.get('/status', (req, res) => {
   }
 });
 
+// 获取修炼信息 (GET /info - 等同于 /status)
+router.get('/info', (req, res) => {
+  const userId = req.userId || 1;
+  try {
+    const player = getPlayer(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    const cult = getOrCreateCultivation(userId);
+    const config = realmConfig[cult.realm] || realmConfig[1];
+    const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
+    const dailyTimes = getDailyCultivationTimes(userId);
+    const realmLevel = config.realm_level || 1;
+    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+
+    res.json({
+      success: true,
+      userId,
+      cultivation: {
+        value: parseInt(cult.value),
+        realm: cult.realm,
+        realmName: config.name,
+        realmIcon: config.icon,
+        realmLevel: config.realm_level,
+        progress,
+        cost: config.cost,
+        cultivationPower
+      },
+      player: {
+        level: player.level,
+        realm: player.realm,
+        lingshi: player.lingshi || 0
+      },
+      dailyCultivation: {
+        times: dailyTimes,
+        limit: 100,
+        lingshiCost: getCultivationCost(cultivationPower)
+      }
+    });
+  } catch (err) {
+    Logger.error('GET /info cultivation error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 // 开始修炼
 router.post('/start', (req, res) => {
   const userId = req.userId || 1;

@@ -80,6 +80,7 @@ app.use('/api/tribulation', require('./routes/tribulation'));
 // 玩家模块（必须在 chapter/tribulation/achievement setPlayerRef 之前加载）
 const playerModule = require('./routes/player');
 app.use('/api/sect', require('./routes/sect'));
+app.use('/api/clan', require('./routes/clan'));
 app.use('/api/sect-missions', require('./routes/sect-missions'));
 app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));

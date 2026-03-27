@@ -52,6 +52,11 @@ router.get('/', (req, res) => {
   res.json(dungeons);
 });
 
+// 获取副本列表 (GET /list - 等同于 /)
+router.get('/list', (req, res) => {
+  res.json(dungeons);
+});
+
 // 获取副本详情
 router.get('/info/:id', (req, res) => {
   const dungeonId = parseInt(req.params.id);

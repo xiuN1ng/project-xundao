@@ -22,6 +22,16 @@ router.get('/chapters', (req, res) => {
   res.json({ data: chapters, total: chapters.length });
 });
 
+// GET /api/story/list - 获取所有章节 (等用于 /chapters)
+router.get('/list', (req, res) => {
+  const chapters = [];
+  const items = chapterRouter ? chapterRouter.__chapters : [];
+  if (items && items.length > 0) {
+    chapters.push(...items);
+  }
+  res.json({ data: chapters, total: chapters.length });
+});
+
 // GET /api/story/chapter/:chapterId - 获取章节详情
 router.get('/chapter/:chapterId', (req, res) => {
   const chapterId = parseInt(req.params.chapterId);

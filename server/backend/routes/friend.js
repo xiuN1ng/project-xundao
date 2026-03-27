@@ -124,6 +124,55 @@ router.get('/', (req, res) => {
   }
 });
 
+// 获取好友列表 (GET /list - 等同于 /)
+router.get('/list', (req, res) => {
+  if (!db) return res.status(500).json({ success: false, error: '数据库未连接' });
+  try {
+    const userId = getUserId(req);
+
+    const friends = db.prepare(`
+      SELECT f.id, f.sender_id, f.receiver_id, f.created_at,
+             CASE WHEN f.sender_id = ? THEN f.receiver_id ELSE f.sender_id END as friend_id
+      FROM friendships f
+      WHERE (f.sender_id = ? OR f.receiver_id = ?) AND f.status = 'accepted'
+    `).all(userId, userId, userId);
+
+    const friendList = friends.map(f => {
+      const fid = f.friend_id;
+      const name = getPlayerName(fid);
+      let online = false;
+      try {
+        const lastActive = db.prepare('SELECT last_login FROM Users WHERE id = ?').get(fid);
+        if (lastActive) {
+          const lastTime = new Date(lastActive.last_login).getTime();
+          online = (Date.now() - lastTime) < 30 * 60 * 1000;
+        }
+      } catch { /* ignore */ }
+
+      return {
+        id: f.id,
+        friendId: fid,
+        name,
+        online,
+        since: f.created_at
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        friends: friendList,
+        friendCount: friendList.length,
+        onlineCount: friendList.filter(f => f.online).length,
+        maxFriends: 50
+      }
+    });
+  } catch (err) {
+    Logger.error('GET /list 获取好友列表失败:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/friend/requests - 待处理的好友请求
 router.get('/requests', (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未连接' });

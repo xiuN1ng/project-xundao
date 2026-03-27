@@ -143,6 +143,61 @@ router.get('/', (req, res) => {
   }
 });
 
+// 获取任务列表 (GET /list - 等同于 /)
+router.get('/list', (req, res) => {
+  if (!db) return res.status(500).json({ success: false, error: '数据库未连接' });
+  try {
+    const userId = getUserId(req);
+    const { type } = req.query;
+
+    const playerQuests = db.prepare(`
+      SELECT quest_id, progress, completed, claimed, accepted_at FROM player_quests WHERE player_id = ?
+    `).all(userId);
+
+    const questMap = {};
+    for (const pq of playerQuests) {
+      questMap[pq.quest_id] = pq;
+    }
+
+    let templates = QUEST_TEMPLATES;
+    if (type) {
+      templates = templates.filter(q => q.type === type);
+    }
+
+    const quests = templates.map(q => {
+      const pq = questMap[q.id];
+      const progress = pq ? pq.progress : 0;
+      const completed = pq ? !!pq.completed : false;
+      const claimed = pq ? !!pq.claimed : false;
+      return {
+        questId: q.id,
+        type: q.type,
+        title: q.title,
+        desc: q.desc,
+        target: q.target,
+        progress: Math.min(progress, q.target),
+        completed,
+        claimed,
+        reward: q.reward,
+        difficulty: q.difficulty,
+        accepted: !!pq
+      };
+    });
+
+    const stats = {
+      total: quests.length,
+      completed: quests.filter(q => q.completed).length,
+      claimed: quests.filter(q => q.claimed).length,
+      inProgress: quests.filter(q => q.progress > 0 && !q.completed).length
+    };
+
+    res.json({ success: true, data: { quests, stats } });
+  } catch (err) {
+    Logger.error('GET /list 获取任务列表失败:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/quest/info - 获取特定任务信息
 router.get('/info', (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未连接' });
