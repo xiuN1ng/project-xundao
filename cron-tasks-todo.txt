@@ -1553,8 +1553,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1-B-59-2] Mall珍宝阁后端（mall.js）— 截止2026-04-10
 
 ## P0-28-N（2026-03-28深夜轮追加）
-[P0-28-N-1] Arena每日重置改用上海时区 [CRITICAL]
-  文件: routes/arena.js — 替换 toISOString().split('T')[0] 为上海时区 dayjs().tz('Asia/Shanghai')
+[P0-28-N-1] Arena每日重置改用上海时区 [CRITICAL]  # 完成 | 2026-03-28 e0af97b9
+  文件: routes/arena.js — 替换 getDateString() 为 Intl.DateTimeFormat Asia/Shanghai 实现
   截止: 2026-03-28
 
 [P1-28-N-1] VIP查询崩溃：ALTER TABLE Users ADD COLUMN vipPoints INTEGER DEFAULT 0
