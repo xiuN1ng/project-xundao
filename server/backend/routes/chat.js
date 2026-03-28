@@ -148,6 +148,33 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/chat/list - 获取频道列表（GET / 别名）
+router.get('/list', (req, res) => {
+  const userId = extractUserId(req);
+  try {
+    const channels = ['world', 'sect', 'private'];
+    const overview = {};
+    for (const ch of channels) {
+      const last = db.prepare(`
+        SELECT id, sender_id, sender_name, content, created_at
+        FROM chat_messages WHERE channel = ?
+        ORDER BY id DESC LIMIT 1
+      `).get(ch);
+      const count = db.prepare(`
+        SELECT COUNT(*) as cnt FROM chat_messages WHERE channel = ?
+      `).get(ch);
+      overview[ch] = {
+        lastMessage: last || null,
+        totalCount: count ? count.cnt : 0
+      };
+    }
+    res.json({ success: true, data: overview });
+  } catch (e) {
+    console.log('[chat] /list 错误:', e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
 // GET /api/chat/history - 获取聊天历史
 // ?channel=world&limit=50&before=123456
 router.get('/history', (req, res) => {

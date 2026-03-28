@@ -145,6 +145,55 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/forge/status - 获取锻造状态（强化石数量 + 装备强化等级）
+router.get('/status', (req, res) => {
+  const playerId = parseInt(req.query.player_id || req.query.userId || 1);
+  const db = getDb();
+  try {
+    // 获取玩家材料（强化石数量）
+    const materials = getPlayerMaterials(db, playerId);
+    const strengthenStones = materials['strengthen_stone'] || 0;
+    const spiritStones = materials['spirit_stone_mat'] || 0;
+
+    // 获取玩家所有装备及强化等级
+    const equips = db.prepare('SELECT * FROM forge_equipment WHERE player_id=? ORDER BY strengthen_level DESC').all(playerId);
+    const equipSummary = equips.map(e => ({
+      id: e.id, name: e.name, type: e.type, quality: e.quality,
+      strengthenLevel: e.strengthen_level,
+      stats: JSON.parse(e.stats || '{}'),
+      bonusStats: JSON.parse(e.bonus_stats || '{}')
+    }));
+
+    // 获取已穿戴装备
+    const equipped = getEquipped(db, playerId);
+
+    // 每日领取状态
+    const today = new Date(Date.now() + 8 * 3600000).toISOString().substring(0, 10);
+    const dailyClaim = db.prepare('SELECT last_claim_date FROM forge_daily_claims WHERE player_id=?').get(playerId);
+    const dailyClaimed = dailyClaim?.last_claim_date === today;
+
+    res.json({
+      success: true,
+      materials: {
+        strengthenStones,
+        spiritStones,
+        ironIngot: materials['iron_ingot'] || 0,
+        fireEssence: materials['fire_essence'] || 0,
+        jade: materials['jade'] || 0
+      },
+      equipmentCount: equips.length,
+      highestStrengthenLevel: equips.length > 0 ? Math.max(...equips.map(e => e.strengthen_level)) : 0,
+      equippedWeapons: equipSummary.filter(e => [equipped.weapon, equipped.armor, equipped.accessory].includes(e.id)),
+      dailyClaimed,
+      message: `强化石×${strengthenStones}，最高强化等级${equips.length > 0 ? Math.max(...equips.map(e => e.strengthen_level)) : 0}`
+    });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  } finally {
+    db.close();
+  }
+});
+
 // GET /api/forge/recipes - 获取所有配方（别名）
 router.get('/recipes', (req, res) => {
   const playerId = parseInt(req.query.player_id || req.query.userId || 1);

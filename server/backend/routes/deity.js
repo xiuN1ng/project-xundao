@@ -25,6 +25,17 @@ router.get('/types', (req, res) => {
   }
 });
 
+// 战力排行榜 GET /api/deity/combat - 等同于 /ranking?type=combat_power
+router.get('/combat', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const rankings = deityStorage.getRanking('combat_power', limit);
+    res.json({ success: true, type: 'combat_power', data: rankings });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 获取榜单排名
 router.get('/ranking', (req, res) => {
   try {
