@@ -2352,3 +2352,24 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1] [B] SectWar 宗门战核心 - 实现赛季状态/宣战/战斗/排名端点
 [P1] [B] 跨服战 API 框架 - 实现 /api/sect-war/schedule, /zones, /ranking, /declare, /battle 端点
 [P2] [B] 天劫降临事件系统 - 定时触发逻辑；天劫副本生成；宝箱奖励发放
+
+# ========== 2026-03-29 新增 P0/B 任务（Trade/Couple/Commission/Talent/SpiritRoot）==========
+[P0] [B] 创建 routes/trade.js — 市场/拍卖行/上架API，包装 src/trade/trade-system.ts  # 完成 | 2026-03-29
+  - server/backend/routes/trade.js (23KB): GET / /list /buy /bid /cancel /my-listings /transactions /market-prices /config
+  - SQLite表: trade_orders, trade_transactions, trade_bids, market_prices; 5%交易税; 72小时有效期
+  - server.js 注册 /api/trade 路由  # 完成 | 2026-03-29
+[P0] [B] 创建 routes/couple.js — 婚姻/求婚/双修API，包装 src/marriage/marriage-service.ts  # 待定
+[P0] [B] server.js 注册 /api/couple 路由  # 待定
+[P0] [B] 创建 routes/commission.js — 委托任务接受/完成API  # 已完成（2026-03-28）
+[P0] [B] server.js 注册 /api/commission 路由  # 已完成（2026-03-28）
+[P0] [B] 创建 routes/talent.js — 天赋解锁/加点点API，包装 src/talent/talent-system.ts  # 完成 | 2026-03-29
+  - server/backend/routes/talent.js (16KB): GET /trees /player/:playerId; POST /unlock-tree /learn /reset /add-points
+  - SQLite表: player_talent_data, player_talents, talent_trees_unlocked; 4天赋树(战斗/修炼/福运/通天)
+  - server.js 注册 /api/talent 路由  # 完成 | 2026-03-29
+[P0] [B] Player表添加 spirit_root 字段；POST /player/switch-spirit-root 实现  # 完成 | 2026-03-29
+  - server/backend/routes/spirit_root.js (10KB): GET /roots /my /player/:playerId /bonus/:playerId; POST /switch /init
+  - SQLite表: spirit_root_records; 10种灵根类型(金/木/水/火/土/风/雷/冰/暗/光); 切换消耗2000灵石或50钻石
+  - server.js 注册 /api/spirit-root 路由 + ALTER TABLE Users ADD spirit_root  # 完成 | 2026-03-29
+[P1] [B] 完善 routes/tower.js — 新增 POST /tower/challenge；配置每层敌人属性
+[P1] [B] Sect.create 重写 — 写 Sects + SectMembers 表，不写内存变量
+[P2] [B] 灵气/境界突破 API（配合 SpiritPanel 重构）

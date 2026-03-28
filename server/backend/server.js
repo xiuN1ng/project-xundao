@@ -35,6 +35,14 @@ try {
   console.log('灵兽系统初始化:', e.message);
 }
 
+// 初始化灵根系统 Users.spirit_root 列
+try {
+  db.exec("ALTER TABLE Users ADD COLUMN spirit_root TEXT DEFAULT 'fire'");
+  console.log('✓ 灵根系统 Users.spirit_root 列初始化成功');
+} catch (e) {
+  // 列已存在
+}
+
 const app = express();
 app.locals.db = db; // 共享主数据库实例给所有路由，防止多实例写锁冲突
 const PORT = 3001;
@@ -86,6 +94,9 @@ app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));
 app.use('/api/festival', require('./routes/festival'));
 app.use('/api/commission', require('./routes/commission'));
+app.use('/api/trade', require('./routes/trade'));
+app.use('/api/talent', require('./routes/talent'));
+app.use('/api/spirit-root', require('./routes/spirit_root'));
 app.use('/api/adventure', require('./routes/adventure'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
