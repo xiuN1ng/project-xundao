@@ -26,6 +26,25 @@ try {
   db = null;
 }
 
+// 每日任务路由（用于更新好友类任务进度）
+let dailyQuestRouter;
+try {
+  dailyQuestRouter = require('./dailyQuest');
+} catch (e) {
+  Logger.warn('[friend] dailyQuest 路由加载失败:', e.message);
+  dailyQuestRouter = null;
+}
+
+// 事件总线（用于触发每日任务事件）
+let eventBus;
+try {
+  const { eventBus: eb } = require('../../game/eventBus');
+  eventBus = eb;
+} catch (e) {
+  Logger.warn('[friend] eventBus 加载失败:', e.message);
+  eventBus = null;
+}
+
 // ============ 数据库初始化 ============
 function initFriendTables() {
   if (!db) return;
@@ -308,13 +327,36 @@ router.post('/accept', (req, res) => {
     db.prepare(`UPDATE friend_requests SET status = 'accepted' WHERE id = ?`).run(requestId);
 
     // 创建双向好友关系
+    const fromId = request.from_id;
+    const toId = request.to_id;
     try {
       db.prepare(`
         INSERT INTO friendships (sender_id, receiver_id, status) VALUES (?, ?, 'accepted')
-      `).run(request.from_id, request.to_id);
+      `).run(fromId, toId);
     } catch (e) {
       // 可能的重复插入，静默忽略
     }
+
+    // ========== 每日任务触发：添加好友 ==========
+    // 更新双方的好友任务进度（接受方和发送方都算添加好友）
+    const friendQuestUpdate = (uid) => {
+      if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+        try {
+          dailyQuestRouter.updateDailyQuestProgress(uid, 'friend', 1);
+        } catch (e) {
+          Logger.warn('[friend] 每日好友任务更新失败:', e.message);
+        }
+      }
+      if (eventBus) {
+        try {
+          eventBus.emit('friend:add', { userId: uid, friendId: fromId === uid ? toId : fromId });
+        } catch (e) {
+          Logger.warn('[friend] friend:add 事件发送失败:', e.message);
+        }
+      }
+    };
+    friendQuestUpdate(toId);   // 接受方
+    friendQuestUpdate(fromId); // 发送方
 
     res.json({
       success: true,

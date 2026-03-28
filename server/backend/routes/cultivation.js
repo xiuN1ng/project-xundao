@@ -443,6 +443,15 @@ router.post('/breakthrough', (req, res) => {
       }
     }
 
+    // ========== 每日任务触发：境界突破（直接调用） ==========
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        Logger.error('每日任务更新失败:', e.message);
+      }
+    }
+
     // ========== 事件总线触发：境界突破 ==========
     if (eventBus) {
       eventBus.emit('cultivation:breakthrough', { userId, newRealm: nextRealm });
@@ -489,6 +498,15 @@ router.post('/advance', (req, res) => {
         achievementTrigger.triggerAchievement(userId, 'realm_breakthrough', nextRealm);
       } catch (e) {
         console.error('[cultivation] 成就触发失败:', e.message);
+      }
+    }
+
+    // ========== 每日任务触发：境界跃迁（直接调用） ==========
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        Logger.error('每日任务更新失败:', e.message);
       }
     }
 
