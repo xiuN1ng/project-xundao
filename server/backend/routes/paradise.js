@@ -19,6 +19,7 @@ const PARADISE_LANDS = {
     description: '灵气温润的灵田，适合炼气期修士打坐修炼',
     minRealm: 1, // 炼气期即可进入
     explorationTime: 120,
+    spiritStoneCost: 50,
     icon: '🌾',
     rewards: { spiritStonesBase: 40, expBase: 150, materialChance: 0.1 }
   },
@@ -28,6 +29,7 @@ const PARADISE_LANDS = {
     description: '拥有灵泉的洞天福地，灵气充沛',
     minRealm: 3, // 金丹期
     explorationTime: 300,
+    spiritStoneCost: 100,
     icon: '⛲',
     rewards: { spiritStonesBase: 100, expBase: 300, materialChance: 0.3 }
   },
@@ -37,6 +39,7 @@ const PARADISE_LANDS = {
     description: '上古修士遗留下来的洞府',
     minRealm: 4, // 元婴期
     explorationTime: 600,
+    spiritStoneCost: 200,
     icon: '🏛️',
     rewards: { spiritStonesBase: 300, expBase: 800, materialChance: 0.5 }
   },
@@ -46,6 +49,7 @@ const PARADISE_LANDS = {
     description: '传说中的仙人居所',
     minRealm: 5, // 化神期
     explorationTime: 900,
+    spiritStoneCost: 400,
     icon: '🏝️',
     rewards: { spiritStonesBase: 600, expBase: 1500, materialChance: 0.7 }
   },
@@ -55,6 +59,7 @@ const PARADISE_LANDS = {
     description: '空间裂缝中蕴含的混沌之力',
     minRealm: 6, // 炼虚期
     explorationTime: 1200,
+    spiritStoneCost: 800,
     icon: '🌀',
     rewards: { spiritStonesBase: 1200, expBase: 3000, materialChance: 0.9 }
   }
@@ -226,6 +231,95 @@ const paradiseInfoHandler = (req, res) => {
 router.get('/info', paradiseInfoHandler);
 router.get('/status', paradiseInfoHandler); // 兼容前端 /paradise/status 调用
 
+// ========== 通用探索开始逻辑 ==========
+function startParadiseExploration(userId, landId, db) {
+  const land = PARADISE_LANDS[landId];
+  if (!land) throw new Error('无效的福地ID');
+
+  const playerRealm = getPlayerRealm(userId);
+  if (playerRealm < land.minRealm) {
+    throw new Error(`境界不足，需要${REALM_MAP[land.minRealm]}才能探索此福地`);
+  }
+
+  // 检查灵石是否足够
+  const cost = land.spiritStoneCost || 0;
+  const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+  if (!user || user.lingshi < cost) {
+    throw new Error(`灵石不足，需要${cost}灵石才能探索此福地`);
+  }
+
+  // 扣除灵石
+  db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost, userId);
+
+  // 检查是否已有进行中的探索
+  const existing = db.prepare(
+    `SELECT * FROM paradise_explorations
+     WHERE user_id = ? AND status IN ('exploring', 'completed') AND rewards_claimed = 0`
+  ).get(userId);
+
+  if (existing) {
+    throw new Error('已有进行中的探索任务');
+  }
+
+  const now = Date.now();
+  const endTime = now + land.explorationTime * 1000;
+
+  const result = db.prepare(
+    `INSERT INTO paradise_explorations (user_id, land_id, status, start_time, end_time)
+     VALUES (?, ?, 'exploring', ?, ?)`
+  ).run(userId, landId, now, endTime);
+
+  // 更新统计
+  db.prepare(
+    `INSERT INTO paradise_stats (user_id, total_explorations, last_updated)
+     VALUES (?, 1, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET
+     total_explorations = total_explorations + 1,
+     last_updated = datetime('now')`
+  ).run(userId);
+
+  return {
+    id: result.lastInsertRowid,
+    landId: land.id,
+    landName: land.name,
+    icon: land.icon,
+    status: 'exploring',
+    remaining: land.explorationTime,
+    progress: 0,
+    startTime: now,
+    endTime,
+    cost,
+    events: [
+      { id: 'spiritual-spring', name: '发现灵泉', icon: '⛲', triggered: false },
+      { id: 'rare-herb', name: '发现灵草', icon: '🌿', triggered: false },
+      { id: 'ancient-ruins', name: '古修士遗迹', icon: '🏛️', triggered: false }
+    ]
+  };
+}
+
+// ========== POST /api/paradise/explore ==========
+// 开始探索福地（POST /explore 的别名端点）
+router.post('/explore', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+    const { landId } = req.body;
+
+    if (!landId) {
+      return res.status(400).json({ error: '缺少 landId 参数' });
+    }
+
+    const db = getDb();
+    initParadiseTables(db);
+    const quest = startParadiseExploration(userId, landId, db);
+    db.close();
+
+    res.json({ success: true, quest });
+  } catch (e) {
+    console.error('[Paradise] POST /explore error:', e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ========== POST /api/paradise/types ==========
 // 开始探索福地
 router.post('/types', (req, res) => {
@@ -233,70 +327,19 @@ router.post('/types', (req, res) => {
     const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
     const { landId } = req.body;
 
-    if (!landId || !PARADISE_LANDS[landId]) {
-      return res.status(400).json({ error: '无效的福地ID' });
-    }
-
-    const land = PARADISE_LANDS[landId];
-    const playerRealm = getPlayerRealm(userId);
-
-    if (playerRealm < land.minRealm) {
-      return res.status(400).json({ error: `境界不足，需要${REALM_MAP[land.minRealm]}才能探索此福地` });
+    if (!landId) {
+      return res.status(400).json({ error: '缺少 landId 参数' });
     }
 
     const db = getDb();
     initParadiseTables(db);
-
-    // 检查是否已有进行中的探索
-    const existing = db.prepare(
-      `SELECT * FROM paradise_explorations
-       WHERE user_id = ? AND status IN ('exploring', 'completed') AND rewards_claimed = 0`
-    ).get(userId);
-
-    if (existing) {
-      db.close();
-      return res.status(400).json({ error: '已有进行中的探索任务' });
-    }
-
-    const now = Date.now();
-    const endTime = now + land.explorationTime * 1000;
-
-    const result = db.prepare(
-      `INSERT INTO paradise_explorations (user_id, land_id, status, start_time, end_time)
-       VALUES (?, ?, 'exploring', ?, ?)`
-    ).run(userId, landId, now, endTime);
-
-    // 更新统计
-    db.prepare(
-      `INSERT INTO paradise_stats (user_id, total_explorations, last_updated)
-       VALUES (?, 1, datetime('now'))
-       ON CONFLICT(user_id) DO UPDATE SET
-       total_explorations = total_explorations + 1,
-       last_updated = datetime('now')`
-    ).run(userId);
-
-    const quest = {
-      id: result.lastInsertRowid,
-      landId: land.id,
-      landName: land.name,
-      icon: land.icon,
-      status: 'exploring',
-      remaining: land.explorationTime,
-      progress: 0,
-      startTime: now,
-      endTime,
-      events: [
-        { id: 'spiritual-spring', name: '发现灵泉', icon: '⛲', triggered: false },
-        { id: 'rare-herb', name: '发现灵草', icon: '🌿', triggered: false },
-        { id: 'ancient-ruins', name: '古修士遗迹', icon: '🏛️', triggered: false }
-      ]
-    };
-
+    const quest = startParadiseExploration(userId, landId, db);
     db.close();
+
     res.json({ success: true, quest });
   } catch (e) {
     console.error('[Paradise] POST /types error:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(400).json({ error: e.message });
   }
 });
 
