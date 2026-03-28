@@ -331,6 +331,88 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/lundao/opponents - 获取AI对手列表（前端论道匹配界面用）
+router.get('/opponents', (req, res) => {
+  try {
+    const userId = req.user?.id || req.query.userId || req.query.player_id || 1;
+    const player = getPlayerRecord(userId);
+
+    // AI对手池（名号/境界/擅长领域）
+    const aiPool = [
+      { name: '青云子', title: '金丹真人', realm: '金丹境', realmLevel: 4, specialty: '功法', difficulty: 1, atk: 200, def: 150, hp: 2000, winRate: 0.35 },
+      { name: '天璇师姐', title: '元婴长老', realm: '元婴境', realmLevel: 5, specialty: '丹药', difficulty: 1, atk: 300, def: 200, hp: 3000, winRate: 0.40 },
+      { name: '灵虚子', title: '筑基修士', realm: '筑基境', realmLevel: 2, specialty: '阵法', difficulty: 1, atk: 120, def: 180, hp: 1200, winRate: 0.55 },
+      { name: '清虚子', title: '炼气弟子', realm: '炼气境', realmLevel: 1, specialty: '医术', difficulty: 0, atk: 80, def: 100, hp: 800, winRate: 0.70 },
+      { name: '天机老人', title: '化神大能', realm: '化神境', realmLevel: 6, specialty: '炼器', difficulty: 2, atk: 500, def: 400, hp: 5000, winRate: 0.20 },
+      { name: '玉清子', title: '金丹真人', realm: '金丹境', realmLevel: 4, specialty: '符箓', difficulty: 1, atk: 250, def: 220, hp: 2500, winRate: 0.38 },
+      { name: '玄明师姐', title: '元婴长老', realm: '元婴境', realmLevel: 5, specialty: '御兽', difficulty: 1, atk: 320, def: 280, hp: 3200, winRate: 0.32 },
+      { name: '悟真子', title: '筑基修士', realm: '筑基境', realmLevel: 2, specialty: '剑道', difficulty: 1, atk: 180, def: 120, hp: 1500, winRate: 0.52 },
+      { name: '飞霞子', title: '炼气弟子', realm: '炼气境', realmLevel: 1, specialty: '轻功', difficulty: 0, atk: 90, def: 110, hp: 900, winRate: 0.68 },
+      { name: '紫霄真人', title: '化神大能', realm: '化神境', realmLevel: 6, specialty: '雷法', difficulty: 2, atk: 550, def: 380, hp: 4800, winRate: 0.18 },
+      { name: '静虚子', title: '炼虚长老', realm: '炼虚境', realmLevel: 7, specialty: '心法', difficulty: 2, atk: 600, def: 500, hp: 6000, winRate: 0.12 },
+      { name: '流云子', title: '筑基修士', realm: '筑基境', realmLevel: 2, specialty: '奇门', difficulty: 1, atk: 150, def: 160, hp: 1400, winRate: 0.58 },
+    ];
+
+    // 根据玩家境界动态选择对手（±1个境界范围内）
+    const playerRealm = player ? player.rank_score || 0 : 0;
+    let targetDifficulty = 1;
+    if (playerRealm >= 2000) targetDifficulty = 2;
+    else if (playerRealm >= 500) targetDifficulty = 1;
+    else targetDifficulty = 0;
+
+    // 按难度分组
+    const easy = aiPool.filter(a => a.difficulty === 0);
+    const medium = aiPool.filter(a => a.difficulty === 1);
+    const hard = aiPool.filter(a => a.difficulty === 2);
+
+    const opponents = [];
+    // 优先取目标难度的AI，不够3个则从相邻难度补充
+    let primaryPool, secondaryPool;
+    if (targetDifficulty === 2) {
+      primaryPool = hard; secondaryPool = medium;
+    } else if (targetDifficulty === 1) {
+      primaryPool = medium; secondaryPool = hard;
+    } else {
+      primaryPool = easy; secondaryPool = medium;
+    }
+
+    const shuffled = [...primaryPool].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(3, shuffled.length));
+    // 不足3个则从相邻难度补
+    if (selected.length < 3) {
+      const extra = [...secondaryPool].sort(() => Math.random() - 0.5);
+      for (const ai of extra) {
+        if (selected.length >= 3) break;
+        if (!selected.includes(ai)) selected.push(ai);
+      }
+    }
+    for (const ai of selected) {
+      opponents.push({
+        playerId: -aiPool.indexOf(ai) - 1, // 负数AI ID
+        name: ai.name,
+        title: ai.title,
+        realm: ai.realm,
+        realmLevel: ai.realmLevel,
+        specialty: ai.specialty,
+        stats: { attack: ai.atk, defense: ai.def, hp: ai.hp },
+        winRate: ai.winRate, // 玩家对此AI的胜率参考
+        difficulty: ai.difficulty,
+        isAI: true,
+      });
+    }
+
+    res.json({
+      success: true,
+      opponents,
+      playerRealm,
+      matchedDifficulty: targetDifficulty,
+    });
+  } catch (err) {
+    Logger.error('GET /lundao/opponents 错误:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/lundao/questions - 获取今日论道题目
 router.get('/questions', (req, res) => {
   try {

@@ -2034,3 +2034,72 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   文件: server/backend/routes/achievement.js + server.js (聊天广播集成)
   实现: 达成传说/史诗成就时向世界频道发送广播；称号写入 player_titles 表
   截止: 2026-04-05
+
+## P0 — 严重断裂（2026-03-28 第74轮）
+
+[P0-B-74-1] 【B】Beast API端点名称不匹配：前端调/beasts/list后端是/beast/list
+  文件: server/server.js
+  修复: 在server.js添加router.get('/api/beasts/list')别名，转发到/beast/list逻辑
+  同步检查其他beast端点(capture/equip/activate)的命名一致性
+  截止: 2026-03-29
+
+## P1 — 功能断裂（2026-03-28 第74轮）
+
+[P1-B-74-1] 【B】Achievement成就全面断裂：所有31个进度为0，玩家已达金丹期
+  文件: server/server.js (achievement_trigger_service集成) + game/achievement_system_v2.js
+  问题: achievement_trigger_service未与各游戏事件(cultivation/arena/tribulation等)挂钩
+  修复: 在server.js中引入achievement_trigger_service.js，在各API成功后eventBus.emit触发成就检查
+  涉及事件: realm_break/combat_win/recharge/sign_in/friend_add/equipment_enhance/daily_quest_complete
+  截止: 2026-03-29
+
+[P1-B-74-2] 【B】Sect Buildings API 404
+  文件: server/server.js
+  问题: require('./src/sect_api')路径不存在，整个sect_api未挂载
+  修复: 找到实际sect_api路径或添加/api/sect/buildings端点，从DB查询宗门建筑数据
+  截止: 2026-03-29
+
+[P1-B-74-3] 【B】Daily Dungeon端点404/无数据
+  文件: server/server.js
+  问题: /api/daily-dungeon/ 404; /api/daily-dungeon/status需要player_id
+  修复: 添加app.get('/api/daily-dungeon/')、app.post('/api/daily-dungeon/enter')，挂载daily_dungeon_system.js
+  截止: 2026-03-30
+
+[P1-B-74-4] 【B】Alchemy API 404
+  文件: server/server.js 第3349行
+  问题: require('./src/alchemy_api')不存在，实际文件在./game/alchemy_api.js
+  修复: 改为require('./game/alchemy_api')，验证/api/alchemy/recipes等端点
+  截止: 2026-03-30
+
+[P1-B-74-5] 【B】Realm Dungeon返回空数据
+  文件: server/server.js 第3367行
+  问题: require('./src/core/realm_dungeon_system')不存在，实际文件在./game/realm_dungeon_system.js
+  修复: 改为require('./game/realm_dungeon_system')，验证REALM_DUNGEON_DATA导出
+  截止: 2026-03-30
+
+[P1-B-74-6] 【B】Lundao论道系统完全缺失(404)
+  文件: server/server.js
+  修复: 添加/api/lundao/status、/api/lundao/fight等端点实现论道功能
+  或如果暂不开发: 告知前端移除lundaoApi引用
+  截止: 2026-03-30
+
+## P2 — 体验优化（2026-03-28 第74轮）
+
+[P2-B-74-1] 【B】Deity-List战力榜全是AI假数据
+  文件: server/backend/routes/deity_list_storage.js 或 server.js中的deity-list路由
+  修复: 从Users表查询真实玩家combat_power，混入AI池后按战力排序
+  截止: 2026-04-02
+
+[P2-B-74-2] 【B】Rank/Level缺失Player#1 (Lv14不在榜上)
+  文件: server/server.js (rank路由)
+  修复: 检查player_id=1的Users表level值；确认ORDER BY level DESC查询包含所有level>0的玩家
+  截止: 2026-04-03
+
+## 新功能（2026-03-28 第74轮）
+
+[NF-B-74-1] 【B】离线收益系统
+  文件: server/server.js + game/offline_system.js (新建)
+  实现: 记录last_active_time；登录时计算离线时长(最长24h)并按50%效率发放灵气+经验
+  数据库: player_offline_records表(last_active_time, total_offline_seconds)
+  VIP3+离线效率提升至70%
+  UI: 登录后弹出离线收益面板(仿梦幻西游风格)
+  截止: 2026-04-07
