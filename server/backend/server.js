@@ -157,6 +157,7 @@ app.use('/api/daily-dungeon', require('../game/daily_dungeon'));
 app.use('/api/gongfa', require('./routes/gongfa'));
 app.use('/api/paradise', require('./routes/paradise'));
 app.use('/api/deity-list', require('./routes/deity'));
+app.use('/api/art', require('./routes/art'));
 app.use('/api/ladder', require('./routes/ladder'));
 
 // 引导系统
