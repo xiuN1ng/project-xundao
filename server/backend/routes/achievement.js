@@ -66,6 +66,10 @@ function saveAchievementToDB(userId, achievementId, progress, completed, claimed
       INSERT OR REPLACE INTO achievement_progress (user_id, achievement_id, progress, completed, claimed, updated_at)
       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).run(userId, achievementId, progress, completed ? 1 : 0, claimed ? 1 : 0);
+
+    // 同步更新内存缓存（解决 save 后 GET 仍返回旧数据的 bug）
+    if (!userAchievements[userId]) userAchievements[userId] = {};
+    userAchievements[userId][achievementId] = { progress, completed: !!completed, claimed: !!claimed };
   } catch (e) {
     console.error('[achievement] 保存成就进度失败:', e.message);
   }
