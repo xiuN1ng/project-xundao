@@ -353,16 +353,7 @@ router.post('/claim-reward', (req, res) => {
     const db = getDb();
     initParadiseTables(db);
 
-    // 获取探索记录
-    const quest = db.prepare(
-      `SELECT * FROM paradise_explorations
-       WHERE user_id = ? AND status IN ('exploring', 'completed') AND rewards_claimed = 0
-       ${questId ? 'AND id = ?' : 'ORDER BY id DESC LIMIT 1'}`
-    ).run(questId ? userId : userId, questId || null);
-
-    const exploration = quest.get ? quest.get(userId, questId || null) : null;
-
-    // 重新查一次不用 run
+    // 获取探索记录（使用 .get() 直接查询）
     const explorationData = db.prepare(
       `SELECT * FROM paradise_explorations
        WHERE user_id = ? AND status IN ('exploring', 'completed') AND rewards_claimed = 0
@@ -442,6 +433,113 @@ router.post('/claim-reward', (req, res) => {
     });
   } catch (e) {
     console.error('[Paradise] /claim-reward error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== POST /api/paradise/abandon ==========
+// 放弃当前探索（解除探索死锁），返还50%灵石
+router.post('/abandon', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+
+    const db = getDb();
+    initParadiseTables(db);
+
+    // 获取当前进行中的探索
+    const exploration = db.prepare(
+      `SELECT * FROM paradise_explorations
+       WHERE user_id = ? AND status IN ('exploring', 'completed') AND rewards_claimed = 0
+       ORDER BY id DESC LIMIT 1`
+    ).get(userId);
+
+    if (!exploration) {
+      db.close();
+      return res.status(404).json({ error: '没有进行中的探索任务可以放弃' });
+    }
+
+    const land = PARADISE_LANDS[exploration.land_id];
+    const refundAmount = land ? Math.floor(land.spiritStoneCost * 0.5) : 0;
+
+    // 标记为放弃（status='abandoned'），允许开始新的探索
+    db.prepare(
+      `UPDATE paradise_explorations
+       SET status = 'abandoned', rewards_claimed = 1, completed_time = ?
+       WHERE id = ?`
+    ).run(Date.now(), exploration.id);
+
+    // 返还50%灵石
+    if (refundAmount > 0) {
+      try {
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(refundAmount, userId);
+      } catch (e) {
+        console.log('[Paradise] /abandon refund failed:', e.message);
+      }
+    }
+
+    db.close();
+
+    res.json({
+      success: true,
+      refund: refundAmount,
+      message: `已放弃${land ? land.name : '探索'}，返还${refundAmount}灵石`
+    });
+  } catch (e) {
+    console.error('[Paradise] /abandon error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== POST /api/paradise/clear ==========
+// 清理超时的探索记录（死锁清理），管理员/系统调用
+router.post('/clear', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+    const db = getDb();
+    initParadiseTables(db);
+
+    // 查找超时的探索（超过2倍预期时间仍未完成且未领取）
+    const now = Date.now();
+    const timeoutThreshold = 2 * 60 * 60 * 1000; // 2小时超时
+
+    const timedOut = db.prepare(
+      `SELECT pe.*, pl.explorationTime
+       FROM paradise_explorations pe
+       JOIN (SELECT 'spirit-field' as land_id, 120 as explorationTime
+             UNION ALL SELECT 'spiritual-spring', 300
+             UNION ALL SELECT 'ancient-ruins', 600
+             UNION ALL SELECT 'immortal-island', 900
+             UNION ALL SELECT 'chaos-rift', 1200) pl
+       ON pl.land_id = pe.land_id
+       WHERE pe.user_id = ? AND pe.status = 'exploring' AND pe.rewards_claimed = 0
+       AND (pe.end_time + (pl.explorationTime * 1000)) < ?`
+    ).all(userId, now);
+
+    if (timedOut.length === 0) {
+      db.close();
+      return res.json({ success: true, cleared: 0, message: '没有超时的探索记录' });
+    }
+
+    let cleared = 0;
+    for (const exploration of timedOut) {
+      // 强制完成并标记为已领取（不发放奖励，避免死锁）
+      db.prepare(
+        `UPDATE paradise_explorations
+         SET status = 'completed', completed_time = ?, rewards_claimed = 1
+         WHERE id = ? AND user_id = ?`
+      ).run(now, exploration.id, userId);
+      cleared++;
+    }
+
+    db.close();
+
+    res.json({
+      success: true,
+      cleared,
+      message: `已清理${cleared}条超时探索记录，这些探索已自动完成（奖励已过期）`
+    });
+  } catch (e) {
+    console.error('[Paradise] /clear error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
