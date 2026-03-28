@@ -2154,10 +2154,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 每天UTC00:00重置progress  # 已在 initDailyQuests 中通过上海时区日期比较实现
 - 参考: routes/dailyQuest.js + 第67轮提案
 
-### [P0-B-67-2] /api/bag/list 404
-- 在 server.js 添加 bag 路由注册
-- 完善 bag.js 端点返回玩家所有物品
-- 添加 /api/bag/materials 专门给 Forge 界面用
+### [P0-B-67-2] /api/bag/list 404  # 完成 | 2026-03-28 18:25 | 8b6cbb45
+- 在 server.js 添加 bag 路由注册  # 已确认存在
+- 完善 bag.js 端点返回玩家所有物品  # 完成 | routes/bag.js 完全重写(260行), DB持久化
+- 添加 /api/bag/materials 专门给 Forge 界面用  # 完成 | GET /api/bag/materials 正常返回
 - 参考: routes/bag.js 第67轮提案
 
 ### [P1-B-67-1] Paradise福地explore端点缺失
