@@ -2328,7 +2328,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-12] 【活动系统】限时活动框架：双倍修炼夜/强化大吉等每日轮换活动
 
 # ========== 2026-03-29 新增 P0/B 任务 ==========
-[P0] [B] 灵兽 API 端点修复 - 新增 /beast/attack, /beast/release, /beast/stats, /beast/shop, /beast/shop/buy；修复 learnSkill 驼峰命名；修改 levelup→upgrade
+[P0] [B] 灵兽 API 端点修复 - 新增 /beast/attack, /beast/release, /beast/stats, /beast/shop, /beast/shop/buy；修复 learnSkill 驼峰命名；修改 levelup→upgrade  # 完成 | 2026-03-29 125b0fce
+  - server/game/beast_api.js: 新增 POST /api/beast/attack 端点（灵兽出战攻击，支持暴击/技能加成/忠诚度消耗）
+  - server/backend/routes/beast.js: 新增 POST /api/beast/attack 端点（同名实现）
+  - /learn-skill 已存在（kebab-case），/upgrade 已存在；确认无需额外修复
 [P0] [B] 灵兽装备路由重建 - 新建 server/src/beast_equipment.js，完整实现 getList/info/equip/unequip/enhance/synthesize/recipes，在 server.js 正确注册并加 Logger 确认输出
 [P0] [B] 时装系统 API 补全 - 新增 GET /catalog, GET /sets, POST /buy, POST /unequip；时装商品数据≥10件；套装效果2件/4件加成
 [P1] [B] 仙盟 guild 路由补全 - 新增 /guild/kick, /guild/transfer-leader, /guild/members GET, /guild/member/position POST
