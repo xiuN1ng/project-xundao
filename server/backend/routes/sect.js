@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 
 // 模块级 DB 连接（避免 TDZ）
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 let db = null;
 try {
@@ -49,6 +49,24 @@ try {
   console.log('[sect] SectMembers 表初始化:', e.message);
 }
 
+// 初始化宗门模板数据（如果 DB sects 表为空）
+try {
+  const { sectTemplates } = require('../../data/sect_templates');
+  const count = db.prepare('SELECT COUNT(*) as c FROM sects').get().c;
+  if (count === 0) {
+    const insert = db.prepare(`
+      INSERT INTO sects (name, level, icon, description, leaderName, members, contribution, rank, leader_id, max_members, spirit_stones, level_req, realm_level_req, welfare)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 50, 100000, 1, 1, ?)
+    `);
+    for (const sect of sectTemplates) {
+      insert.run(sect.name, sect.level, sect.icon, sect.description || '', sect.leaderName, sect.members, sect.contribution, sect.rank, sect.welfare || '');
+    }
+    console.log(`[sect] 宗门模板初始化完成: ${sectTemplates.length} 个宗门已写入`);
+  }
+} catch (e) {
+  console.error('[sect] 宗门模板初始化失败:', e.message);
+}
+
 // 初始化 campfire_messages 表（宗门篝火聊天）
 try {
   db.exec(`
@@ -68,12 +86,12 @@ try {
 
 // 初始化默认宗门「青云宗」到 Sects 表（如不存在则插入）
 try {
-  const existingSect = db.prepare('SELECT id FROM Sects WHERE id = 1').get();
+  const existingSect = db.prepare('SELECT id FROM sects WHERE id = 1').get();
   if (!existingSect) {
     const now = new Date().toISOString();
     // 青云宗：id=1, level=8, members=1, contribution=0, rank=1
     db.prepare(`
-      INSERT INTO Sects (id, name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
+      INSERT INTO sects (id, name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
       VALUES (1, '青云宗', 1, 8, 1, 0, 1, ?, ?)
     `).run(now, now);
 
@@ -157,14 +175,14 @@ router.get('/', (req, res) => {
     const orderClause = sortFieldMap[sort] || 'rank ASC';
 
     // 总数
-    const countRow = db.prepare(`SELECT COUNT(*) as total FROM Sects${whereClause}`).get(...params);
+    const countRow = db.prepare(`SELECT COUNT(*) as total FROM sects${whereClause}`).get(...params);
     const total = countRow ? countRow.total : 0;
 
-    // 列表（JOIN Users 获取掌门名称）
+    // 列表（JOIN users 获取掌门名称）
     const list = db.prepare(`
-      SELECT s.*, u.nickname as leaderName
-      FROM Sects s
-      LEFT JOIN Users u ON u.id = s.leaderId
+      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      FROM sects s
+      LEFT JOIN users u ON u.id = s.leader_id
       ${whereClause}
       ORDER BY ${orderClause}
       LIMIT ? OFFSET ?
@@ -179,9 +197,9 @@ router.get('/', (req, res) => {
         members: s.members,
         contribution: s.contribution,
         rank: s.rank,
-        leaderId: s.leaderId,
-        leaderName: s.leaderName || '未知',
-        createdAt: s.createdAt
+        leaderId: s.leader_id,
+        leaderName: s.leader_name,
+        createdAt: s.created_at
       })),
       pagination: {
         page,
@@ -225,13 +243,13 @@ router.get('/list', (req, res) => {
     };
     const orderClause = sortFieldMap[sort] || 'rank ASC';
 
-    const countRow = db.prepare(`SELECT COUNT(*) as total FROM Sects${whereClause}`).get(...params);
+    const countRow = db.prepare(`SELECT COUNT(*) as total FROM sects${whereClause}`).get(...params);
     const total = countRow ? countRow.total : 0;
 
     const list = db.prepare(`
-      SELECT s.*, u.nickname as leaderName
-      FROM Sects s
-      LEFT JOIN Users u ON u.id = s.leaderId
+      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      FROM sects s
+      LEFT JOIN users u ON u.id = s.leader_id
       ${whereClause}
       ORDER BY ${orderClause}
       LIMIT ? OFFSET ?
@@ -243,12 +261,13 @@ router.get('/list', (req, res) => {
         id: s.id,
         name: s.name,
         level: s.level,
-        members: s.members,
-        contribution: s.contribution,
-        rank: s.rank,
-        leaderId: s.leaderId,
-        leaderName: s.leaderName || '未知',
-        createdAt: s.createdAt
+        icon: s.icon || '🏯',
+        memberCount: s.members || 0,
+        contribution: s.contribution || 0,
+        rank: s.rank || 0,
+        leaderName: s.leader_name,
+        welfare: s.welfare || '',
+        createdAt: s.created_at
       })),
       pagination: {
         page,
@@ -280,9 +299,9 @@ router.get('/info', (req, res) => {
 
     // 从 DB 查询宗门信息
     const sectInfo = db.prepare(`
-      SELECT s.*, u.nickname as leaderName
-      FROM Sects s
-      LEFT JOIN Users u ON u.id = s.leaderId
+      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      FROM sects s
+      LEFT JOIN users u ON u.id = s.leader_id
       WHERE s.id = ?
     `).get(user.sectId);
 
@@ -329,7 +348,7 @@ router.get('/my', (req, res) => {
     if (!user || !user.sectId) {
       return res.json({ success: true, inSect: false, message: '未加入宗门' });
     }
-    const sectInfo = db.prepare('SELECT * FROM Sects WHERE id = ?').get(user.sectId);
+    const sectInfo = db.prepare('SELECT * FROM sects WHERE id = ?').get(user.sectId);
     if (!sectInfo) {
       return res.json({ success: true, inSect: false, message: '宗门不存在' });
     }
@@ -489,7 +508,7 @@ router.post('/create', (req, res) => {
 
     // 插入 Sects 表
     const stmt = db.prepare(`
-      INSERT INTO Sects (name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
+      INSERT INTO sects (name, leaderId, level, members, contribution, rank, createdAt, updatedAt)
       VALUES (?, ?, 1, 1, 0, 999, ?, ?)
     `);
     const result = stmt.run(sectName, creatorId, now, now);
@@ -508,7 +527,7 @@ router.post('/create', (req, res) => {
       console.log('[sect] create SectMembers 插入:', e.message);
     }
 
-    const newSect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(newSectId);
+    const newSect = db.prepare('SELECT * FROM sects WHERE id = ?').get(newSectId);
 
     return res.json({
       success: true,
@@ -556,9 +575,9 @@ router.get('/list', (req, res) => {
     try {
       const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
       const sects = db.prepare(`
-        SELECT s.*, COALESCE(u.nickname, '掌门') as leader_name
+        SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
         FROM sects s
-        LEFT JOIN Users u ON u.id = s.leaderId
+        LEFT JOIN users u ON u.id = s.leader_id
         ORDER BY s.level DESC, s.members DESC
         LIMIT ? OFFSET ?
       `).all(parseInt(limit), offset);
@@ -625,7 +644,7 @@ router.post('/join', (req, res) => {
 
     // 检查玩家是否已在宗门
     if (player.sectId) {
-      const currentSect = db.prepare('SELECT name FROM Sects WHERE id = ?').get(player.sectId);
+      const currentSect = db.prepare('SELECT name FROM sects WHERE id = ?').get(player.sectId);
       return res.status(400).json({
         success: false,
         message: `你已在宗门「${currentSect?.name || '未知'}」中，请先退出再申请`
@@ -633,7 +652,7 @@ router.post('/join', (req, res) => {
     }
 
     // 检查宗门是否存在
-    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    const sect = db.prepare('SELECT * FROM sects WHERE id = ?').get(sectId);
     if (!sect) {
       return res.status(404).json({ success: false, message: '宗门不存在' });
     }
@@ -736,7 +755,7 @@ router.post('/leave', (req, res) => {
     const sectId = player.sectId;
 
     // 掌门不能直接离开宗门
-    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    const sect = db.prepare('SELECT * FROM sects WHERE id = ?').get(sectId);
     if (sect && sect.leaderId === player_id) {
       return res.status(400).json({
         success: false,
@@ -794,7 +813,7 @@ router.post('/apply', (req, res) => {
     }
 
     // 检查宗门是否存在
-    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    const sect = db.prepare('SELECT * FROM sects WHERE id = ?').get(sectId);
     if (!sect) {
       return res.status(404).json({ success: false, message: '宗门不存在' });
     }
@@ -895,7 +914,7 @@ router.post('/approve', (req, res) => {
     }
 
     // 检查宗门人数上限
-    const sect = db.prepare('SELECT * FROM Sects WHERE id = ?').get(sectId);
+    const sect = db.prepare('SELECT * FROM sects WHERE id = ?').get(sectId);
     if (!sect) {
       return res.status(404).json({ success: false, message: '宗门不存在' });
     }
