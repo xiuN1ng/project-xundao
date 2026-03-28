@@ -268,6 +268,45 @@ router.post('/login', (req, res) => {
   res.json({ success: true, player, offlineReward: 0 });
 });
 
+// GET /api/player/bag?type=equipment - 返回玩家装备背包
+router.get('/bag', (req, res) => {
+  const userId = req.userId || parseInt(req.query.userId || req.query.player_id || 1) || 1;
+  const itemType = req.query.type || 'all';
+
+  const path = require('path');
+  const DATA_DIR = path.join(__dirname, '..', 'data');
+  const DB_PATH = path.join(DATA_DIR, 'game.db');
+
+  let db;
+  try {
+    const Database = require('better-sqlite3');
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+  } catch (e) {
+    db = null;
+  }
+
+  if (!db) {
+    return res.json({ success: false, items: [], message: '数据库不可用' });
+  }
+
+  try {
+    let query = 'SELECT id, item_id as itemId, item_name as name, item_type as type, count, icon, source FROM player_items WHERE user_id = ?';
+    const params = [userId];
+
+    if (itemType === 'equipment') {
+      query += " AND (item_type = 'weapon' OR item_type = 'armor' OR item_type = 'accessory' OR item_type = 'fashion')";
+    }
+
+    query += ' ORDER BY item_type, id';
+    const items = db.prepare(query).all(...params);
+    res.json({ success: true, items });
+  } catch (e) {
+    console.error('[player] GET /bag error:', e.message);
+    res.json({ success: false, items: [], message: e.message });
+  }
+});
+
 module.exports = router;
 module.exports._player = player;
 module.exports.setDb = setDb;
