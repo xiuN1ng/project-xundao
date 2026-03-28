@@ -1796,7 +1796,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - saveAchievementToDB 同步更新 userAchievements 内存缓存（解决 save 后 GET 仍返回旧 progress=0 的 bug）
 [P0] realm-dungeon路由：创建routes/realm_dungeon.js并注册到server.js（含list/status/enter/battle/claim）  # 完成 | 2026-03-28 741a47a6
 [P0] chat路由：创建routes/chat.js并注册（含history/send/online端点，世界/宗门/私聊三频道）  # 完成 | 2026-03-28 9d23401f
-[P1] Paradise添加灵田福地（minRealm=1，炼气期可进入，探索时间120秒，奖励灵石30-50+经验100-200）
+[P1] Paradise添加灵田福地（minRealm=1，炼气期可进入，探索时间120秒，奖励灵石30-50+经验100-200）  # 完成 | 2026-03-28 c7cc361a (gitee)
 [P1] 每日任务接口重构：GET /dailyQuest/daily, /weekly, /challenge（三个独立端点）+ claim端点支持三类ID
 [P1] 材料兑换系统：routes/material_exchange.js（含templates/exchange端点，铁锭×5→火晶×1等兑换模板，每日限制次数）  # 完成 | 2026-03-28 a14257ea
 [P2] 章节星级+扫荡后端：chapter/complete计算星级，chapter_stars表，扫荡端点
@@ -1955,3 +1955,82 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # → POST /api/material-exchange/recycle: 材料→灵石(白5/蓝20/紫100/橙500)
 # → routes/material_exchange.js 完善recycle端点
   截止: 2026-03-31
+
+# ========== 2026-03-28-v3 策划提案 — 后端任务 ==========
+# 分发时间: 2026-03-28 14:37
+
+## P0 紧急 — 经济系统崩溃
+
+[P0-B-73-1] 【B】Shop buy 扣款不执行 — shop.js POST /buy 返回 success 但灵石未扣除
+  文件: server/backend/routes/shop.js (buyItem 函数)
+  问题: UPDATE player SET lingshi - price 未执行，player_items 未写入
+  修复: buyItem() 中添加 db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(price, userId) + INSERT player_items
+  验证: curl -X POST http://localhost:3001/api/shop/buy -d '{"userId":1,"itemId":3}' 后 SELECT lingshi FROM Users WHERE id=1 应减少50
+  截止: 2026-03-28
+
+[P0-B-73-2] 【B】成就 progress 全为 0 — 31个成就进度完全不追踪
+  文件: server/backend/routes/cultivation.js, routes/chapter.js, routes/arena.js
+  问题: triggerAchievement() 从未被调用
+  修复: cultivation/start 后调用 dailyQuestRouter.updateDailyQuestProgress() 写入 daily_quest_progress；同样在 chapter/complete 和 arena/challenge 后触发
+  注意: 需同时在 cultivation.js 添加 cultivation.start 成功后的 dailyQuest 更新
+  截止: 2026-03-29
+
+[P0-B-73-3] 【B】每日任务 progress 全为 0 — 14个任务 current 全部为 0
+  文件: server/backend/routes/cultivation.js, routes/chapter.js, routes/arena.js
+  问题: updateDailyQuestProgress() 存在但从未被调用
+  修复: cultivation.start 成功后 emit 'cultivation:completed'；chapter/complete 成功后 emit 'chapter:cleared'；arena challenge 成功后 emit 'arena:challenged'
+  dailyQuest.js 监听这些事件并更新对应任务 progress
+  截止: 2026-03-29
+
+## P1 重要 — 多个系统 404
+
+[P1-B-73-1] 【B】Partner 婚姻路由 404 — /api/partner/* 全部 Cannot GET
+  文件: server/backend/routes/partner.js 或 server/game/partner_api.js
+  问题: routes/partner.js 未注册或 router 无根路由
+  修复: 检查 server.js 中 app.use('/api/partner', ...) 是否存在；如不存在则创建完整 partner.js（含求婚/结婚/离婚/双修/亲密度端点）
+  端点: GET /status, POST /propose, POST /accept, POST /reject, POST /divorce, GET /intimacy, POST /double-cultivate
+  截止: 2026-03-30
+
+[P1-B-73-2] 【B】Adventure 奇遇路由 404 — /api/adventure/* 全部 Cannot GET
+  文件: server/backend/routes/adventure.js
+  问题: routes/adventure.js 未注册
+  修复: 创建完整 adventure.js（含 types/status/explore/encounter/claim 端点）
+  事件触发: 探索触发随机奇遇事件（山洞奇遇/仙人指路/魔物袭击），完成后发放奖励
+  截止: 2026-03-30
+
+[P1-B-73-3] 【B】Lundao opponents 路由 404 — /api/lundao/opponents Cannot GET
+  文件: server/backend/routes/lundao.js
+  问题: lundao.js 缺少 /opponents 路由实现
+  修复: 添加 GET /opponents 端点，返回随机 3 个 AI 对手（含名号/境界/擅长领域）
+  截止: 2026-03-29
+
+[P1-B-73-4] 【B】材料副本 18:00 才能进入 — is_open 全天 false
+  文件: server/backend/routes/daily-dungeon.js
+  问题: daily_dungeon.js 硬编码 startHour:18，没有"全天开放"选项
+  修复: 移除时间锁；改为每日凌晨4点重置次数，全天可进入；18:00-24:00 设置 hasBonus: true（掉落×1.5）
+  截止: 2026-03-30
+
+[P1-B-73-5] 【B】Shop /items 端点 404 — 前端可能调用 /api/shop/items
+  文件: server/backend/routes/shop.js
+  问题: shop 只有根路由 /api/shop/，没有 /api/shop/items
+  修复: 确认前端调用路径；若前端用 /items 则添加 router.get('/items') 作为别名转发到 / 逻辑
+  截止: 2026-03-29
+
+## P2 — 体验优化
+
+[P2-B-73-1] 【B】商铺18件商品 description 全为空
+  文件: server/backend/routes/shop.js
+  修复: 为 shop_items 表补充中文 description 字段（shop.js 的 SELECT 补充 description 列）
+  截止: 2026-04-02
+
+[P2-B-73-2] 【B】封神榜数据全是 AI 假名
+  文件: server/backend/routes/deity_list_storage.js 或 deity.js
+  修复: 从 Users 表实时查询真实玩家混入 AI 池
+  截止: 2026-04-03
+
+## 新功能
+
+[NF-B-73-1] 【B】成就达成全服广播 + 称号发放
+  文件: server/backend/routes/achievement.js + server.js (聊天广播集成)
+  实现: 达成传说/史诗成就时向世界频道发送广播；称号写入 player_titles 表
+  截止: 2026-04-05
