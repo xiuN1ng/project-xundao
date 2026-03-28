@@ -34,7 +34,20 @@ function initMarketTables() {
         expire_at INTEGER,
         status TEXT NOT NULL DEFAULT 'active',
         view_count INTEGER DEFAULT 0,
+        quantity INTEGER DEFAULT 1,
+        max_quantity INTEGER DEFAULT 1,
+        is_system INTEGER DEFAULT 0,
         UNIQUE(seller_id, item_key, status)
+      );
+      
+      -- 玩家限购记录表
+      CREATE TABLE IF NOT EXISTS market_purchase_limits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        item_key TEXT NOT NULL,
+        total_bought INTEGER DEFAULT 0,
+        reset_date TEXT DEFAULT '',
+        UNIQUE(user_id, item_key)
       );
 
       CREATE TABLE IF NOT EXISTS market_transactions (
@@ -45,7 +58,9 @@ function initMarketTables() {
         item_key TEXT NOT NULL,
         item_name TEXT NOT NULL,
         price INTEGER NOT NULL,
-        traded_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        quantity INTEGER DEFAULT 1,
+        traded_at INTEGER NOT NULL,
+        UNIQUE(listing_id, buyer_id)
       );
 
       CREATE TABLE IF NOT EXISTS market_categories (
@@ -55,6 +70,15 @@ function initMarketTables() {
         sort_order INTEGER DEFAULT 0
       );
     `);
+
+    // 升级旧表结构（如果缺列）
+    try { db.exec("ALTER TABLE market_listings ADD COLUMN quantity INTEGER DEFAULT 1"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_listings ADD COLUMN max_quantity INTEGER DEFAULT 1"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_listings ADD COLUMN is_system INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_transactions ADD COLUMN seller_id INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_transactions ADD COLUMN quantity INTEGER DEFAULT 1"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_transactions ADD COLUMN buyer_id INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE market_purchase_limits ADD COLUMN reset_date TEXT DEFAULT ''"); } catch(e) {}
 
     // 初始化分类
     const catCount = db.prepare('SELECT COUNT(*) as c FROM market_categories').get()?.c || 0;
@@ -69,6 +93,15 @@ function initMarketTables() {
       ];
       const insertCat = db.prepare('INSERT INTO market_categories (id, name, icon, sort_order) VALUES (?,?,?,?)');
       for (const c of cats) insertCat.run(c.id, c.name, c.icon, c.sort);
+    }
+    
+    // 初始化系统商店：铁锭（系统卖家seller_id=0，每天重置库存）
+    const ironListing = db.prepare("SELECT id FROM market_listings WHERE seller_id=0 AND item_key='iron_ingot' AND status='active'").get();
+    if (!ironListing) {
+      db.prepare(`
+        INSERT INTO market_listings (seller_id, seller_name, item_key, item_name, item_type, icon, price, quantity, max_quantity, is_system, status, description)
+        VALUES (0, '系统商店', 'iron_ingot', '铁锭', 'material', '🔩', 20, 99, 99, 1, 'active', '基础锻造材料，99灵石/个，每日限购99个')
+      `).run();
     }
 
     console.log('[market] 市场数据表初始化完成');
@@ -316,12 +349,13 @@ router.post('/cancel/:listingId', (req, res) => {
   }
 });
 
-// POST /api/market/buy/:listingId - 购买物品
+// POST /api/market/buy/:listingId - 购买物品（支持数量）
 router.post('/buy/:listingId', (req, res) => {
   if (!db) return res.status(503).json({ success: false, message: '数据库未连接' });
   try {
     const buyerId = getUserId(req);
     const listingId = parseInt(req.params.listingId);
+    let quantity = parseInt(req.body.quantity) || 1;
 
     const listing = db.prepare("SELECT * FROM market_listings WHERE id = ? AND status='active'").get(listingId);
     if (!listing) {
@@ -331,6 +365,24 @@ router.post('/buy/:listingId', (req, res) => {
       return res.status(400).json({ success: false, message: '不能购买自己上架的物品' });
     }
 
+    // 系统商品限购检查
+    if (listing.is_system) {
+      // 检查玩家已购买数量
+      const limitRow = db.prepare('SELECT total_bought FROM market_purchase_limits WHERE user_id = ? AND item_key = ?').get(buyerId, listing.item_key);
+      const alreadyBought = limitRow?.total_bought || 0;
+      const maxPerPlayer = listing.max_quantity || 99;
+      
+      if (alreadyBought >= maxPerPlayer) {
+        return res.status(400).json({ success: false, message: `该商品每人限购${maxPerPlayer}个，您已达购买上限` });
+      }
+      
+      // 实际可购买数量
+      const remaining = maxPerPlayer - alreadyBought;
+      quantity = Math.min(quantity, remaining, listing.quantity);
+    }
+
+    const totalPrice = listing.price * quantity;
+
     // 检查买家灵石
     let buyerLingshi = 0;
     try {
@@ -338,11 +390,11 @@ router.post('/buy/:listingId', (req, res) => {
       if (u) buyerLingshi = u.lingshi || 0;
     } catch (e) {}
 
-    if (buyerLingshi < listing.price) {
+    if (buyerLingshi < totalPrice) {
       return res.status(400).json({
         success: false,
-        message: `灵石不足(需${listing.price}灵石，您有${buyerLingshi}灵石)`,
-        required: listing.price,
+        message: `灵石不足(需${totalPrice}灵石，您有${buyerLingshi}灵石)`,
+        required: totalPrice,
         current: buyerLingshi
       });
     }
@@ -354,46 +406,82 @@ router.post('/buy/:listingId', (req, res) => {
       db.exec('BEGIN TRANSACTION');
 
       // 扣除买家灵石
-      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(listing.price, buyerId);
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalPrice, buyerId);
 
-      // 给卖家加灵石 (扣除5%交易税)
-      const tax = Math.floor(listing.price * 0.05);
-      const sellerEarnings = listing.price - tax;
-      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(sellerEarnings, listing.seller_id);
+      // 给卖家加灵石（系统卖家不获得灵石）
+      if (listing.seller_id > 0) {
+        const tax = Math.floor(totalPrice * 0.05);
+        const sellerEarnings = totalPrice - tax;
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(sellerEarnings, listing.seller_id);
+      }
 
       // 将物品写入买家背包
       try {
-        db.prepare(`
-          INSERT INTO player_items (user_id, item_key, item_name, item_type, icon, count, source)
-          VALUES (?, ?, ?, ?, ?, 1, 'market_purchase')
-        `).run(buyerId, listing.item_key, listing.item_name, listing.item_type, listing.icon);
+        const existingItem = db.prepare('SELECT id, count FROM player_items WHERE user_id = ? AND item_key = ? AND item_type = ?').get(buyerId, listing.item_key, listing.item_type);
+        if (existingItem) {
+          db.prepare('UPDATE player_items SET count = count + ? WHERE id = ?').run(quantity, existingItem.id);
+        } else {
+          db.prepare(`
+            INSERT INTO player_items (user_id, item_key, item_name, item_type, icon, count, source)
+            VALUES (?, ?, ?, ?, ?, ?, 'market_purchase')
+          `).run(buyerId, listing.item_key, listing.item_name, listing.item_type, listing.icon, quantity);
+        }
       } catch (e) {
-        // 如果表结构不同，尝试其他方式
-        try {
-          db.prepare('UPDATE player_items SET count = count + 1 WHERE user_id = ? AND item_key = ?').run(buyerId, listing.item_key);
-        } catch (e2) {}
+        console.log('[market] 物品写入失败:', e.message);
       }
 
-      // 标记上架记录为已售
-      db.prepare("UPDATE market_listings SET status='sold' WHERE id = ?").run(listingId);
+      // 系统商品：扣减库存 + 更新玩家限购记录
+      if (listing.is_system) {
+        db.prepare('UPDATE market_listings SET quantity = quantity - ? WHERE id = ?').run(quantity, listingId);
+        
+        const limitRow = db.prepare('SELECT id FROM market_purchase_limits WHERE user_id = ? AND item_key = ?').get(buyerId, listing.item_key);
+        if (limitRow) {
+          db.prepare('UPDATE market_purchase_limits SET total_bought = total_bought + ? WHERE id = ?').run(quantity, limitRow.id);
+        } else {
+          db.prepare('INSERT INTO market_purchase_limits (user_id, item_key, total_bought) VALUES (?, ?, ?)').run(buyerId, listing.item_key, quantity);
+        }
+        
+        // 限购每日重置：检查是否需要重置（上海时区凌晨4点重置）
+        const now = new Date();
+        const shanghaiHour = parseInt(now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '24', hour12: false }));
+        const shanghaiDate = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const lastReset = db.prepare('SELECT reset_date FROM market_purchase_limits WHERE user_id = ? AND item_key = ?').get(buyerId, listing.item_key);
+        if (lastReset && lastReset.reset_date && lastReset.reset_date !== shanghaiDate && shanghaiHour >= 4) {
+          // 新的一天凌晨4点后，重置限购
+          db.prepare('UPDATE market_purchase_limits SET total_bought = 0, reset_date = ? WHERE user_id = ? AND item_key = ?').run(shanghaiDate, buyerId, listing.item_key);
+          // 同时重置系统商品库存
+          const sysListing = db.prepare("SELECT id, max_quantity FROM market_listings WHERE is_system=1 AND item_key='iron_ingot'").get();
+          if (sysListing) {
+            db.prepare('UPDATE market_listings SET quantity = max_quantity WHERE id = ?').run(sysListing.id);
+          }
+        } else if (!lastReset) {
+          db.prepare('INSERT OR REPLACE INTO market_purchase_limits (user_id, item_key, total_bought, reset_date) VALUES (?, ?, ?, ?)').run(buyerId, listing.item_key, quantity, shanghaiDate);
+        }
+      }
+
+      // 标记上架记录（系统商品不标记sold，维持active直到库存清空）
+      if (!listing.is_system) {
+        db.prepare("UPDATE market_listings SET status='sold' WHERE id = ?").run(listingId);
+      }
 
       // 记录交易
       db.prepare(`
-        INSERT INTO market_transactions (listing_id, seller_id, buyer_id, item_key, item_name, price, traded_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(listingId, listing.seller_id, buyerId, listing.item_key, listing.item_name, listing.price, now);
+        INSERT INTO market_transactions (listing_id, seller_id, buyer_id, item_key, item_name, price, quantity, traded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(listingId, listing.seller_id, buyerId, listing.item_key, listing.item_name, listing.price, quantity, now);
 
       db.exec('COMMIT');
 
       res.json({
         success: true,
-        message: `购买成功！花费${listing.price}灵石，卖家获得${sellerEarnings}灵石(扣除${tax}灵石交易税)`,
+        message: `购买成功！花费${totalPrice}灵石${listing.seller_id > 0 ? `，卖家获得${Math.floor(totalPrice * 0.95)}灵石(扣除${Math.floor(totalPrice * 0.05)}灵石交易税)` : ''}`,
         purchase: {
           listingId,
           itemName: listing.item_name,
           icon: listing.icon,
           price: listing.price,
-          tax
+          quantity,
+          totalPrice
         }
       });
     } catch (err) {

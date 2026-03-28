@@ -141,7 +141,9 @@ let worldBoss = {
   maxHp: 0,
   damageRecords: [], // { userId, name, damage, time }
   lastRefresh: 0,
-  status: 'dead' // alive, dead, countdown
+  status: 'dead', // alive, dead, countdown
+  encourageBonus: 1.0, // 全服鼓舞加成，默认1.0，每鼓舞一次+0.1
+  encourageCount: 0   // 鼓舞次数
 };
 
 // 获取当前BOSS状态
@@ -158,7 +160,9 @@ router.get('/status', (req, res) => {
       maxHp: boss.hp,
       damageRecords: [],
       lastRefresh: now,
-      status: 'alive'
+      status: 'alive',
+      encourageBonus: 1.0,
+      encourageCount: 0
     };
   }
   
@@ -167,6 +171,8 @@ router.get('/status', (req, res) => {
     hp: worldBoss.hp,
     maxHp: worldBoss.maxHp,
     status: worldBoss.status,
+    encourageBonus: worldBoss.encourageBonus,
+    encourageCount: worldBoss.encourageCount,
     myDamage: 0 // 需传入userId计算
   });
 });
@@ -179,25 +185,36 @@ router.post('/attack', (req, res) => {
     return res.json({ success: false, message: 'BOSS未刷新' });
   }
   
-  // 从DB读取玩家攻击力，计算基础伤害
+  // 从DB读取玩家攻击力和HP
   let playerAttack = 100;
+  let playerHp = 1000;
   if (db) {
     try {
-      const player = db.prepare('SELECT attack FROM Users WHERE id = ?').get(userId);
-      if (player) playerAttack = player.attack || 100;
+      const player = db.prepare('SELECT attack, hp FROM Users WHERE id = ?').get(userId);
+      if (player) {
+        playerAttack = player.attack || 100;
+        playerHp = player.hp || 1000;
+      }
     } catch (e) {
-      console.log('[worldBoss] 读取玩家攻击失败:', e.message);
+      console.log('[worldBoss] 读取玩家属性失败:', e.message);
     }
   }
   
   // 基础伤害 = 玩家攻击 * 1.5
   let damage = Math.max(1, Math.floor(playerAttack * 1.5));
   
+  // 单次伤害上限：不超过玩家HP的50%
+  const damageCap = Math.floor(playerHp * 0.5);
+  damage = Math.min(damage, damageCap);
+  
   // 狂暴机制：BOSS血量<30%时，伤害翻倍
   const maxHp = worldBoss.currentBoss.hp || 1;
   const hpPercent = worldBoss.hp / maxHp;
   const furyMultiplier = hpPercent < 0.3 ? 2 : 1;
   damage = Math.floor(damage * furyMultiplier);
+  
+  // 鼓舞加成：全服鼓舞每次+10%伤害
+  damage = Math.floor(damage * worldBoss.encourageBonus);
 
   // 记录伤害到DB
   recordDamageToDB(userId, worldBoss.currentBoss.id, damage);
@@ -255,8 +272,54 @@ router.post('/attack', (req, res) => {
     totalDamage: newTotalDamage,
     killed,
     furyMultiplier,
+    damageCap,
+    encourageBonus: worldBoss.encourageBonus,
     bossRewards: killed ? worldBoss.currentBoss.reward : null,
     magicCrystalPreview: Math.max(1, mcReward),
+  });
+});
+
+// 鼓舞机制：花费50灵石，全服所有玩家伤害+10%（可叠加）
+router.post('/encourage', (req, res) => {
+  const { userId } = req.body;
+  
+  if (worldBoss.status !== 'alive' || !worldBoss.currentBoss) {
+    return res.json({ success: false, message: 'BOSS未刷新，请等待下次刷新' });
+  }
+  
+  const ENCOURAGE_COST = 50; // 鼓舞消耗灵石
+  const ENCOURAGE_BONUS = 0.1; // 每次鼓舞全服伤害+10%
+  const MAX_ENCOURAGE = 10; // 最多鼓舞10次（+100%上限）
+  
+  // 扣除灵石
+  if (db) {
+    try {
+      const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+      if (!player) {
+        return res.json({ success: false, message: '玩家不存在' });
+      }
+      if ((player.lingshi || 0) < ENCOURAGE_COST) {
+        return res.json({ success: false, message: `灵石不足，需要${ENCOURAGE_COST}灵石` });
+      }
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(ENCOURAGE_COST, userId);
+    } catch (e) {
+      console.error('[worldBoss] encourage扣灵石失败:', e.message);
+      return res.status(500).json({ success: false, message: '数据库错误' });
+    }
+  }
+  
+  // 增加鼓舞加成（上限+100%）
+  if (worldBoss.encourageCount < MAX_ENCOURAGE) {
+    worldBoss.encourageBonus = Math.min(2.0, worldBoss.encourageBonus + ENCOURAGE_BONUS);
+    worldBoss.encourageCount++;
+  }
+  
+  res.json({
+    success: true,
+    message: `鼓舞成功！全服伤害+10%，当前加成${Math.round((worldBoss.encourageBonus - 1) * 100)}%`,
+    encourageBonus: worldBoss.encourageBonus,
+    encourageCount: worldBoss.encourageCount,
+    cost: ENCOURAGE_COST,
   });
 });
 
