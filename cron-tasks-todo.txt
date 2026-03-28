@@ -2283,7 +2283,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # ========== 2026-03-28 晚间版 [B] 任务 ==========
 [P0-70-1] 背包物品堆叠修复 — addItem用UPSERT逻辑，已有itemId+type时UPDATE count而非INSERT新记录；写历史数据合并脚本
-[P0-70-2] sect/join时同步 UPDATE Users SET sect_id=? WHERE id=?
-[P1-70-1] 修复vip/benefits端点playerId从req.body读取→改为req.query.playerId或req.get('X-User-Id')
-[P1-70-2] 新手副本(id=1)添加iron_ingot掉落(50%掉率,1-3个)；market添加铁锭出售(20灵石/个,限购99)
-[P1-70-3] 世界BOSS：添加单次伤害上限(自身HP*50%)；添加鼓舞机制(50灵石全服+10%伤害)；添加复活时间表
+[P0-70-2] sect/join时同步 UPDATE Users SET sect_id=? WHERE id=?  # 已确认完成 | 2026-03-28 代码已验证有UPDATE Users SET sectId
+[P1-70-1] 修复vip/benefits端点playerId从req.body读取→改为req.query.playerId或req.get('X-User-Id')  # vip.js只有/和/:userId端点，无/benefits独立路由
+[P1-70-2] 新手副本(id=1)添加iron_ingot掉落(50%掉率,1-3个)；market添加铁锭出售(20灵石/个,限购99)  # 完成 | 2026-03-28 0dc63abe
+  - dungeon.js: dropChance→0.5, iron_ingot独立掉率50%[1-3个], UPSERT写入player_items
+  - market.js: 系统商店铁锭listing(20灵石,99库存,限购99/玩家/日), quantity字段, purchase_limits表, 每日4点重置
+[P1-70-3] 世界BOSS：添加单次伤害上限(自身HP*50%)；添加鼓舞机制(50灵石全服+10%伤害)；添加复活时间表  # 完成 | 2026-03-28 0dc63abe
+  - worldBoss.js: 伤害上限playerHp*0.5, encourageBonus(每次+10%,上限100%), /encourage端点(50灵石), status返回encourageBonus
