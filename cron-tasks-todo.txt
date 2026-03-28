@@ -2307,11 +2307,14 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ## 2026-03-28 Night v69 任务清单
 
 ### P0 - 必须修复
-[B-1] 【修炼系统】降低境界突破灵气成本：境界1~3突破改为3000/8000/15000；增加灵石直接兑换灵气选项（100灵石=500灵气）；每日首次修炼双倍灵气
-[B-2] 【API路由】增加 POST /api/cultivation/claim 端点（领取修炼成果）
-[B-3] 【API路由】forge路由增加 GET /status 端点（返回强化石数量+强化等级）
-[B-4] 【API路由】deity路由增加 /combat 端点（战力排行榜）
-[B-5] 【API路由】chat路由增加 GET /list 别名指向 /
+[B-1] 【修炼系统】降低境界突破灵气成本：境界1~3突破改为3000/8000/15000；增加灵石直接兑换灵气选项（100灵石=500灵气）；每日首次修炼双倍灵气  # 完成 | 2026-03-28 8e3f6b2b
+[B-2] 【API路由】增加 POST /api/cultivation/claim 端点（领取修炼成果）  # 完成 | 2026-03-28 7cc9af7a
+  - POST /api/cultivation/claim: 基于 last_claim_time 追踪领取间隔，发放灵气/经验/灵石
+  - 上限8小时(480分钟)，效率60%+VIP加成，last_claim_time 使用 unixepoch 避免时区问题
+  - Cultivations 表添加 last_claim_time 列(ALTER TABLE)
+[B-3] 【API路由】forge路由增加 GET /status 端点（返回强化石数量+强化等级）  # 完成 | 2026-03-28 8dacbf98
+[B-4] 【API路由】deity路由增加 /combat 端点（战力排行榜）  # 完成 | 2026-03-28 8dacbf98
+[B-5] 【API路由】chat路由增加 GET /list 别名指向 /  # 完成 | 2026-03-28 8dacbf98
 [B-6] 【宗门福地】修复探索死锁：增加探索完成后的清理/重置逻辑；增加 POST /api/paradise/abandon 端点
 
 ### P1 - 核心优化
