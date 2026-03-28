@@ -2107,15 +2107,18 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # ========== 从策划提案分发 — 2026-03-28 15:37（第81轮）============
 
 # === P0 阻断级（后端API全缺失）===
-# [P0-81-1-B] 琴棋书画后端API - server/backend/routes/art_system.js（演奏/对弈/书画/雅趣/修养/熟练度/历史记录）  # 2026-03-28
-  - POST /api/art/performance {playerId, type, instrument, mode, score, combo, accuracy, grade}
-  - POST /api/art/chess/move {playerId, move, gameId}
-  - POST /api/art/calligraphy/submit
-  - POST /api/art/painting/submit
-  - GET /api/art/player/:playerId
-  - GET /api/art/history/:playerId
-  - 数据库表: player_art_stats, art_performance_records
-  - 雅趣/修养对战斗属性 +0.5%/级 加成公式
+# [P0-81-1-B] 琴棋书画后端API  # 完成 | 2026-03-28 939f4991
+  - 创建 routes/art.js (23KB, 琴棋书画艺术系统完整实现)
+  - 数据库表: player_art_stats, art_performance_records, art_chess_games
+  - POST /api/art/performance: 演奏(古琴/琵琶/笛/筝) 评分/等级/经验  # 2026-03-28
+  - POST /api/art/chess/start: 开始棋局(8x8红黑对弈)  # 2026-03-28
+  - POST /api/art/chess/move: 落子+AI自动应对+胜负判定  # 2026-03-28
+  - POST /api/art/calligraphy: 书法(篆/草/楷/行)+quality评分  # 2026-03-28
+  - POST /api/art/painting: 绘画(山水/花鸟/人物/动物)+creativity评分  # 2026-03-28
+  - GET /api/art/player/:playerId: 四艺等级/经验/属性加成  # 2026-03-28
+  - GET /api/art/history/:playerId: 历史记录  # 2026-03-28
+  - server.js 注册 /api/art 路由  # 2026-03-28 939f4991
+  - 艺术修为加成: ATK/DEF/HP/暴击率 (随等级累积)  # 2026-03-28
 # [P0-81-2-B] 支付系统API - server.js 添加 /api/payment/* 路由  # 2026-03-28
   - POST /api/payment/create {player_id, package_id} → 返回orderId
   - POST /api/payment/callback {order_id} → 发放灵石+写payment_records
