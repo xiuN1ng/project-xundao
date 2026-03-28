@@ -106,12 +106,12 @@ router.get('/info', (req, res) => {
 
     // 重置每日
     if (!row || row.last_daily_reset !== today) {
-      db.prepare('INSERT INTO sect_activity (player_id, daily_score, last_daily_reset, updated_at) VALUES (?,0,?,strftime("%s","now")) ON CONFLICT(player_id) DO UPDATE SET daily_score=0, last_daily_reset=?').run(playerId, today, today);
+      db.prepare(`INSERT INTO sect_activity (player_id, daily_score, last_daily_reset, updated_at) VALUES (?,0,?,strftime('%s','now')) ON CONFLICT(player_id) DO UPDATE SET daily_score=0, last_daily_reset=?`).run(playerId, today, today);
       daily.daily_score = 0;
     }
     // 重置每周
     if (!row || row.last_weekly_reset !== weekKey) {
-      db.prepare('INSERT INTO sect_activity (player_id, weekly_score, last_weekly_reset, updated_at) VALUES (?,0,?,strftime("%s","now")) ON CONFLICT(player_id) DO UPDATE SET weekly_score=0, last_weekly_reset=?').run(playerId, weekKey, weekKey);
+      db.prepare(`INSERT INTO sect_activity (player_id, weekly_score, last_weekly_reset, updated_at) VALUES (?,0,?,strftime('%s','now')) ON CONFLICT(player_id) DO UPDATE SET weekly_score=0, last_weekly_reset=?`).run(playerId, weekKey, weekKey);
       daily.weekly_score = 0;
     }
 
@@ -158,7 +158,7 @@ router.post('/score', (req, res) => {
     if (!existing) {
       db.prepare('INSERT INTO sect_activity (player_id, daily_score, weekly_score, total_score, last_daily_reset, last_weekly_reset) VALUES (?,?,?,?,?,?)').run(playerId, score, score, score, today, weekKey);
     } else {
-      db.prepare('UPDATE sect_activity SET daily_score=daily_score+?, weekly_score=weekly_score+?, total_score=total_score+?, updated_at=strftime("%s","now") WHERE player_id=?').run(score, score, score, playerId);
+      db.prepare(`UPDATE sect_activity SET daily_score=daily_score+?, weekly_score=weekly_score+?, total_score=total_score+?, updated_at=strftime('%s','now') WHERE player_id=?`).run(score, score, score, playerId);
     }
 
     // 记录日志
