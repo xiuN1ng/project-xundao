@@ -1998,11 +1998,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   事件触发: 探索触发随机奇遇事件（山洞奇遇/仙人指路/魔物袭击），完成后发放奖励
   截止: 2026-03-30
 
-[P1-B-73-3] 【B】Lundao opponents 路由 404 — /api/lundao/opponents Cannot GET
+[P1-B-73-3] 【B】Lundao opponents 路由 404 — /api/lundao/opponents Cannot GET  # 完成 | 2026-03-28 ccb7eb0f
   文件: server/backend/routes/lundao.js
   问题: lundao.js 缺少 /opponents 路由实现
   修复: 添加 GET /opponents 端点，返回随机 3 个 AI 对手（含名号/境界/擅长领域）
-  截止: 2026-03-29
+  截止: 2026-03-29 | 完成于 2026-03-28
 
 [P1-B-73-4] 【B】材料副本 18:00 才能进入 — is_open 全天 false
   文件: server/backend/routes/daily-dungeon.js
