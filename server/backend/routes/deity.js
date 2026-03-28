@@ -7,16 +7,13 @@ const router = express.Router();
 
 // 加载依赖
 let deityStorage;
-function loadDependencies() {
-  if (!deityStorage) {
-    try {
-      deityStorage = require('../game/deity_list_storage');
-    } catch (e) {
-      console.error('加载deity_list_storage失败:', e.message);
-    }
-  }
-  return deityStorage;
+try {
+  const mod = require('../../game/deity_list_storage');
+  deityStorage = mod.deityStorage;
+} catch (e) {
+  console.error('加载deity_list_storage失败:', e.message);
 }
+function loadDependencies() { return deityStorage; }
 
 // 获取榜单类型列表
 router.get('/types', (req, res) => {
