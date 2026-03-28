@@ -267,6 +267,52 @@ function updateDailyQuestProgress(userId, type, delta) { fs.writeFileSync("/tmp/
   return updated;
 }
 
+// 获取每日任务进度（从DB实时读取，解决 /progress?userId=X 被路由到 /:userId 的问题）
+router.get('/progress', (req, res) => {
+  const userId = parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
+  const today = getShanghaiDate();
+
+  // 从DB实时读取今日进度（避免内存缓存 miss）
+  let dbProgress = {};
+  if (db) {
+    try {
+      const rows = db.prepare('SELECT quest_id, progress, completed, claimed FROM daily_quest_progress WHERE user_id = ? AND quest_date = ?').all(userId, today);
+      rows.forEach(row => {
+        dbProgress[row.quest_id] = {
+          progress: row.progress,
+          completed: !!row.completed,
+          claimed: !!row.claimed
+        };
+      });
+    } catch (e) {
+      console.warn('[dailyQuest] /progress DB查询失败:', e.message);
+    }
+  }
+
+  const quests = questTemplates.map(quest => {
+    const userQ = dbProgress[quest.id] || { progress: 0, completed: false, claimed: false };
+    return {
+      ...quest,
+      progress: userQ.progress,
+      completed: userQ.completed,
+      claimed: userQ.claimed
+    };
+  });
+
+  const daily = quests.filter(q => q.difficulty === 1);
+  const weekly = quests.filter(q => q.difficulty === 2);
+  const challenge = quests.filter(q => q.difficulty === 3);
+
+  res.json({
+    date: today,
+    daily,
+    weekly,
+    challenge,
+    totalProgress: quests.filter(q => q.completed).length,
+    totalQuests: quests.length
+  });
+});
+
 // 获取每日任务概览（根路径）
 router.get('/', (req, res) => {
   const quests = questTemplates;

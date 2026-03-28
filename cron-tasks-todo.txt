@@ -2518,3 +2518,184 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 方案C: 实现 POST /api/market/create-listing 让玩家可上架物品
 - 负责人: [B]
 - 截止: 2026-03-30
+
+## P0（3个）[2026-03-29 第58轮]
+[P0-B-0329-1] DailyQuest eventBus + 进度驱动
+- 创建 game/eventBus.js 中央事件总线
+- cultivation/start 成功后 eventBus.emit('cultivation:complete', {playerId})
+- arena/challenge 成功后 eventBus.emit('arena:challenge', {playerId, success})
+- chapter/battle 胜利后 eventBus.emit('chapter:complete', {playerId, chapterId})
+- 创建/完善 game/achievement_trigger_service.js 监听上述事件，写入 daily_quest_progress 表
+- 修复 GET /api/dailyQuest/progress 从 DB 读取真实进度
+- 负责人: [B]
+- 截止: 2026-03-30
+
+[P0-B-0329-2] Achievement 成就进度驱动
+- 在 eventBus 基础上，achievement_trigger_service.js 监听 realm_upgrade/cultivation 等事件
+- 当 player.realm 提升时，更新对应境界成就进度
+- 实现 POST /api/achievement/claim 领取奖励（diamonds）
+- 负责人: [B]
+- 截止: 2026-03-30
+
+[P0-B-0329-3] Rank/combat 清除 fake NPC 数据
+- 修改 getCombatRank() SQL：WHERE p.user_id > 0 排除负数 fake 账号
+- 或从 Users 表查询，只取真实注册玩家
+- 更新 arena 对手匹配：只匹配 user_id > 0 的真实玩家
+- 负责人: [B]
+- 截止: 2026-03-30
+
+## P1（3个）[2026-03-29 第58轮]
+[P1-B-0329-1] 灵兽捕捉 + 出战系统
+- 实现 POST /api/beast/capture（消耗500灵石，capture_rate成功率，保底机制）
+- 实现 POST /api/beast/equip（出战灵兽，属性加成）
+- 写入 player_beasts 表
+- 前端 BeastPanel 接入捕捉按钮和出战设置 [F]
+- 负责人: [B] + [F]
+- 截止: 2026-04-01
+
+[P1-B-0329-2] 锁妖塔楼层内容实现
+- 在 tower_system.js 添加 100 层敌人配置（HP/ATK/DEF/奖励）
+- 实现 POST /api/tower/challenge 胜负判定
+- 每波发放首通奖励，更新 highestFloor
+- 每10层设Boss层
+- 负责人: [B]
+- 截止: 2026-04-02
+
+[P1-B-0329-3] 探险奇遇系统重建
+- 创建 game/adventure_system.js 奇遇事件引擎
+- 实现 GET /api/adventure/events + POST /api/adventure/claim/:eventId
+- 奇遇类型：灵石宝箱/妖兽战斗/属性永久+/限时副本
+- 挂机tick 0.5%概率触发
+- 负责人: [B]
+- 截止: 2026-04-03
+
+# ========== 2026-03-29 第59轮新增任务 ==========
+[P0-59-B-1] 商城商品描述填充  # 完成 | 2026-03-29
+  - 文件: server/backend/routes/shop.js
+  - 问题: 全部18个商品description为空字符串
+  - 修复: 为每个商品添加中文描述（参考提案 docs/PROPOSALS/2026-03-29-late-night.md）
+  - 截止: 2026-03-30
+
+[P1-59-B-1] 活动系统progress实时读取 + claim接口
+  - 文件: server/backend/routes/activity.js
+  - 问题: level_up progress=0（玩家16级无法领10级奖励）
+  - 修复: progress从player.level实时读取; claimed从DB读取防重复; 添加POST /api/activity/claim/:activityId
+  - 截止: 2026-03-30
+
+[P1-59-B-2] 世界BOSS定时刷新机制
+  - 文件: server/backend/routes/worldboss.js
+  - 问题: hasBoss=false，无BOSS无机制
+  - 修复: 添加BOSS刷新时间表; GET /api/worldboss/status; POST /api/worldboss/attack真实伤害; GET /api/worldboss/rank
+  - 截止: 2026-03-31
+
+[P1-59-B-3] VIP月卡系统完善
+  - 文件: server/backend/routes/vip.js
+  - 修复: GET /api/vip/info返回monthlyCard详情; POST /api/vip/buy-monthly-card; POST /api/vip/claim-daily
+  - 截止: 2026-03-31
+
+[P1-59-B-4] 统一ProgressTracker服务
+  - 文件: server/backend/game/progress_tracker.js (新建)
+  - 接入: cultivation.js realm_up事件, chapter.js cleared事件, arena.js challenged事件, player.js level_up事件
+  - 效果: 一次修复，成就/每日任务/活动进度全联动
+  - 截止: 2026-03-31
+
+[P1-59-B-5] 排行榜combatPower计算修复
+  - 文件: server/backend/routes/rank.js
+  - 问题: userId<0的fake账号污染; 真实用户combatPower=1350默认值
+  - 修复: 只返回userId>0; combatPower实时=(attack*10+defense*5+hp/10); 新用户基于level初始化
+  - 截止: 2026-03-30
+
+[P2-59-B-1] 宗门贡献兑换系统
+  - 文件: server/backend/routes/sect.js
+  - 添加: POST /api/sect/exchange(100贡献=500灵石); GET /api/sect/skills; POST /api/sect/study
+  - 截止: 2026-04-02
+
+[P2-59-B-2] 每日试炼小宝箱
+  - 文件: server/backend/routes/daily_trial.js (新建)
+  - 功能: 每日5个随机试炼，全部完成额外奖励
+  - 接口: GET /api/daily-trial/, POST /api/daily-trial/claim/:id
+  - 截止: 2026-04-03
+
+# ========== 2026-03-30 新增 P0/B 任务 ===========
+[P0-B-30-1] Achievement API：从 DB 读取真实进度
+  - 文件: server/backend/routes/achievement.js GET /list
+  - 问题: achievement_progress DB 有真实数据，但 API 返回全0
+  - 修复: SELECT * FROM achievement_progress WHERE user_id=? → 合并到返回
+  - 修复: 添加 POST /api/achievement/claim 领取奖励
+  - 截止: 2026-03-30
+
+[P0-B-30-2] DailyQuest API：从 DB 读取今日真实进度  # 完成 | 2026-03-29
+  - 文件: server/backend/routes/dailyQuest.js GET /progress
+  - 问题: daily_quest_progress DB 有 2026-03-29 真实数据，但 API 返回全0
+  - 修复: 添加 router.get('/progress') 从DB实时读取；原 /:userId 被 /progress 误匹配 → 新端点独立解决
+  - 验证: curl http://localhost:3001/api/dailyQuest/progress?userId=1 → 返回真实DB进度
+  - 截止: 2026-03-30
+
+[P1-B-30-1] Paradise / Lundao 端点验证并补全
+  - 验证 POST /api/paradise/explore 和 POST /api/lundao/submit 是否可用
+  - 如缺失则添加完整实现
+  - 截止: 2026-04-01
+
+[P1-B-30-2] 章节 HP/ATK 曲线重做（第9-30章）
+  - 文件: server/backend/routes/chapter.js chapters 数组
+  - 修复: HP[n] = 8000*(1.2)^(n-7)，ATK 每章+15%
+  - 截止: 2026-03-31
+
+[P1-B-30-3] Shop 18件商品 description 补全
+  - 文件: server/backend/routes/shop.js shop_items 数组
+  - 截止: 2026-03-31
+
+[P1-B-30-4] Activity level_up progress 从 player.level 读取
+  - 文件: server/backend/routes/activity.js GET /
+  - 截止: 2026-03-31
+
+[P2-B-30-1] 锻造强化系统 POST /api/forge/enhance
+  - 文件: server/backend/routes/forge.js
+  - 截止: 2026-04-02
+
+[P2-B-30-2] 宗门技能研究 + 建筑系统
+  - 文件: server/backend/routes/sect.js
+  - 截止: 2026-04-03
+
+[P2-B-30-3] 装备套装系统后端
+  - 截止: 2026-04-05
+
+[P2-B-30-4] 师徒系统后端
+  - 截止: 2026-04-07
+
+[P0-B-29-V2-1] Beast API player_beasts列名错配（user_id → player_id）
+  - 文件: server/backend/routes/beast.js 第97/98/117行等所有player_beasts查询
+  - 影响端点: /beast/my, /beast/activate, /beast/stats, /beast/battle-bonus等
+  - 同步检查: beast_pitty_counter表实际列名
+  - 截止: 2026-03-30
+
+[P1-B-29-V2-1] DailyQuest progress API与DB不一致
+  - 文件: server/backend/routes/dailyQuest.js progress handler
+  - 问题: DB有2026-03-29日期的progress数据，API返回全部0
+  - 截止: 2026-03-31
+
+[P1-B-29-V2-3] Beast battle-bonus接入战斗系统
+  - 文件: server/backend/routes/beast.js + battle.js/chapter.js
+  - 修复P0列名后，确认战斗路由调用battle-bonus并叠加属性
+  - 截止: 2026-03-31
+
+[P2-B-29-V2-1] Achievement DB残缺（31个成就只有5个在DB）
+  - 文件: server/backend/achievement_trigger_service.js 或对应路由
+  - 补充cultivate/battle/realm/sect等category的成就记录初始化
+  - 截止: 2026-04-02
+
+[P2-B-29-V2-2] Meridian meridianPoints返回0（应从DB统计）
+  - 文件: server/backend/routes/meridian.js GET /:userId handler
+  - 从meridian_branches表COUNT已解锁穴位作为meridianPoints
+  - 截止: 2026-04-02
+
+[P1-B-NF-29-V2-1] 离线挂机收益系统
+  - 文件: server/backend/routes/cultivation.js + player.js
+  - 添加: lastOfflineAt列 + /player/offline-rewards + /player/claim-offline
+  - 离线收益=离线分钟×每分钟速度×0.5，上限24小时
+  - 截止: 2026-04-03
+
+[P2-B-NF-29-V2-2] Lundao题目系统
+  - 文件: server/backend/routes/lundao.js
+  - 创建lundao_questions表，添加/api/lundao/question端点
+  - 截止: 2026-04-05
