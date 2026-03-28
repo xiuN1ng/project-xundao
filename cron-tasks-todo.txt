@@ -2103,3 +2103,89 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   VIP3+离线效率提升至70%
   UI: 登录后弹出离线收益面板(仿梦幻西游风格)
   截止: 2026-04-07
+
+# ========== 从策划提案分发 — 2026-03-28 15:37（第81轮）============
+
+# === P0 阻断级（后端API全缺失）===
+# [P0-81-1-B] 琴棋书画后端API - server/backend/routes/art_system.js（演奏/对弈/书画/雅趣/修养/熟练度/历史记录）  # 2026-03-28
+  - POST /api/art/performance {playerId, type, instrument, mode, score, combo, accuracy, grade}
+  - POST /api/art/chess/move {playerId, move, gameId}
+  - POST /api/art/calligraphy/submit
+  - POST /api/art/painting/submit
+  - GET /api/art/player/:playerId
+  - GET /api/art/history/:playerId
+  - 数据库表: player_art_stats, art_performance_records
+  - 雅趣/修养对战斗属性 +0.5%/级 加成公式
+# [P0-81-2-B] 支付系统API - server.js 添加 /api/payment/* 路由  # 2026-03-28
+  - POST /api/payment/create {player_id, package_id} → 返回orderId
+  - POST /api/payment/callback {order_id} → 发放灵石+写payment_records
+  - GET /api/payment/packages → 返回6档充值套餐配置
+  - GET /api/payment/my-packages/:playerId
+  - GET /api/payment/orders/:playerId
+# [P0-81-3-B] 宗门秘境后端API - server/backend/routes/sect_dungeon.js  # 2026-03-28
+  - GET /api/sect-dungeon/list?player_id=X → 5个副本配置
+  - POST /api/sect-dungeon/enter {player_id, dungeon_id} → 战斗+奖励
+  - GET /api/sect-dungeon/progress?player_id=X
+  - 副本: 练气秘藏/筑基禁地/金丹深渊/元婴幻境/化神遗迹
+
+# === P1 重要（功能不完整）===
+# [P1-81-1-B] 市场挂单API - POST /api/market/list-item, /buy, /my-listings, DELETE /cancel  # 2026-03-28
+# [P1-81-2-B] 灵兽装备API端点确认 - /api/beasts/list 别名 + /api/beast-equipment/* 端点  # 2026-03-28
+
+# === 新功能（可选）===
+# [NF-81-1-B] 看广告激励视频后端奖励API - POST /api/ad/reward {player_id, ad_type, video_id}  # 2026-03-28
+# [NF-81-2-B] 宗门宝藏竞拍API - /api/sect/treasury/* 路由组  # 2026-03-28
+
+## 2026-03-28-v67 任务追加
+
+### [P0-B-67-1] DailyQuest进度追踪断裂  # 完成 | 2026-03-28 16:20
+- 创建 daily_quest_progress 表（如果不存在）  # 已在 dailyQuest.js 中初始化
+- 在 cultivation/start, chapter/battle, shop/buy, friend/add, equipment/enhance 后调用触发器
+  - cultivation/start: 直接调用 updateDailyQuestProgress ✓ + emit cultivation:start ✓
+  - cultivation/breakthrough: 添加直接调用 updateDailyQuestProgress (之前仅靠事件总线) ✓
+  - cultivation/advance: 添加直接调用 updateDailyQuestProgress ✓
+  - chapter/battle: 直接调用 updateDailyQuestProgress ✓ + emit chapter:battle ✓
+  - shop/buy: 直接调用 updateDailyQuestProgress ✓
+  - friend/accept: 添加 dailyQuestRouter + eventBus 导入，好友接受时触发 friend 任务 ✓
+  - equipment/enhance (forge.js): 直接调用 updateDailyQuestProgress ✓
+- 每天UTC00:00重置progress  # 已在 initDailyQuests 中通过上海时区日期比较实现
+- 参考: routes/dailyQuest.js + 第67轮提案
+
+### [P0-B-67-2] /api/bag/list 404
+- 在 server.js 添加 bag 路由注册
+- 完善 bag.js 端点返回玩家所有物品
+- 添加 /api/bag/materials 专门给 Forge 界面用
+- 参考: routes/bag.js 第67轮提案
+
+### [P1-B-67-1] Paradise福地explore端点缺失
+- 添加 POST /api/paradise/explore {userId, landId}
+- 添加 GET /api/paradise/status
+- 配置各福地灵石消耗（灵田50/灵泉100/古遗址200/仙灵岛400/混沌裂缝800）
+- 参考: routes/paradise.js 第67轮提案
+
+### [P1-B-67-2] Rank数据源为测试数据
+- /rank/combat 从 Users 表实时计算: FLOOR(attack*HP/50)
+- /rank/level 从 Users 表 SELECT level ORDER BY level DESC
+- /rank/wealth 从 Users 表 SELECT lingshi
+- /rank/chapter 从 chapter_progress 表
+- 参考: routes/rank.js 第67轮提案
+
+### [P1-B-67-3] 锻造材料来源黑盒
+- 新手副本(id=1)掉落表增加 iron_ingot 100%(1-2个) + jade 50%(1个)
+- /api/dungeon/ 返回增加 material_drops 字段说明每种材料掉率
+- 参考: routes/dungeon.js + 第67轮提案
+
+### [P1-B-67-4] 灵石回收站
+- POST /api/material-exchange/recycle {userId, materialId, quantity}
+- iron_ingot=5/jade=20/fire_crystal=50/thunder_crystal=50/dragon_scale=200
+- 参考: routes/material_exchange.js 第66+67轮提案
+
+### [P1-B-67-5] Achievement进度追踪
+- 创建 achievement_progress 表（如果不存在）
+- 动作触发器: 修炼/战斗/装备强化/加入宗门/添加好友/升级
+- 参考: routes/achievement.js 第67轮提案
+
+### [P2-B-67-1] Deity封神榜路由注册
+- server.js 添加 app.use('/api/deity-list', require('./routes/deity'))
+- 验证 deity.js 的 GET /ranking 和 GET /combat
+- 参考: routes/deity.js 第67轮提案
