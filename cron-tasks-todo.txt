@@ -2207,8 +2207,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #   - AI bots数据库重置：combat_power公式=atk*10+def*5+hp/10（与battle一致）
 #   - 截止: 2026-03-29
 
-# [B] 签到状态逻辑修复 - signedToday与lastSignDate矛盾
-#   - 统一使用'Asia/Shanghai'时区的YYYY-MM-DD格式存储和比较
+# [B] 签到状态逻辑修复 - signedToday与lastSignDate矛盾  # 完成 | 2026-03-29 f9aa02cf
+#   - 修复 routes/welfare.js: 移除in-memory signInData，改用 welfareStorage
+#   - 所有日期比较统一使用 getShanghaiDate() (UTC+8)
 #   - 截止: 2026-03-29
 
 # [B] Sect-missions触发器 - cultivation完成后未触发sect-missions更新
