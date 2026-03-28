@@ -2303,3 +2303,23 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-B-68-1] Commission路由注册 — server.js添加 app.use('/api/commission', require('./routes/commission'))
 [P2-B-68-2] Deity封神榜路由 — server.js添加 app.use('/api/deity-list', require('./routes/deity'))（需确认deity.js路由前缀是否匹配）
 [P2-B-68-3] VIP /benefits端点 — POST /benefits(userId) 检查vipLevel>=1，每日领取对应等级灵石+装备，写入vip_daily_claims防重复 # 完成 | 2026-03-28 21:51 | 52d7435f
+
+## 2026-03-28 Night v69 任务清单
+
+### P0 - 必须修复
+[B-1] 【修炼系统】降低境界突破灵气成本：境界1~3突破改为3000/8000/15000；增加灵石直接兑换灵气选项（100灵石=500灵气）；每日首次修炼双倍灵气
+[B-2] 【API路由】增加 POST /api/cultivation/claim 端点（领取修炼成果）
+[B-3] 【API路由】forge路由增加 GET /status 端点（返回强化石数量+强化等级）
+[B-4] 【API路由】deity路由增加 /combat 端点（战力排行榜）
+[B-5] 【API路由】chat路由增加 GET /list 别名指向 /
+[B-6] 【宗门福地】修复探索死锁：增加探索完成后的清理/重置逻辑；增加 POST /api/paradise/abandon 端点
+
+### P1 - 核心优化
+[B-7] 【VIP系统】月卡功能：增加月卡充值入口；月卡内容设计（灵石月卡6元/尊享月卡30元）；VIP福利领取引导UI
+[B-8] 【聊天系统】添加系统机器人消息（欢迎语/公告/升级广播）；增加玩家突破系统广播
+[B-9] 【副本系统】章节增加1-3星评分；满星解锁扫荡；章节宝箱
+[B-10] 【锻造系统】强化界面增加成功率曲线展示；强化保护石机制
+
+### P2 - 新功能
+[B-11] 【灵兽系统】灵兽出战功能：出战灵兽附加属性；灵兽独立技能；灵兽装备
+[B-12] 【活动系统】限时活动框架：双倍修炼夜/强化大吉等每日轮换活动

@@ -33,6 +33,7 @@ try {
   db = new Database(DB_PATH);
   // 确保 last_logout 列存在
   try { db.exec('ALTER TABLE Users ADD COLUMN last_logout DATETIME'); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_claim_time DATETIME"); } catch (e) { /* 列已存在 */ }
   Logger.info('数据库连接成功');
 } catch (err) {
   Logger.error('数据库连接失败:', err.message);
@@ -605,6 +606,94 @@ router.get('/offline-rewards', (req, res) => {
     });
   } catch (err) {
     Logger.error('GET /offline-rewards error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 领取修炼成果（基于挂机时长的阶段奖励）
+router.post('/claim', (req, res) => {
+  const userId = req.userId || 1;
+  const MAX_CLAIM_MINUTES = 480; // 上限8小时
+
+  try {
+    const player = getPlayer(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    const cult = getOrCreateCultivation(userId);
+    const config = realmConfig[cult.realm] || realmConfig[1];
+
+    // 获取上次领取时间（如果没有记录，视为首次，可领取全量）
+    let lastClaimTime = null;
+    if (cult.last_claim_time) {
+      // 使用 unixepoch() 获取 UTC 秒级时间戳，JS 直接转为毫秒避免时区歧义
+      const claimRow = db.prepare("SELECT strftime('%s', last_claim_time) as ts FROM Cultivations WHERE userId = ?").get(userId);
+      lastClaimTime = claimRow && claimRow.ts ? parseInt(claimRow.ts) * 1000 : null;
+    }
+
+    const now = Date.now();
+    const elapsedMs = now - lastClaimTime;
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+
+    if (elapsedMinutes < 1) {
+      return res.json({ success: false, message: '修炼时间太短，无法领取奖励' });
+    }
+
+    const cappedMinutes = Math.min(elapsedMinutes, MAX_CLAIM_MINUTES);
+    const realm = cult.realm || 1;
+    const realmBaseGain = [0, 10, 25, 60, 150, 400, 1000, 2500, 6000][realm] || 10;
+    const vipBonus = 1 + (player.vipLevel || 0) * 0.1;
+    // 修炼效率60%，VIP加成为vipBonus
+    const efficiency = 0.6 * vipBonus;
+
+    // 灵气收益
+    const cultivationGain = Math.floor(realmBaseGain * cappedMinutes * efficiency);
+    // 经验收益
+    const expGain = Math.floor(5 * realm * cappedMinutes * efficiency);
+    // 灵石收益（少量，仅作为bonus）
+    const lingshiGain = Math.floor((1 + Math.floor(Math.random() * 5)) * realm * cappedMinutes * 0.3);
+
+    // 突破进度
+    const newValue = Math.min(parseInt(cult.value) + cultivationGain, config.cost);
+    const progress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
+    const realmLevel = config.realm_level || 1;
+    const cultivationPower = Math.floor(newValue * 0.1 + realmLevel * 50);
+
+    // 写入DB
+    db.prepare("UPDATE Cultivations SET value = ?, cultivationPower = ?, last_claim_time = datetime('now'), updatedAt = datetime('now') WHERE userId = ?").run(newValue, cultivationPower, userId);
+    db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(lingshiGain, userId);
+
+    // 每日任务触发
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try {
+        dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
+      } catch (e) {
+        Logger.error('每日任务更新失败:', e.message);
+      }
+    }
+
+    // 事件总线
+    if (eventBus) {
+      eventBus.emit('cultivation:claim', { userId, cultivationGain, lingshiGain });
+    }
+
+    res.json({
+      success: true,
+      claimed: true,
+      elapsedMinutes: cappedMinutes,
+      capped: elapsedMinutes > MAX_CLAIM_MINUTES,
+      rewards: {
+        cultivationValue: cultivationGain,
+        exp: expGain,
+        spiritStones: lingshiGain
+      },
+      currentValue: newValue,
+      progress,
+      cultivationPower,
+      maxed: newValue >= config.cost,
+      message: `领取成功！修炼${cappedMinutes}分钟，获得灵气+${cultivationGain}，经验+${expGain}，灵石+${lingshiGain}`
+    });
+  } catch (err) {
+    Logger.error('POST /claim error:', err.message);
     res.json({ success: false, message: err.message });
   }
 });
