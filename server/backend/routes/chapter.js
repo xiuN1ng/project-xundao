@@ -2,13 +2,26 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
-// 数据库连接
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'game.db');
+// ========== 中间件：优先使用 req.app.locals.db（共享主实例）==========
+// 解决：独立 Database 连接导致 forge_materials INSERT 失败（写锁冲突）
+router.use((req, res, next) => {
+  // 路由处理器中优先使用 req.app.locals.db
+  // 模块级 db 仅作为后备（用于模块初始化时的表检查等）
+  if (!req.db) {
+    req.db = (req.app && req.app.locals && req.app.locals.db) ? req.app.locals.db : null;
+  }
+  next();
+});
+
+// 模块级数据库连接（后备，仅用于表初始化检查）
 let db;
 try {
   const Database = require('better-sqlite3');
+  const DATA_DIR = path.join(__dirname, '..', 'data');
+  const DB_PATH = path.join(DATA_DIR, 'game.db');
   db = new Database(DB_PATH);
+  // 与主 server.js 保持一致：写锁超时
+  db.prepare('PRAGMA busy_timeout = 5000').run();
 } catch (e) {
   console.log('[chapter] DB连接失败:', e.message);
   db = null;
@@ -245,9 +258,10 @@ router.post('/enter', (req, res) => {
 
   // 动态计算敌人HP: enemyHP = playerATK * 3 + chapterId * 50
   let playerATK = 50; // 默认攻击力
-  if (db) {
+  const useDb = req.db || db;
+  if (useDb) {
     try {
-      const player = db.prepare('SELECT attack FROM Users WHERE id = ?').get(userId);
+      const player = useDb.prepare('SELECT attack FROM Users WHERE id = ?').get(userId);
       if (player) playerATK = parseInt(player.attack) || 50;
     } catch (e) {
       console.error('[chapter] 获取玩家攻击力失败:', e.message);
@@ -261,6 +275,7 @@ router.post('/enter', (req, res) => {
 // 章节战斗完成
 router.post('/complete', (req, res) => {
   const { userId, chapterId, kills = 0, time } = req.body;
+  const useDb = req.db || db; // 优先使用 req.app.locals.db（共享主实例）
 
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
@@ -285,16 +300,16 @@ router.post('/complete', (req, res) => {
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
 
-  // ========== 奖励发放（最终修复：更新 Users 表，正确字段名）==========
+  // ========== 奖励发放（使用共享db连接）==========
   let spiritStonesGained = 0;
   let expGained = chapter.exp || 0;
   let rewardGained = chapter.reward || 0;
   let newLevel = null;
 
-  if (db) {
+  if (useDb) {
     try {
       // 读取 Users 表（权威数据源）
-      const user = db.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
+      const user = useDb.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
       if (user) {
         // 累加灵石（章节奖励 + 首通 bonus）
         const totalSpiritStones = rewardGained + (isFirstClear ? 200 : 0);
@@ -309,7 +324,7 @@ router.post('/complete', (req, res) => {
         }
 
         // 写入 Users 表（正确表名和字段）
-        db.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
+        useDb.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
           .run(user.lingshi, user.level, userId);
       }
     } catch (e) {
@@ -356,11 +371,11 @@ router.post('/complete', (req, res) => {
     eventBus.emit('chapter:complete', { userId, chapterId });
   }
 
-  // ========== 锻造材料掉落 ==========
+  // ========== 锻造材料掉落（使用共享db连接，不再独立连接）==========
   let materialDrops = [];
-  if (db) {
+  if (useDb) {
     try {
-      materialDrops = rollMaterialDrops(userId, chapterId, db);
+      materialDrops = rollMaterialDrops(userId, chapterId, useDb);
     } catch (e) {
       console.error('[chapter] 材料掉落失败:', e.message);
     }
@@ -398,6 +413,7 @@ router.get('/story/:id', (req, res) => {
 router.post('/battle', (req, res) => {
   // 直接映射到 /complete 的逻辑
   const { userId, chapterId, kills = 0, time } = req.body;
+  const useDb = req.db || db; // 优先使用 req.app.locals.db（共享主实例）
 
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
   const progress = userProgress[userId];
@@ -422,15 +438,15 @@ router.post('/battle', (req, res) => {
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
 
-  // ========== 奖励发放（最终修复：更新 Users 表，正确字段名）==========
+  // ========== 奖励发放（使用共享db连接）==========
   let spiritStonesGained = 0;
   let expGained = chapter.exp || 0;
   let rewardGained = chapter.reward || 0;
   let newLevel = null;
 
-  if (db) {
+  if (useDb) {
     try {
-      const user = db.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
+      const user = useDb.prepare('SELECT id, lingshi, level FROM Users WHERE id = ?').get(userId);
       if (user) {
         const totalSpiritStones = rewardGained + (isFirstClear ? 200 : 0);
         user.lingshi += totalSpiritStones;
@@ -440,7 +456,7 @@ router.post('/battle', (req, res) => {
           newLevel = user.level;
           console.log(`[chapter] 玩家升级: → ${user.level}`);
         }
-        db.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
+        useDb.prepare('UPDATE Users SET lingshi = ?, level = ? WHERE id = ?')
           .run(user.lingshi, user.level, userId);
       }
     } catch (e) {
@@ -483,11 +499,11 @@ router.post('/battle', (req, res) => {
     eventBus.emit('chapter:battle', { userId, chapterId });
   }
 
-  // 锻造材料掉落
+  // 锻造材料掉落（使用共享db连接，不再独立连接）
   let materialDrops = [];
-  if (db) {
+  if (useDb) {
     try {
-      materialDrops = rollMaterialDrops(userId, chapterId, db);
+      materialDrops = rollMaterialDrops(userId, chapterId, useDb);
     } catch (e) {
       console.error('[chapter] 材料掉落失败:', e.message);
     }
