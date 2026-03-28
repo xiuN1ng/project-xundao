@@ -2224,3 +2224,65 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # === P2 体验优化 ===
 # [B] WorldBoss刷新时间表 - 添加BOSS_schedule配置和nextRefresh字段
+
+# === P0 紧急（2026-03-28-night 第69轮）===
+# [B] 章节进度与副本战斗联动——dungeon.js battle后调用chapter /kill端点
+#   - 当前问题: chapter.js的in-memory progress全=0，dungeon.js完全没调用chapter API
+#   - 修复: POST /battle胜利后自动推进章节进度
+#   - 同时把in-memory改为数据库持久化
+#   - 截止: 2026-03-29
+
+# [B] Quest系统触发器——所有action完成后调用quest /progress
+#   - dungeon.js battle胜利 → emit('battle:win')
+#   - arena.js挑战完成 → emit('arena:win')  
+#   - sect.js加入宗门 → set accepted=true
+#   - cultivation.js修炼完成 → emit('cultivate:done')
+#   - 或统一Event Bus (见NF-69-2)
+#   - 截止: 2026-03-29
+
+# [B] 背包测试数据清理——删除40+铁剑和多余时装
+#   - DELETE FROM bag WHERE item_id=1 AND count>5
+#   - 保留最多5把铁剑
+#   - 清理测试阶段获得的时装
+#   - 截止: 2026-03-29
+
+# === P1 重要（2026-03-28-night 第69轮）===
+# [B] 灵石经济修复——副本奖励翻3倍，每日修炼前10次免费
+#   - 新手副本: 20→60灵石，火山: 40→120，冰霜: 60→180
+#   - 每日登录: 100→300灵石
+#   - 每日修炼: 第1-10次免费（当前10灵石/次导致经济崩溃）
+#   - 截止: 2026-03-30
+
+# [B] 功法加成功力未入战力——九天真元诀+50攻击但player.attack=100
+#   - 确认功法机制: 学习即生效 vs 需要装备
+#   - player API GET / 时叠加所有learned=true的gongfa bonuses
+#   - 或实现 POST /api/gongfa/equip 装备系统
+#   - 截止: 2026-03-30
+
+# [B] 宗门捐献系统——contribution=0多日，系统完全未启动
+#   - 实现 POST /api/sect/donate (捐灵石换贡献点)
+#   - 宗门活跃度: 每日任务完成+10贡献
+#   - 截止: 2026-03-30
+
+# === P2 体验优化（2026-03-28-night 第69轮）===
+# [B] 每日副本API注册——/api/daily-dungeon返回404
+#   - routes/daily_dungeon.js未被server.js注册
+#   - 截止: 2026-03-31
+
+# [B] 锻造材料获取——副本怪物掉落材料(铁锭/火晶/玉石)
+#   - dungeon battle奖励增加材料掉落
+#   - 截止: 2026-03-31
+
+# === 新功能（架构级）===
+# [B] Event Bus统一触发系统——各系统事件统一emit，避免手动逐个调用
+#   - 'battle:win' → quest/achievement/sect_mission/daily_quest自动更新
+#   - 'cultivate:done' → sect_mission/daily_quest自动更新
+#   - 'arena:win' → quest/sect_mission自动更新
+#   - 截止: 2026-04-01
+
+# ========== 2026-03-28 晚间版 [B] 任务 ==========
+[P0-70-1] 背包物品堆叠修复 — addItem用UPSERT逻辑，已有itemId+type时UPDATE count而非INSERT新记录；写历史数据合并脚本
+[P0-70-2] sect/join时同步 UPDATE Users SET sect_id=? WHERE id=?
+[P1-70-1] 修复vip/benefits端点playerId从req.body读取→改为req.query.playerId或req.get('X-User-Id')
+[P1-70-2] 新手副本(id=1)添加iron_ingot掉落(50%掉率,1-3个)；market添加铁锭出售(20灵石/个,限购99)
+[P1-70-3] 世界BOSS：添加单次伤害上限(自身HP*50%)；添加鼓舞机制(50灵石全服+10%伤害)；添加复活时间表
