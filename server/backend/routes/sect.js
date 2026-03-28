@@ -49,6 +49,23 @@ try {
   console.log('[sect] SectMembers 表初始化:', e.message);
 }
 
+// 初始化 campfire_messages 表（宗门篝火聊天）
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS campfire_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sect_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      player_name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_campfire_sect ON campfire_messages(sect_id, created_at DESC)`);
+} catch (e) {
+  console.log('[sect] campfire_messages 表初始化:', e.message);
+}
+
 // 初始化默认宗门「青云宗」到 Sects 表（如不存在则插入）
 try {
   const existingSect = db.prepare('SELECT id FROM Sects WHERE id = 1').get();
@@ -924,6 +941,102 @@ router.post('/approve', (req, res) => {
   } catch (error) {
     console.error('[sect] /approve 错误:', error.message);
     return res.status(500).json({ success: false, message: '审批失败: ' + error.message });
+  }
+});
+
+// GET /campfire/:sectId - 获取宗门篝火聊天历史
+router.get('/campfire/:sectId', (req, res) => {
+  const sectId = parseInt(req.params.sectId);
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+  const before = req.query.before; // optional cursor for pagination
+
+  if (!db) return res.status(500).json({ success: false, message: '数据库不可用' });
+
+  try {
+    let messages;
+    if (before) {
+      messages = db.prepare(
+        'SELECT * FROM campfire_messages WHERE sect_id = ? AND id < ? ORDER BY id DESC LIMIT ?'
+      ).all(sectId, parseInt(before), limit);
+    } else {
+      messages = db.prepare(
+        'SELECT * FROM campfire_messages WHERE sect_id = ? ORDER BY id DESC LIMIT ?'
+      ).all(sectId, limit);
+    }
+    // 返回正序（ oldest → newest）
+    res.json({ success: true, messages: messages.reverse(), hasMore: messages.length === limit });
+  } catch (e) {
+    console.error('[sect] /campfire/:sectId 错误:', e.message);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// POST /campfire/send - 发送篝火消息
+router.post('/campfire/send', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+  const sectId = parseInt(req.body.sectId);
+  const content = (req.body.content || '').trim();
+
+  if (!sectId) return res.status(400).json({ success: false, message: '缺少 sectId' });
+  if (!content || content.length === 0) return res.status(400).json({ success: false, message: '消息不能为空' });
+  if (content.length > 200) return res.status(400).json({ success: false, message: '消息不能超过200字' });
+  if (!db) return res.status(500).json({ success: false, message: '数据库不可用' });
+
+  try {
+    // 获取玩家宗门身份和昵称
+    const player = db.prepare('SELECT nickname, sectId FROM Users WHERE id = ?').get(userId);
+    if (!player) return res.status(404).json({ success: false, message: '玩家不存在' });
+    if (player.sectId !== sectId) return res.status(403).json({ success: false, message: '你不在该宗门中' });
+
+    const playerName = player.nickname || `玩家${userId}`;
+
+    const result = db.prepare(
+      'INSERT INTO campfire_messages (sect_id, player_id, player_name, content) VALUES (?, ?, ?, ?)'
+    ).run(sectId, userId, playerName, content);
+
+    res.json({
+      success: true,
+      message: {
+        id: result.lastInsertRowid,
+        sect_id: sectId,
+        player_id: userId,
+        player_name: playerName,
+        content,
+        created_at: new Date().toISOString()
+      }
+    });
+  } catch (e) {
+    console.error('[sect] /campfire/send 错误:', e.message);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// GET /campfire/members/:sectId - 获取宗门在线成员（本周有活跃的成员）
+router.get('/campfire/members/:sectId', (req, res) => {
+  const sectId = parseInt(req.params.sectId);
+  if (!db) return res.status(500).json({ success: false, message: '数据库不可用' });
+
+  try {
+    const members = db.prepare(`
+      SELECT u.id as player_id, u.nickname, sm.role, sm.contribution,
+             COALESCE(messages.recent_count, 0) as message_count,
+             messages.last_message_at
+      FROM SectMembers sm
+      JOIN Users u ON u.id = sm.userId
+      LEFT JOIN (
+        SELECT player_id, COUNT(*) as recent_count, MAX(created_at) as last_message_at
+        FROM campfire_messages
+        WHERE sect_id = ? AND created_at > datetime('now', '-7 days')
+        GROUP BY player_id
+      ) messages ON messages.player_id = sm.userId
+      WHERE sm.sectId = ?
+      ORDER BY sm.role = '掌门' DESC, sm.contribution DESC, sm.joinedAt ASC
+    `).all(sectId, sectId);
+
+    res.json({ success: true, sectId, members });
+  } catch (e) {
+    console.error('[sect] /campfire/members/:sectId 错误:', e.message);
+    res.status(500).json({ success: false, message: e.message });
   }
 });
 
