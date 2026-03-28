@@ -1787,3 +1787,12 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 端点: GET /(列表) + GET /list + GET /info + POST /create + POST /join + POST /leave + GET /:id  # 2026-03-28
   - server.js 注册 /api/clan 路由  # 2026-03-28
   截止: 2026-04-05
+
+=== 2026-03-28 晨间轮 [B] 后端任务 ===
+[P0] 成就触发链修复：在cultivation.js和chapter.js完成后triggerAchievement写入achievement_progress表（31个achievements progress全0）
+[P0] realm-dungeon路由：创建routes/realm_dungeon.js并注册到server.js（含list/status/enter/battle/claim）  # 完成 | 2026-03-28 741a47a6
+[P0] chat路由：创建routes/chat.js并注册（含history/send/online端点，世界/宗门/私聊三频道）  # 完成 | 2026-03-28 9d23401f
+[P1] Paradise添加灵田福地（minRealm=1，炼气期可进入，探索时间120秒，奖励灵石30-50+经验100-200）
+[P1] 每日任务接口重构：GET /dailyQuest/daily, /weekly, /challenge（三个独立端点）+ claim端点支持三类ID
+[P1] 材料兑换系统：routes/material_exchange.js（含templates/exchange端点，铁锭×5→火晶×1等兑换模板，每日限制次数）
+[P2] 章节星级+扫荡后端：chapter/complete计算星级，chapter_stars表，扫荡端点
