@@ -2160,7 +2160,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 添加 /api/bag/materials 专门给 Forge 界面用  # 完成 | GET /api/bag/materials 正常返回
 - 参考: routes/bag.js 第67轮提案
 
-### [P1-B-67-1] Paradise福地explore端点缺失
+### [P1-B-67-1] Paradise福地explore端点缺失  # 完成 | 2026-03-28 eae61681
 - 添加 POST /api/paradise/explore {userId, landId}
 - 添加 GET /api/paradise/status
 - 配置各福地灵石消耗（灵田50/灵泉100/古遗址200/仙灵岛400/混沌裂缝800）
