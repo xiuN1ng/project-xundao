@@ -14,6 +14,51 @@ try {
 let dbRef = null;
 function setDb(db) { dbRef = db; }
 
+// 功法模板（与 gongfa.js 保持一致）
+const GONGFAS = [
+  { id: 1, name: '九天真元诀', type: 'attack',  level: 1, attackBonus: 50,   defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 2, name: '烈焰焚天诀', type: 'attack',  level: 2, attackBonus: 120,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 3, name: '天雷破空诀', type: 'attack',  level: 3, attackBonus: 300,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 4, name: '混沌灭世诀', type: 'attack',  level: 4, attackBonus: 800,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 5, name: '金刚护体术', type: 'defense', level: 1, attackBonus: 0,   defenseBonus: 30, hpBonus: 0,   speedBonus: 0 },
+  { id: 6, name: '玄冥护甲诀', type: 'defense', level: 2, attackBonus: 0,   defenseBonus: 80, hpBonus: 0,   speedBonus: 0 },
+  { id: 7, name: '天地护元术', type: 'defense', level: 3, attackBonus: 0,   defenseBonus: 200, hpBonus: 0,  speedBonus: 0 },
+  { id: 8, name: '生生不息诀', type: 'hp',      level: 1, attackBonus: 0,    defenseBonus: 0, hpBonus: 500,   speedBonus: 0 },
+  { id: 9, name: '造化长春功', type: 'hp',      level: 2, attackBonus: 0,    defenseBonus: 0, hpBonus: 1500,  speedBonus: 0 },
+  { id: 10, name: '不死凤凰诀', type: 'hp',     level: 3, attackBonus: 0,    defenseBonus: 0, hpBonus: 5000,  speedBonus: 0 },
+  { id: 11, name: '流光掠影术', type: 'speed',  level: 1, attackBonus: 0,   defenseBonus: 0, hpBonus: 0,    speedBonus: 5 },
+  { id: 12, name: '瞬风千里诀', type: 'speed',  level: 2, attackBonus: 0,   defenseBonus: 0, hpBonus: 0,    speedBonus: 15 },
+];
+
+/**
+ * 获取玩家已学功法的属性加成
+ * @param {object} db - 数据库实例
+ * @param {number} userId - 玩家ID
+ * @returns {{ attackBonus, defenseBonus, hpBonus, speedBonus, learnedGongfas[] }}
+ */
+function getGongfaBonuses(db, userId) {
+  const result = { attackBonus: 0, defenseBonus: 0, hpBonus: 0, speedBonus: 0, learnedGongfas: [] };
+  if (!db || !userId) return result;
+  try {
+    const learned = db.prepare('SELECT * FROM player_gongfa WHERE user_id = ?').all(userId);
+    for (const lg of learned) {
+      const template = GONGFAS.find(g => g.id === lg.gongfa_id);
+      if (template) {
+        result.attackBonus   += template.attackBonus   || 0;
+        result.defenseBonus  += template.defenseBonus  || 0;
+        result.hpBonus       += template.hpBonus       || 0;
+        result.speedBonus    += template.speedBonus    || 0;
+        result.learnedGongfas.push({ id: template.id, name: template.name, type: template.type,
+          attackBonus: template.attackBonus, defenseBonus: template.defenseBonus,
+          hpBonus: template.hpBonus, speedBonus: template.speedBonus, isEquipped: !!lg.is_equipped });
+      }
+    }
+  } catch (e) {
+    console.error('[player] getGongfaBonuses错误:', e.message);
+  }
+  return result;
+}
+
 // 模拟数据库（测试用满级账号）
 let player = {
   id: 1,
@@ -38,6 +83,12 @@ router.get('/', (req, res) => {
     try {
       const user = dbRef.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
       if (user) {
+        // 获取已学功法的属性加成（学习即生效）
+        const gb = getGongfaBonuses(dbRef, userId);
+        const baseHp  = user.hp      || 1000;
+        const baseAtk = user.attack  || 50;
+        const baseDef = user.defense || 50;
+        const baseSpd = user.speed   || 30;
         return res.json({
           id: user.id,
           name: user.nickname || user.username,
@@ -45,10 +96,12 @@ router.get('/', (req, res) => {
           realm: user.realm || 1,
           lingshi: user.lingshi || 0,
           diamonds: user.diamonds || 0,
-          hp: user.hp || 1000,
-          attack: user.attack || 50,
-          defense: user.defense || 50,
-          speed: user.speed || 30,
+          hp: baseHp  + gb.hpBonus,
+          attack: baseAtk + gb.attackBonus,
+          defense: baseDef + gb.defenseBonus,
+          speed: baseSpd  + gb.speedBonus,
+          baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
+          gongfaBonuses: gb,
           sectId: user.sect_id || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt
@@ -69,6 +122,12 @@ router.get('/info', (req, res) => {
     try {
       const user = dbRef.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
       if (user) {
+        // 获取已学功法的属性加成（学习即生效）
+        const gb = getGongfaBonuses(dbRef, userId);
+        const baseHp  = user.hp      || 1000;
+        const baseAtk = user.attack  || 50;
+        const baseDef = user.defense || 50;
+        const baseSpd = user.speed   || 30;
         return res.json({
           id: user.id,
           name: user.nickname || user.username,
@@ -76,10 +135,12 @@ router.get('/info', (req, res) => {
           realm: user.realm || 1,
           lingshi: user.lingshi || 0,
           diamonds: user.diamonds || 0,
-          hp: user.hp || 1000,
-          attack: user.attack || 50,
-          defense: user.defense || 50,
-          speed: user.speed || 30,
+          hp: baseHp  + gb.hpBonus,
+          attack: baseAtk + gb.attackBonus,
+          defense: baseDef + gb.defenseBonus,
+          speed: baseSpd  + gb.speedBonus,
+          baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
+          gongfaBonuses: gb,
           sectId: user.sect_id || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt

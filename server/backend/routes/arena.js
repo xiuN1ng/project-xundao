@@ -34,6 +34,38 @@ try {
   };
 }
 
+// 功法模板（与 gongfa.js 保持一致，用于计算属性加成）
+const GONGFAS = [
+  { id: 1, name: '九天真元诀', type: 'attack',  attackBonus: 50,   defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 2, name: '烈焰焚天诀', type: 'attack',  attackBonus: 120,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 3, name: '天雷破空诀', type: 'attack',  attackBonus: 300,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 4, name: '混沌灭世诀', type: 'attack',  attackBonus: 800,  defenseBonus: 0, hpBonus: 0,    speedBonus: 0 },
+  { id: 5, name: '金刚护体术', type: 'defense', attackBonus: 0,   defenseBonus: 30, hpBonus: 0,   speedBonus: 0 },
+  { id: 6, name: '玄冥护甲诀', type: 'defense', attackBonus: 0,   defenseBonus: 80, hpBonus: 0,   speedBonus: 0 },
+  { id: 7, name: '天地护元术', type: 'defense', attackBonus: 0,   defenseBonus: 200, hpBonus: 0,  speedBonus: 0 },
+  { id: 8, name: '生生不息诀', type: 'hp',      attackBonus: 0,   defenseBonus: 0, hpBonus: 500,   speedBonus: 0 },
+  { id: 9, name: '造化长春功', type: 'hp',      attackBonus: 0,   defenseBonus: 0, hpBonus: 1500,  speedBonus: 0 },
+  { id: 10, name: '不死凤凰诀', type: 'hp',     attackBonus: 0,   defenseBonus: 0, hpBonus: 5000,  speedBonus: 0 },
+  { id: 11, name: '流光掠影术', type: 'speed',  attackBonus: 0,   defenseBonus: 0, hpBonus: 0,    speedBonus: 5 },
+  { id: 12, name: '瞬风千里诀', type: 'speed',  attackBonus: 0,   defenseBonus: 0, hpBonus: 0,    speedBonus: 15 },
+];
+
+/**
+ * 获取玩家已学功法的属性加成（学习即生效）
+ */
+function getGongfaBonus(db, userId) {
+  if (!db || !userId) return { attackBonus: 0, defenseBonus: 0, hpBonus: 0, speedBonus: 0 };
+  let atk = 0, def = 0, hp = 0, spd = 0;
+  try {
+    const learned = db.prepare('SELECT * FROM player_gongfa WHERE user_id = ?').all(userId);
+    for (const lg of learned) {
+      const t = GONGFAS.find(g => g.id === lg.gongfa_id);
+      if (t) { atk += t.attackBonus || 0; def += t.defenseBonus || 0; hp += t.hpBonus || 0; spd += t.speedBonus || 0; }
+    }
+  } catch (e) { /* ignore */ }
+  return { attackBonus: atk, defenseBonus: def, hpBonus: hp, speedBonus: spd };
+}
+
 // 初始化 arena_player 表
 function initArenaTables() {
   if (!db) return;
@@ -431,9 +463,15 @@ router.get('/opponents/:userId', (req, res) => {
     const usersData = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
     const playerLevel = playerData ? playerData.level : (usersData ? usersData.level : 1);
     const playerRealm = playerData ? playerData.realm : (usersData ? usersData.realm : 1);
-    const playerAtk = playerData ? playerData.attack : (usersData ? usersData.attack : 100);
-    const playerDef = playerData ? playerData.defense : (usersData ? usersData.defense : 50);
-    const playerHP = playerData ? playerData.hp : (usersData ? usersData.hp : 1000);
+    // 基础属性
+    const baseAtk = playerData ? playerData.attack : (usersData ? usersData.attack : 100);
+    const baseDef = playerData ? playerData.defense : (usersData ? usersData.defense : 50);
+    const baseHP  = playerData ? playerData.hp : (usersData ? usersData.hp : 1000);
+    // 功法加成（学习即生效）
+    const gb = getGongfaBonus(db, userId);
+    const playerAtk = baseAtk + gb.attackBonus;
+    const playerDef = baseDef + gb.defenseBonus;
+    const playerHP  = baseHP  + gb.hpBonus;
     // 战斗战力 = ATK*10 + DEF*5 + HP/10（与battle一致）
     const playerCombatPower = playerAtk * 10 + playerDef * 5 + Math.floor(playerHP / 10);
 
@@ -699,9 +737,17 @@ router.post('/challenge', (req, res) => {
     const attackerArena = getOrCreateArenaPlayer(player_id);
     const defenderArena = getOrCreateArenaPlayer(target_id);
 
-    // 模拟战斗（combat_power = ATK*10 + DEF*5 + HP/10）
-    const attackerPower = (player.attack || 100) * 10 + (player.defense || 50) * 5 + Math.floor((player.hp || 1000) / 10);
-    const defenderPower = (targetPlayer.attack || 100) * 10 + (targetPlayer.defense || 50) * 5 + Math.floor((targetPlayer.hp || 1000) / 10);
+    // 模拟战斗（combat_power = ATK*10 + DEF*5 + HP/10，含功法加成）
+    const gbA = getGongfaBonus(db, player_id);
+    const gbD = getGongfaBonus(db, target_id);
+    const attackerAtk = (player.attack || 100) + gbA.attackBonus;
+    const attackerDef = (player.defense || 50) + gbA.defenseBonus;
+    const attackerHP  = (player.hp || 1000) + gbA.hpBonus;
+    const defenderAtk = (targetPlayer.attack || 100) + gbD.attackBonus;
+    const defenderDef = (targetPlayer.defense || 50) + gbD.defenseBonus;
+    const defenderHP  = (targetPlayer.hp || 1000) + gbD.hpBonus;
+    const attackerPower = attackerAtk * 10 + attackerDef * 5 + Math.floor(attackerHP / 10);
+    const defenderPower = defenderAtk * 10 + defenderDef * 5 + Math.floor(defenderHP / 10);
     const attackerWin = ArenaSystem.simulateBattle(attackerPower, defenderPower);
 
     // 计算积分变化
