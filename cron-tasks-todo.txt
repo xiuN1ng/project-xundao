@@ -2315,7 +2315,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-3] 【API路由】forge路由增加 GET /status 端点（返回强化石数量+强化等级）  # 完成 | 2026-03-28 8dacbf98
 [B-4] 【API路由】deity路由增加 /combat 端点（战力排行榜）  # 完成 | 2026-03-28 8dacbf98
 [B-5] 【API路由】chat路由增加 GET /list 别名指向 /  # 完成 | 2026-03-28 8dacbf98
-[B-6] 【宗门福地】修复探索死锁：增加探索完成后的清理/重置逻辑；增加 POST /api/paradise/abandon 端点
+[B-6] 【宗门福地】修复探索死锁：增加探索完成后的清理/重置逻辑；增加 POST /api/paradise/abandon 端点  # 完成 | 2026-03-28 25fe25a9
 
 ### P1 - 核心优化
 [B-7] 【VIP系统】月卡功能：增加月卡充值入口；月卡内容设计（灵石月卡6元/尊享月卡30元）；VIP福利领取引导UI
