@@ -13,6 +13,15 @@ function getDb() {
 
 // ========== 福地配置 ==========
 const PARADISE_LANDS = {
+  'spirit-field': {
+    id: 'spirit-field',
+    name: '灵田福地',
+    description: '灵气温润的灵田，适合炼气期修士打坐修炼',
+    minRealm: 1, // 炼气期即可进入
+    explorationTime: 120,
+    icon: '🌾',
+    rewards: { spiritStonesBase: 40, expBase: 150, materialChance: 0.1 }
+  },
   'spiritual-spring': {
     id: 'spiritual-spring',
     name: '灵泉福地',
