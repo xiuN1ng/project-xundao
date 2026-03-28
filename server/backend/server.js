@@ -137,6 +137,7 @@ app.use('/api/gem', require('./routes/gem'));
 app.use('/api/fashion', require('./routes/fashion'));
 app.use('/api/vip', require('./routes/vip'));
 app.use('/api/friend', require('./routes/friend'));
+app.use('/api/chat', require('./routes/chat'));
 app.use('/api/auction', require('./routes/auction'));
 app.use('/api/cave', require('./routes/cave'));
 app.use('/api/fishing', require('./routes/fishing'));
