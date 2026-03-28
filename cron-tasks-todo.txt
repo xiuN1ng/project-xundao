@@ -2240,10 +2240,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #   - 或统一Event Bus (见NF-69-2)
 #   - 截止: 2026-03-29
 
-# [B] 背包测试数据清理——删除40+铁剑和多余时装
+# [B] 背包测试数据清理——删除40+铁剑和多余时装  # 完成 | 2026-03-28 7ce908f6
 #   - DELETE FROM bag WHERE item_id=1 AND count>5
 #   - 保留最多5把铁剑
 #   - 清理测试阶段获得的时装
+#   - player_items表: 铁剑从27条记录合并为1条(count=5), 布甲碎片测试数据56条删除, 剩余数据合理
 #   - 截止: 2026-03-29
 
 # === P1 重要（2026-03-28-night 第69轮）===
