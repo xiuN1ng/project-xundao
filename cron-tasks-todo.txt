@@ -1795,5 +1795,57 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P0] chat路由：创建routes/chat.js并注册（含history/send/online端点，世界/宗门/私聊三频道）  # 完成 | 2026-03-28 9d23401f
 [P1] Paradise添加灵田福地（minRealm=1，炼气期可进入，探索时间120秒，奖励灵石30-50+经验100-200）
 [P1] 每日任务接口重构：GET /dailyQuest/daily, /weekly, /challenge（三个独立端点）+ claim端点支持三类ID
-[P1] 材料兑换系统：routes/material_exchange.js（含templates/exchange端点，铁锭×5→火晶×1等兑换模板，每日限制次数）
+[P1] 材料兑换系统：routes/material_exchange.js（含templates/exchange端点，铁锭×5→火晶×1等兑换模板，每日限制次数）  # 完成 | 2026-03-28 a14257ea
 [P2] 章节星级+扫荡后端：chapter/complete计算星级，chapter_stars表，扫荡端点
+
+# ========== 从 xundao-docs 提案分发 — 2026-03-28 第58轮 ==========
+# 分发时间: 2026-03-28 09:25
+
+# === P0（截止 2026-03-28）===
+[B] [P0-28-N-1] Deity神祇路由注册/修复 - deity.js已存在，检查server.js注册状态，修复/api/deity/list返回404  # 2026-03-28 完成 | 2026-03-28 27d8ca9d
+  - 修复 require 路径: '../game/deity_list_storage' → '../../game/deity_list_storage' (解构 deityStorage)
+  - 验证: GET /api/deity-list/types 返回4类榜单, /ranking 返回AI排行榜数据
+[B] [P0-28-N-2] Ladder TypeError修复 - routes/ladder.js中getPlayerLadderData未定义，500崩溃  # 2026-03-28 完成 | 2026-03-28 27d8ca9d
+  - 修复 require 路径: '../game/ladder_storage' → '../../game/ladder_storage' (解构 ladderStorage)
+  - 验证: GET /api/ladder/info?player_id=1 返回青铜段位, /season 返回第1赛季, /match 匹配成功
+[B] [P0-28-N-3] Gem宝石路由创建 - 创建/api/gem/list + /equip + /unequip端点，创建player_gems表  # 2026-03-28
+[B] [P1-28-N-3] VIP vipPoints列修复 - ALTER TABLE users ADD vip_points INTEGER DEFAULT 0  # 2026-03-28
+
+# === P1（截止 2026-03-29）===
+[B] [P1-28-N-1] Story/Quest/Friend路由创建 - 三套REST端点，关联面板数据填充  # 2026-03-29
+[B] [P1-28-N-2] Chat聊天路由创建 - 世界/宗门/私聊三频道，POST /send + GET历史  # 2026-03-29
+[B] [P1-28-N-4] Market挂单功能 - POST /market/list + 购买流程 + 材料来源打通  # 2026-03-29
+[B] [新功能-1] 灵兽出战激活系统 - 出战属性加成 + 战斗技能 + 升级吞噬  # 2026-03-29
+[B] [新功能-2] 每日限购礼包商城 - 灵气礼包/修炼礼包/突破礼包 + 月卡/战令入口  # 2026-03-29
+
+# === P2（截止 2026-03-30）===
+[B] [P2-28-N-1] DailyQuest进度驱动修复 - cultivation/chapter/shop成功回调中调用updateDailyQuestProgress  # 2026-03-30
+[B] [P2-28-N-2] Trade拍卖行创建 - routes/auction.js，上架/竞价/倒计时/成交  # 2026-03-30
+
+# === 2026-03-28 Expert Round ===
+[P0-28-E-1] 修复 deity.js 和 ladder.js require 路径
+  → deity.js: require('../../game/deity_list_storage')
+  → ladder.js: require('../../game/ladder_storage')
+  截止: 2026-03-28
+
+[P0-28-E-2] Welfare 签到数据持久化
+  → Users 表添加 welfare_sign_in_date, welfare_consecutive_days, welfare_total_days
+  → 重写 /claim-sign-in 和 /sign-in 读写DB
+  → 统一时区 Asia/Shanghai
+  截止: 2026-03-29
+
+[P1-28-E-3] 材料副本掉落实现
+  → POST /api/dungeon/challenge
+  → 5个副本对应5种材料掉落
+  → 写入 player_items 表
+  截止: 2026-03-29
+
+[P1-28-E-4] 装备强化 API
+  → POST /api/equipment/enhance
+  → 扣除灵石和强化石，写入 DB
+  截止: 2026-03-30
+
+[P1-28-E-5] 深渊 /enter 路由验证
+  → 确认 abyssDungeon/enter 是否正确挂载
+  → 验证功能逻辑
+  截止: 2026-03-29
