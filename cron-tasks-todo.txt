@@ -2254,10 +2254,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 #   - 每日修炼: 第1-10次免费（当前10灵石/次导致经济崩溃）
 #   - 截止: 2026-03-30
 
-# [B] 功法加成功力未入战力——九天真元诀+50攻击但player.attack=100
-#   - 确认功法机制: 学习即生效 vs 需要装备
-#   - player API GET / 时叠加所有learned=true的gongfa bonuses
-#   - 或实现 POST /api/gongfa/equip 装备系统
+# [B] 功法加成功力未入战力——九天真元诀+50攻击但player.attack=100  # 完成 | 2026-03-28 8b9e9b56
+#   - player.js: 新增GONGFAS模板 + getGongfaBonuses()，GET /和GET /info返回effective stats
+#   - arena.js: opponents/challenge战斗计算加入功法攻击/防御/生命加成
+#   - 验证: playerId=1 九天真元诀(+50攻击) → attack=150(base=100+50)
 #   - 截止: 2026-03-30
 
 # [B] 宗门捐献系统——contribution=0多日，系统完全未启动
