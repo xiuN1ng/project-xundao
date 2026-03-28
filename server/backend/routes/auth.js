@@ -180,6 +180,15 @@ router.post('/register',async(req,res)=>{
       `).run(userId, now);
 
       console.log('[auth] 新用户注册写入DB:', username);
+
+      // 发放新手初始装备
+      try {
+        const equipModule = require('../routes/equipment');
+        equipModule.initStarterEquipment(userId);
+        console.log(`[auth] 初始装备发放: userId=${userId}`);
+      } catch (eqErr) {
+        console.error('[auth] 初始装备发放失败:', eqErr.message);
+      }
     } catch (e) {
       console.error('[auth] 注册写入DB失败:', e.message);
     }

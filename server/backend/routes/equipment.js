@@ -198,4 +198,77 @@ router.get('/augment/history/:equipId', (req, res) => {
   res.json({ success: true, history });
 });
 
+// POST /initialize - 新手初始装备（武器+防具各1件）
+router.post('/initialize', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+
+  // 检查是否已有装备
+  const existing = userEquipments.filter(e => e.userId === userId);
+  if (existing.length > 0) {
+    return res.json({ success: true, message: '已有装备，跳过', equips: existing });
+  }
+
+  // 生成唯一ID
+  const maxId = userEquipments.reduce((m, e) => Math.max(m, e.id), 0);
+
+  const starterWeapon = {
+    userId,
+    id: maxId + 1,
+    name: '新手木剑',
+    type: 'weapon',
+    quality: 'common',
+    attack: 15,
+    defense: 0,
+    hp: 0,
+    enhanceLevel: 0,
+    sockets: [],
+    gems: [],
+    equipped: true
+  };
+
+  const starterArmor = {
+    userId,
+    id: maxId + 2,
+    name: '新手布衣',
+    type: 'armor',
+    quality: 'common',
+    attack: 0,
+    defense: 10,
+    hp: 50,
+    enhanceLevel: 0,
+    sockets: [],
+    gems: [],
+    equipped: true
+  };
+
+  userEquipments.push(starterWeapon, starterArmor);
+
+  // 初始化玩家资源（如果不存在）
+  if (!playerResources[userId]) {
+    playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1 };
+  }
+
+  console.log(`[equipment] 初始装备发放: userId=${userId}, weapon=${starterWeapon.name}, armor=${starterArmor.name}`);
+
+  res.json({
+    success: true,
+    message: '初始装备发放成功',
+    equips: [starterWeapon, starterArmor]
+  });
+});
+
+// 导出数据供其他模块使用（如 auth.js 新用户注册时发放装备）
 module.exports = router;
+module.exports._userEquipments = userEquipments;
+module.exports._playerResources = playerResources;
+module.exports.initStarterEquipment = function(userId) {
+  const existing = userEquipments.filter(e => e.userId === userId);
+  if (existing.length > 0) return existing;
+  const maxId = userEquipments.reduce((m, e) => Math.max(m, e.id), 0);
+  userEquipments.push(
+    { userId, id: maxId + 1, name: '新手木剑', type: 'weapon', quality: 'common', attack: 15, defense: 0, hp: 0, enhanceLevel: 0, sockets: [], gems: [], equipped: true },
+    { userId, id: maxId + 2, name: '新手布衣', type: 'armor', quality: 'common', attack: 0, defense: 10, hp: 50, enhanceLevel: 0, sockets: [], gems: [], equipped: true }
+  );
+  if (!playerResources[userId]) playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1 };
+  return userEquipments.filter(e => e.userId === userId);
+};
