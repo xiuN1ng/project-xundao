@@ -356,4 +356,267 @@ router.get('/pity', (req, res) => {
   res.json({ userId, count: pity ? pity.count : 0, nextMythical: pity ? (90 - pity.count) : 90 });
 });
 
+// GET /api/beast/stats - 获取玩家灵兽统计信息
+router.get('/stats', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  try {
+    const beasts = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? ORDER BY level DESC').all(userId);
+    const active = beasts.find(b => b.is_active === 1);
+    const totalAttack = beasts.reduce((sum, b) => sum + b.attack, 0);
+    const totalHp = beasts.reduce((sum, b) => sum + b.hp, 0);
+    const qualityCount = {};
+    beasts.forEach(b => { qualityCount[b.quality] = (qualityCount[b.quality] || 0) + 1; });
+    res.json({
+      total: beasts.length,
+      totalAttack,
+      totalHp,
+      activeBeast: active ? { id: active.id, name: active.name, level: active.level, quality: active.quality, attack: active.attack, hp: active.hp } : null,
+      qualityCount,
+      maxLevel: beasts.length > 0 ? Math.max(...beasts.map(b => b.level)) : 0,
+      avgIntimacy: beasts.length > 0 ? Math.round(beasts.reduce((sum, b) => sum + b.intimacy, 0) / beasts.length) : 0
+    });
+  } catch(e) {
+    res.json({ total: 0, totalAttack: 0, totalHp: 0, activeBeast: null, qualityCount: {}, maxLevel: 0, avgIntimacy: 0, error: e.message });
+  }
+});
+
+// POST /api/beast/release - 放生灵兽
+router.post('/release', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const { beastId } = req.body;
+
+  if (!beastId) return res.json({ success: false, message: '缺少beastId' });
+
+  try {
+    const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+    if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+    if (beast.is_active === 1) return res.json({ success: false, message: '请先取消出战再放生' });
+
+    // 返还少量灵石作为补偿
+    const refund = beast.level * 20;
+    db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(refund, userId);
+    db.prepare('DELETE FROM player_beast_skills WHERE beast_id = ?').run(beastId);
+    db.prepare('DELETE FROM player_beasts WHERE id = ?').run(beastId);
+
+    res.json({ success: true, message: `灵兽已放生，返还${refund}灵石`, refund });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// GET /api/beast/shop - 灵兽商店（灵兽捕捉道具、灵兽食品等）
+router.get('/shop', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+
+  const shopItems = [
+    { id: 'beast_ball', name: '灵兽球', icon: '🔮', price: 50, desc: '捕捉灵兽的必备道具', category: 'capture', stock: -1 },
+    { id: 'beast_food_1', name: '普通兽粮', icon: '🍖', price: 30, desc: '喂养灵兽增加好感度+10', category: 'food', stock: -1 },
+    { id: 'beast_food_2', name: '精制灵粮', icon: '🍱', price: 100, desc: '喂养灵兽增加好感度+40，额外+5攻击', category: 'food', stock: -1 },
+    { id: 'beast_food_3', name: '仙丹', icon: '💊', price: 300, desc: '喂养灵兽好感度+120，攻防各+15', category: 'food', stock: -1 },
+    { id: 'beast_egg_1', name: '普通灵兽蛋', icon: '🥚', price: 500, desc: '可孵化出普通~稀有灵兽', category: 'egg', stock: 10 },
+    { id: 'beast_egg_2', name: '史诗灵兽蛋', icon: '🌟', price: 2000, desc: '可孵化出稀有~史诗灵兽', category: 'egg', stock: 5 },
+    { id: 'beast_skill_book', name: '灵兽技能书·攻', icon: '📖', price: 800, desc: '让灵兽学习撕咬技能', category: 'skill', stock: -1 },
+    { id: 'beast_skill_book_def', name: '灵兽技能书·防', icon: '📕', price: 800, desc: '让灵兽学习护甲技能', category: 'skill', stock: -1 },
+    { id: 'beast_enhance_stone', name: '灵兽强化石', icon: '💎', price: 150, desc: '升级灵兽成功率+20%', category: 'enhance', stock: -1 },
+    { id: 'beast_quality_scroll', name: '品质提升符', icon: '📜', price: 5000, desc: '灵兽进化成功率+30%', category: 'enhance', stock: 3 }
+  ];
+
+  // 获取玩家背包中的灵兽商店物品
+  let inventory = {};
+  try {
+    const items = db.prepare(`SELECT item_id, count FROM player_items WHERE user_id = ? AND item_id LIKE 'beast_%'`).all(userId);
+    items.forEach(i => { inventory[i.item_id] = i.count; });
+  } catch(e) {}
+
+  res.json({
+    items: shopItems,
+    inventory,
+    refreshTime: '次日00:00'
+  });
+});
+
+// POST /api/beast/shop/buy - 购买灵兽商店物品
+router.post('/shop/buy', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const { itemId, quantity = 1 } = req.body;
+
+  if (!itemId) return res.json({ success: false, message: '缺少itemId' });
+
+  const shopItems = {
+    'beast_ball': { name: '灵兽球', price: 50 },
+    'beast_food_1': { name: '普通兽粮', price: 30 },
+    'beast_food_2': { name: '精制灵粮', price: 100 },
+    'beast_food_3': { name: '仙丹', price: 300 },
+    'beast_egg_1': { name: '普通灵兽蛋', price: 500 },
+    'beast_egg_2': { name: '史诗灵兽蛋', price: 2000 },
+    'beast_skill_book': { name: '灵兽技能书·攻', price: 800 },
+    'beast_skill_book_def': { name: '灵兽技能书·防', price: 800 },
+    'beast_enhance_stone': { name: '灵兽强化石', price: 150 },
+    'beast_quality_scroll': { name: '品质提升符', price: 5000 }
+  };
+
+  const item = shopItems[itemId];
+  if (!item) return res.json({ success: false, message: '商品不存在' });
+
+  const totalCost = item.price * quantity;
+  try {
+    const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!player || player.lingshi < totalCost) {
+      return res.json({ success: false, message: '灵石不足' });
+    }
+
+    // 扣灵石
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalCost, userId);
+
+    // 写入背包 player_items 表
+    try {
+      db.prepare(`INSERT INTO player_items (user_id, item_id, item_name, item_type, icon, count, source)
+        VALUES (?, ?, ?, 'beast', ?, ?, 'beast_shop')
+        ON CONFLICT(user_id, item_id) DO UPDATE SET count = count + ?`).run(
+        userId, itemId, item.name, '📦', quantity, quantity
+      );
+    } catch(e) {
+      console.log('[beast/shop/buy] player_items write error:', e.message);
+    }
+
+    res.json({ success: true, message: `购买成功：${item.name} x${quantity}`, cost: totalCost, remaining: player.lingshi - totalCost });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// POST /api/beast/feed-item - 使用背包物品喂养灵兽
+router.post('/feed-item', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const { beastId, itemId } = req.body;
+
+  if (!beastId || !itemId) return res.json({ success: false, message: '缺少参数' });
+
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+
+  const feedItems = {
+    'beast_food_1': { intimacy: 10, atk: 0, hp: 0 },
+    'beast_food_2': { intimacy: 40, atk: 5, hp: 0 },
+    'beast_food_3': { intimacy: 120, atk: 15, hp: 15 }
+  };
+
+  const feed = feedItems[itemId];
+  if (!feed) return res.json({ success: false, message: '该物品无法用于喂养' });
+
+  // 扣除物品
+  try {
+    const itemRow = db.prepare('SELECT * FROM player_items WHERE user_id = ? AND item_id = ?').get(userId, itemId);
+    if (!itemRow || itemRow.count < 1) return res.json({ success: false, message: '物品不足' });
+
+    const newCount = itemRow.count - 1;
+    if (newCount <= 0) {
+      db.prepare('DELETE FROM player_items WHERE user_id = ? AND item_id = ?').run(userId, itemId);
+    } else {
+      db.prepare('UPDATE player_items SET count = ? WHERE user_id = ? AND item_id = ?').run(newCount, userId, itemId);
+    }
+  } catch(e) {
+    console.log('[beast/feed-item] item deduct error:', e.message);
+  }
+
+  // 更新灵兽
+  db.prepare('UPDATE player_beasts SET intimacy = intimacy + ?, attack = attack + ?, hp = hp + ? WHERE id = ?').run(
+    feed.intimacy, feed.atk, feed.hp, beastId
+  );
+
+  const updated = db.prepare('SELECT * FROM player_beasts WHERE id = ?').get(beastId);
+  res.json({ success: true, message: `喂养成功，好感度+${feed.intimacy}`, beast: updated });
+});
+
+// POST /api/beast/attack - 灵兽出战攻击（命令灵兽对敌人造成伤害）
+router.post('/attack', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  // 支持 camelCase 和 kebab-case 参数别名
+  const { enemyHp = 0, enemyDef = 0, enemyLevel = 1, targetType = 'normal' } = req.body;
+  const rawEnemyHp = req.body.enemyHp ?? req.body.enemy_hp ?? 0;
+  const rawEnemyDef = req.body.enemyDef ?? req.body.enemy_def ?? 0;
+  const eHp = parseInt(rawEnemyHp) || 0;
+  const eDef = parseInt(rawEnemyDef) || 0;
+
+  try {
+    const active = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? AND is_active = 1').get(userId);
+    if (!active) {
+      return res.json({ success: false, message: '请先激活一只灵兽出战', hasBeast: false });
+    }
+
+    // 计算灵兽攻击力（基础攻击 * 等级修正 * 好感度修正）
+    const levelBonus = 1 + (active.level - 1) * 0.1;
+    const intimacyBonus = 1 + Math.min(active.intimacy, 100) * 0.005;
+    const baseAtk = Math.floor(active.attack * levelBonus * intimacyBonus);
+
+    // 技能加成
+    let skillBonus = 1.0;
+    let skillName = null;
+    if (active.skill_id) {
+      const skill = beastSkills.find(s => s.id === active.skill_id);
+      if (skill) {
+        skillName = skill.name;
+        if (skill.effect.includes('attack')) skillBonus = 1.5;
+      }
+    }
+
+    // 伤害计算：攻击 * 技能加成 - 防御减免，最低1点
+    const rawDamage = Math.floor(baseAtk * skillBonus - eDef * 0.3);
+    const damage = Math.max(1, rawDamage);
+
+    // 暴击判定（好感度>60解锁，8%概率）
+    const critChance = active.intimacy > 60 ? 0.08 : 0;
+    const isCrit = Math.random() < critChance;
+    const finalDamage = isCrit ? Math.floor(damage * 1.5) : damage;
+
+    // 灵兽消耗忠诚度（每次攻击消耗1点）
+    db.prepare('UPDATE player_beasts SET intimacy = MAX(0, intimacy - 1) WHERE id = ?').run(active.id);
+
+    res.json({
+      success: true,
+      hasBeast: true,
+      beast: { id: active.id, name: active.name, level: active.level, quality: active.quality },
+      baseAtk,
+      damage: finalDamage,
+      isCrit,
+      skillName,
+      loyaltyCost: 1,
+      message: isCrit ? `暴击！灵兽${active.name}造成${finalDamage}点伤害` : `灵兽${active.name}造成${finalDamage}点伤害`
+    });
+  } catch(e) {
+    res.json({ success: false, message: e.message, hasBeast: false });
+  }
+});
+
+// POST /api/beast/learn-skill - 学习技能（kebab-case别名，修复camelCase）
+router.post('/learn-skill', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const { beastId, skillId } = req.body;
+
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+
+  const skill = beastSkills.find(s => s.id === skillId);
+  if (!skill) return res.json({ success: false, message: '技能不存在' });
+
+  db.prepare('INSERT OR REPLACE INTO player_beast_skills (beast_id, skill_id) VALUES (?, ?)').run(beastId, skillId);
+  db.prepare('UPDATE player_beasts SET skill_id = ? WHERE id = ?').run(skillId, beastId);
+
+  res.json({ success: true, skill });
+});
+
 module.exports = router;

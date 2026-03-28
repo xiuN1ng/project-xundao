@@ -2326,3 +2326,26 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ### P2 - 新功能
 [B-11] 【灵兽系统】灵兽出战功能：出战灵兽附加属性；灵兽独立技能；灵兽装备
 [B-12] 【活动系统】限时活动框架：双倍修炼夜/强化大吉等每日轮换活动
+
+# ========== 2026-03-29 新增 P0/B 任务 ==========
+[P0] [B] 灵兽 API 端点修复 - 新增 /beast/attack, /beast/release, /beast/stats, /beast/shop, /beast/shop/buy；修复 learnSkill 驼峰命名；修改 levelup→upgrade
+[P0] [B] 灵兽装备路由重建 - 新建 server/src/beast_equipment.js，完整实现 getList/info/equip/unequip/enhance/synthesize/recipes，在 server.js 正确注册并加 Logger 确认输出
+[P0] [B] 时装系统 API 补全 - 新增 GET /catalog, GET /sets, POST /buy, POST /unequip；时装商品数据≥10件；套装效果2件/4件加成
+[P1] [B] 仙盟 guild 路由补全 - 新增 /guild/kick, /guild/transfer-leader, /guild/members GET, /guild/member/position POST
+[P1] [B] 灵兽好感度系统 - 好感度属性/喂食/出战/阈值触发（信任60+/默契80+/羁绊100）
+[P2] [B] 宗门动态推送系统 - 成员突破/获得灵兽/上榜实时推送；宗门活动日历；宗主@all
+
+# ========== 2026-03-29 新增 P0/B 任务 ==========
+[P0] [B] WorldBoss API 补全 - 确认 /api/worldboss GET 和 POST /api/worldboss/attack 端点完整；测试攻击扣血、奖励发放逻辑 # 完成 | 2026-03-29 01:38 | 9ee932f4
+  - 根因: /refresh 和 /status 端点生成新worldBoss对象时遗漏 encourageBonus/encourageCount 字段
+  - 修复: 两处赋值均添加带类型检查的 encourageBonus/encourageCount (后备值1.0/0)
+  - 修复: recordDamageToDB 添加 isNaN(damage) 检查防止 NOT NULL 约束崩溃
+  - 验证: attack扣血正常(50000→49835), encourageBonus=1.1传递正确, 击杀奖励正常
+[P0] [B] Lottery draw 端点对接 - POST /api/lottery/draw 返回真实物品数据；实现保底计数（每90抽触发保底）
+[P0] [B] Shop 商品数据补全 - 补充 description、icon_url 字段；库存扣减逻辑；VIP等级购买限制；支付回调
+[P0] [B] Auction API 联调 - GET /api/auction 返回真实拍卖品列表；POST /api/auction/bid 竞拍逻辑；超时自动关闭拍卖
+[P1] [B] Rank API 格式统一 - 将 /api/rank/:type 响应改为 { success, data: { list, myRank } } 格式与前端对齐
+[P1] [B] Sect API 数据对齐 - 确认 /api/sect/info 返回格式包含 { inSect, sect, members } 三个字段
+[P1] [B] SectWar 宗门战核心 - 实现赛季状态/宣战/战斗/排名端点
+[P1] [B] 跨服战 API 框架 - 实现 /api/sect-war/schedule, /zones, /ranking, /declare, /battle 端点
+[P2] [B] 天劫降临事件系统 - 定时触发逻辑；天劫副本生成；宝箱奖励发放
