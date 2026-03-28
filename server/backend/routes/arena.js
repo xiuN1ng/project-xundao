@@ -96,14 +96,18 @@ try {
 
 // AI机器人池（8个，分低/中/高三层）
 // tier: 1=低阶, 2=中阶, 3=高阶
+// tier0: 新手陪练(1-20级) | tier1: 练气境(30-55级) | tier2: 筑基-金丹境(56-75级) | tier3: 元婴+(76-95级)
 const AI_BOTS = [
-  { username: '小修士',  level: 30, realm_level: 2, combat_power: 5000,  tier: 1 },
-  { username: '练气士',  level: 40, realm_level: 3, combat_power: 12000, tier: 1 },
+  { username: '小道士',   level: 8,  realm_level: 1, combat_power: 800,   tier: 0 },
+  { username: '凡人甲',   level: 12, realm_level: 1, combat_power: 1500,  tier: 0 },
+  { username: '凡人乙',   level: 18, realm_level: 1, combat_power: 2200,  tier: 0 },
+  { username: '小修士',   level: 30, realm_level: 2, combat_power: 5000,  tier: 1 },
+  { username: '练气士',   level: 40, realm_level: 3, combat_power: 12000, tier: 1 },
   { username: '筑基散修', level: 50, realm_level: 4, combat_power: 25000, tier: 1 },
   { username: '内门弟子', level: 60, realm_level: 5, combat_power: 45000, tier: 2 },
   { username: '核心真传', level: 70, realm_level: 6, combat_power: 70000, tier: 2 },
-  { username: '长老级',  level: 80, realm_level: 7, combat_power: 100000, tier: 2 },
-  { username: '宗主级',  level: 88, realm_level: 8, combat_power: 150000, tier: 3 },
+  { username: '长老级',   level: 80, realm_level: 7, combat_power: 100000, tier: 2 },
+  { username: '宗主级',   level: 88, realm_level: 8, combat_power: 150000, tier: 3 },
   { username: '飞升大能', level: 95, realm_level: 9, combat_power: 200000, tier: 3 },
 ];
 
@@ -123,9 +127,9 @@ function initAIBots() {
       INSERT OR IGNORE INTO player (id, user_id, level, realm, attack, defense, hp, vip_level, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))
     `);
-    // tier1=白银(2), tier2=黄金(3), tier3=钻石(5)
-    const tierRank = { 1: [2, '白银'], 2: [3, '黄金'], 3: [5, '钻石'] };
-    const basePoints = { 1: 500, 2: 2000, 3: 4500 };  // 按层初始积分
+    // tier0=青铜(1), tier1=白银(2), tier2=黄金(3), tier3=钻石(5)
+    const tierRank = { 0: [1, '青铜'], 1: [2, '白银'], 2: [3, '黄金'], 3: [5, '钻石'] };
+    const basePoints = { 0: 100, 1: 500, 2: 2000, 3: 4500 };  // 按层初始积分
     const season = ArenaSystem ? ArenaSystem.getCurrentSeasonId() : 'default';
 
     for (let i = 0; i < AI_BOTS.length; i++) {
@@ -406,12 +410,11 @@ router.get('/rank/:userId', (req, res) => {
 });
 
 // ============================================
-// GET /opponents/:userId - 获取可挑战对手列表
+// GET /opponents/:userId - 获取可挑战对手列表（基于战力匹配 + AI分级池）
 // ============================================
 router.get('/opponents/:userId', (req, res) => {
   try {
     const { userId } = req.params;
-    const { refresh } = req.query;
 
     if (!db) {
       return res.json({ success: false, error: '数据库不可用' });
@@ -423,59 +426,123 @@ router.get('/opponents/:userId', (req, res) => {
       return res.status(500).json({ success: false, error: '竞技场数据获取失败' });
     }
 
-    const currentPoints = arenaPlayer.arena_points;
-    const range = 2000;
+    // 获取玩家真实属性（优先 player 表，fallback 到 Users 表）
+    const playerData = db.prepare('SELECT * FROM player WHERE user_id = ?').get(userId);
+    const usersData = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+    const playerLevel = playerData ? playerData.level : (usersData ? usersData.level : 1);
+    const playerRealm = playerData ? playerData.realm : (usersData ? usersData.realm : 1);
+    const playerAtk = playerData ? playerData.attack : (usersData ? usersData.attack : 100);
+    const playerDef = playerData ? playerData.defense : (usersData ? usersData.defense : 50);
+    const playerHP = playerData ? playerData.hp : (usersData ? usersData.hp : 1000);
+    // 战斗战力 = ATK*10 + DEF*5 + HP/10（与battle一致）
+    const playerCombatPower = playerAtk * 10 + playerDef * 5 + Math.floor(playerHP / 10);
 
-    // 查找附近的对手
-    const opponents = db.prepare(`
+    const currentPoints = arenaPlayer.arena_points;
+    const refreshCost = ArenaSystem ? ArenaSystem.challengeConfig.refreshCost : 50;
+
+    // ========== AI分级池（按玩家等级匹配）==========
+    // tier0: 新手(1-20级) | tier1: 练气境(30-55级) | tier2: 筑基-金丹境(56-75级) | tier3: 元婴+(76-95级)
+    const playerTier = playerLevel <= 20 ? 0 : playerLevel <= 45 ? 1 : playerLevel <= 70 ? 2 : 3;
+
+    // AI bot player_id: tier0 = -1,-2,-3 | tier1 = -4,-5,-6 | tier2 = -7,-8,-9 | tier3 = -10,-11
+    // (botId = -(i+1) where i is AI_BOTS index)
+    const allowedBotTiers = [];
+    if (playerTier >= 0) allowedBotTiers.push(-1, -2, -3);  // tier0 新手 bots
+    if (playerTier >= 1) allowedBotTiers.push(-4, -5, -6);  // tier1 练气 bots
+    if (playerTier >= 2) allowedBotTiers.push(-7, -8, -9);  // tier2 筑基-金丹 bots
+    if (playerTier >= 3) allowedBotTiers.push(-10);         // tier3 元婴+ bots (AI_BOTS[9])
+
+    // ========== 战力过滤：±50% combat power 范围 ==========
+    const minCombat = Math.max(1, Math.floor(playerCombatPower * 0.5));
+    const maxCombat = Math.ceil(playerCombatPower * 1.5);
+
+    // 真实玩家对手（排除AI bot: player_id < 0，只取正数的真实玩家）
+    const realOpponents = db.prepare(`
       SELECT p.id,
              COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
-             p.level, p.realm as realm_level,
+             p.level, p.realm as realm_level, p.attack, p.defense, p.hp,
              ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
       FROM player p
       JOIN arena_player ap ON p.user_id = ap.player_id
       LEFT JOIN Users u ON u.id = ap.player_id
-      WHERE ap.player_id != ?
-        AND ap.arena_points BETWEEN ? AND ?
-      ORDER BY ap.arena_points DESC
-      LIMIT ?
-    `).all(userId, Math.max(0, currentPoints - range), currentPoints + range, 5);
+      WHERE ap.player_id > 0
+        AND ap.player_id != ?
+        AND (
+          /* 战力过滤：±50% */
+          ((p.attack || 100)*10 + (p.defense || 50)*5 + (p.hp || 1000)/10) BETWEEN ? AND ?
+          /* 或积分接近（±1500）的玩家 */
+          OR ap.arena_points BETWEEN ? AND ?
+        )
+      ORDER BY ABS(ap.arena_points - ?) ASC
+      LIMIT 3
+    `).all(userId, minCombat, maxCombat, Math.max(0, currentPoints - 1500), currentPoints + 1500, currentPoints);
 
-    // 补充高排名玩家
-    if (opponents.length < 5) {
-      const topOpponents = db.prepare(`
+    // AI机器人对手（从允许的tier中选）
+    const botOpponents = [];
+    if (allowedBotTiers.length > 0) {
+      const placeholders = allowedBotTiers.map(() => '?').join(',');
+      const rawBots = db.prepare(`
         SELECT p.id,
                COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
-               p.level, p.realm as realm_level,
+               p.level, p.realm as realm_level, p.attack, p.defense, p.hp,
                ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
         FROM player p
         JOIN arena_player ap ON p.user_id = ap.player_id
         LEFT JOIN Users u ON u.id = ap.player_id
-        WHERE ap.player_id != ?
-        ORDER BY ap.arena_points DESC
-        LIMIT ?
-      `).all(userId, 5 - opponents.length);
+        WHERE ap.player_id IN (${placeholders})
+        ORDER BY RANDOM()
+      `).all(...allowedBotTiers);
 
-      const existingIds = new Set(opponents.map(o => o.id));
-      for (const top of topOpponents) {
-        if (!existingIds.has(top.id)) {
-          opponents.push(top);
-        }
-        if (opponents.length >= 5) break;
+      for (const bot of rawBots) {
+        const botCP = (bot.attack || 100) * 10 + (bot.defense || 50) * 5 + Math.floor((bot.hp || 1000) / 10);
+        // 战力差距>70%显示警告标记，但不直接排除
+        const cpRatio = Math.min(botCP / playerCombatPower, playerCombatPower / botCP);
+        if (cpRatio < 0.3) continue; // 差距>70%跳过
+        bot._cpRatio = cpRatio;
+        bot._isAI = true;
+        botOpponents.push(bot);
+        if (botOpponents.length >= 3) break;
       }
     }
 
-    const currentRank = ArenaSystem ? ArenaSystem.getRank(arenaPlayer.rank_id) : { icon: '👤' };
-    const refreshCost = ArenaSystem ? ArenaSystem.challengeConfig.refreshCost : 50;
+    // 合并：优先真实玩家（战力接近），不足用AI补充
+    const combined = [...realOpponents, ...botOpponents].slice(0, 5);
 
-    const opponentList = opponents.map(op => {
+    // 若仍不足5人，补充高排名玩家（排除AI bots）
+    if (combined.length < 5) {
+      const existingIds = new Set(combined.map(o => o.id));
+      const top补充 = db.prepare(`
+        SELECT p.id,
+               COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+               p.level, p.realm as realm_level, p.attack, p.defense, p.hp,
+               ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
+        FROM player p
+        JOIN arena_player ap ON p.user_id = ap.player_id
+        LEFT JOIN Users u ON u.id = ap.player_id
+        WHERE ap.player_id > 0 AND ap.player_id != ?
+        ORDER BY ap.arena_points DESC
+        LIMIT ?
+      `).all(userId, 5 - combined.length);
+
+      for (const t of top补充) {
+        if (!existingIds.has(t.id)) {
+          t._isWarn = true; // 实力悬殊标记
+          combined.push(t);
+        }
+        if (combined.length >= 5) break;
+      }
+    }
+
+    const opponentList = combined.map(op => {
+      const opCP = (op.attack || 100) * 10 + (op.defense || 50) * 5 + Math.floor((op.hp || 1000) / 10);
       const opRank = ArenaSystem ? ArenaSystem.getRank(op.rank_id) : { icon: '👤' };
+      const cpRatio = Math.min(opCP / playerCombatPower, playerCombatPower / opCP);
       return {
         playerId: op.id,
         username: op.username,
         level: op.level,
         realmLevel: op.realm_level,
-        combatPower: Math.floor(op.level * 500 + (op.realm_level || 1) * 2000),
+        combatPower: opCP,
         arenaPoints: op.arena_points,
         rankId: op.rank_id,
         rankName: op.rank_name,
@@ -485,7 +552,10 @@ router.get('/opponents/:userId', (req, res) => {
         winRate: (op.win_count + op.lose_count) > 0
           ? Math.round((op.win_count / (op.win_count + op.lose_count)) * 100)
           : 0,
-        isRecommend: Math.abs(op.arena_points - currentPoints) < 500
+        // 战力差距警告：<50%显示"实力悬殊"
+        combatWarning: cpRatio < 0.5 ? '实力悬殊' : null,
+        isRecommend: cpRatio >= 0.7,
+        isAI: !!op._isAI
       };
     });
 
@@ -494,6 +564,9 @@ router.get('/opponents/:userId', (req, res) => {
       data: {
         playerPoints: currentPoints,
         playerRankId: arenaPlayer.rank_id,
+        playerLevel,
+        playerCombatPower,
+        playerTier,
         opponents: opponentList,
         refreshCost
       }
