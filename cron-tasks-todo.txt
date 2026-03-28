@@ -2373,3 +2373,147 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1] [B] 完善 routes/tower.js — 新增 POST /tower/challenge；配置每层敌人属性
 [P1] [B] Sect.create 重写 — 写 Sects + SectMembers 表，不写内存变量
 [P2] [B] 灵气/境界突破 API（配合 SpiritPanel 重构）
+
+# ========== 2026-03-29 新增 P0/B 任务（紧急修复）==========
+[P0-B-29-1] Arena daily_reward_claimed 列缺失修复
+  - 文件: server/backend/routes/arena.js
+  - 问题: checkAndResetDailyChallenges() 引用 arena_player.daily_reward_claimed 列但表无此列
+  - 修复: 在 arena_player 表 ADD COLUMN daily_reward_claimed INTEGER DEFAULT 0
+  - 同时检查并添加 daily_challenges 列（如缺失）
+  - 在 server.js 或 arena.js 启动时 db.exec() 执行 ALTER TABLE（带 IF NOT EXISTS 兼容）
+  - 截止: 2026-03-29
+
+[P0-B-29-2] Chat combat_power 列缺失修复
+  - 文件: server/backend/routes/chat.js
+  - 问题: GET /online SQL 引用 Users.combat_power 但表无此列
+  - 修复: ALTER TABLE Users ADD COLUMN combat_power INTEGER DEFAULT 0
+  - 修复 chat.js 在线查询 SQL，直接 JOIN player 表或子查询 combat_power
+  - 截止: 2026-03-29
+
+[P0-B-29-3] 成就进度全局静默修复（连续3轮未解决）
+  - 文件: server/backend/routes/cultivation.js, routes/achievement.js, game/achievement_trigger_service.js
+  - 问题: breakthrough/level_up/arena_win 等事件从未触发成就进度更新
+  - 修复1: cultivation.js POST /breakthrough 后 emit('player:realm_up', { playerId, newRealm })
+  - 修复2: achievement_trigger_service.js 监听并写入 achievement_progress 表
+  - 修复3: 对 player_id=1 做一次性补偿写入（realm=3 → achievement_id=2 completed=1）
+  - 验证: GET /api/achievement/list player_id=1 → id=2 progress应≥3
+  - 截止: 2026-03-29
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-29-1] Shop 18件商品 description 补全
+  - 文件: server/backend/routes/shop.js (items 数组定义处)
+  - 为 shop_items 表所有18件商品补充中文 description 字段
+  - 截止: 2026-03-30
+
+[P1-B-29-2] 章节 HP/ATK 曲线重做（第11-20章）
+  - 文件: server/backend/routes/chapter.js (chapters 数组)
+  - 问题: 第11章 hp=10000 与第10章相同，难度曲线断裂
+  - 修复: 第11-20章 HP 从 12000 开始每章+20%增长到61900
+  - 截止: 2026-03-30
+
+[P1-B-29-3] 每日任务进度链修复
+  - 文件: server/backend/routes/cultivation.js POST /start 端点
+  - 问题: cultivation_times 永远是0，dailyQuest progress 永远是0
+  - 修复1: ALTER TABLE Cultivations ADD cultivation_times INTEGER DEFAULT 0
+  - 修复2: /start 成功后 UPDATE cultivation_times++ 并触发 daily quest 更新
+  - 修复3: 添加每日 UTC 16:00 重置 cultivation_times 定时逻辑
+  - 截止: 2026-03-30
+
+# ========== 2026-03-29 新增 P2/B 任务 ==========
+[P2-B-29-1] cultivation/status 增加 canBreakthrough 字段
+  - 文件: server/backend/routes/cultivation.js GET / 端点
+  - 截止: 2026-04-02
+
+[P2-B-29-2] 境界突破后属性联动更新
+  - 文件: server/backend/routes/cultivation.js POST /breakthrough 端点
+  - 截止: 2026-04-03
+
+[P2-B-29-3] 智能引导推荐引擎后端
+  - 文件: server/backend/routes/player.js 新增 GET /api/player/recommendations
+  - 截止: 2026-04-10
+
+# ========== 2026-03-29 新增 P0/B 任务（紧急）==========
+[P0-B-N-1] Welfare签到内存刷奖励修复
+  - 文件: server/backend/routes/welfare.js + game/welfare_storage.js
+  - 问题: signInData是内存变量，服务器重启可刷奖励
+  - 修复: welfare.js改用welfare_storage.js(DB持久化)，验证今日是否已签到
+  - 截止: 2026-03-29
+
+[P0-B-N-2] Arena daily_reward_claimed列断裂（多轮未修，优先最高）
+  - 文件: server/backend/routes/arena.js
+  - 问题: SELECT未返回该列，checkAndResetDailyChallenges崩溃
+  - 修复: 在SELECT语句中添加daily_reward_claimed列
+  - 验证: server.log不再出现"no such column: daily_reward_claimed"
+  - 截止: 2026-03-29
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-N-1] 境界突破后属性联动更新
+  - 文件: server/backend/routes/cultivation.js POST /breakthrough
+  - 问题: 突破到元婴(attack=150, hp=1000)未变化
+  - 修复: breakthrough后UPDATE player SET hp=1400, attack=160, defense=65
+  - 公式: hp=1000+(realm-1)*400, attack=100+(realm-1)*20, defense=50+(realm-1)*5
+  - 截止: 2026-03-30
+
+[P1-B-N-2] 排行榜combatPower实时计算
+  - 文件: server/backend/routes/rank.js
+  - 问题: 新用户全部combatPower=1350（默认值）
+  - 修复: rank/combat改为实时计算: (attack*10 + defense*5 + hp/10)
+  - 截止: 2026-03-30
+
+[P1-B-N-3] 活动progress从DB实时读取
+  - 文件: server/backend/routes/activity.js
+  - 问题: level_up progress=0（玩家16级无法领取10级奖励）
+  - 修复: progress从player.level实时读取，claimed从DB读取
+  - 截止: 2026-03-30
+
+[P1-B-N-4] 渡劫保护道具完整API
+  - 文件: server/backend/routes/tribulation.js
+  - 添加: POST /api/tribulation/challenge（发起渡劫，成功率计算，奖励/惩罚发放）
+  - 截止: 2026-03-31
+
+# ========== 2026-03-29 新增 P2/B 任务 ==========
+[P2-B-N-1] 经脉点数系统完善
+  - 修复: 添加经脉点数获取途径（境界突破奖励+10点/次）
+  - 修复: 添加POST /api/meridian/activate端点（消耗点数激活穴位）
+  - 截止: 2026-04-05
+
+[P2-B-N-2] 好友系统完整API
+  - 添加: POST /api/friend/add, DELETE /api/friend/remove, GET /api/friend/requests
+  - 截止: 2026-04-05
+
+[P2-B-N-3] 装备强化完整API
+  - 添加: player_equipment表（含enhance_level,enhance_count）
+  - 添加: POST /api/forge/enhance（扣除材料+灵石，提升强化等级）
+  - 完成后触发: dailyQuest + achievement进度更新
+  - 截止: 2026-04-05
+
+[P2-B-N-4] 宗门技能研究系统
+  - 添加: GET /api/sect/skills, POST /api/sect/study, POST /api/sect/build
+  - 截止: 2026-04-07
+
+[P2-B-N-5] 商业化系统完善（月卡/基金/战令）
+  - 添加: 月卡购买+每日领取逻辑, 等级基金购买+返还, 战令赛季任务
+  - 截止: 2026-04-10
+
+## 2026-03-29 04:37 — 第62轮任务追加
+
+### P0（截止2026-03-29）
+[P0-29-N-B1] 检查并注册7个缺失的后端路由
+- 检查 routes/pill.js、adventure.js、abyss.js、realm_dungeon.js、daily_dungeon.js、secret.js、sect-dungeon.js 是否在 server.js 中注册
+- 如未注册，在 server.js 中添加：app.use('/api/pill', require('./routes/pill')) 等
+- 同时实现 /api/offline/info（离线挂机奖励）
+- 负责人: [B]
+- 截止: 2026-03-29
+
+[P0-29-N-B2] DailyQuest进度驱动修复
+- 在 routes/cultivation.js 的 /cultivation/start 成功后调用 updateProgress(playerId, 'cultivate')
+- 在 routes/chapter.js 的 /chapter/battle 成功后调用 updateProgress(playerId, 'dungeon_clear')
+- 负责人: [B]
+- 截止: 2026-03-29
+
+[P0-29-N-B3] Forge材料来源打通
+- 方案A: 每日任务奖励添加火焰精华/火晶/雷晶
+- 方案B: routes/forge.js 添加分解功能（分解装备得材料）
+- 方案C: 实现 POST /api/market/create-listing 让玩家可上架物品
+- 负责人: [B]
+- 截止: 2026-03-30
