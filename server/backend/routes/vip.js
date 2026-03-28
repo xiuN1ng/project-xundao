@@ -392,4 +392,66 @@ router.post('/claim-daily', (req, res) => {
   }
 });
 
+// VIP每日福利领取
+router.post('/benefits', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || (req.userId) || 1;
+
+  try {
+    if (!db) return res.json({ success: false, error: '数据库不可用' });
+
+    // 确保 vip_daily_claims 表存在
+    db.exec(`CREATE TABLE IF NOT EXISTS vip_daily_claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE,
+      last_claim_time INTEGER,
+      claim_date TEXT
+    )`);
+
+    // 获取玩家 VIP 等级
+    const user = db.prepare('SELECT id, vip_level, vipLevel, lingshi FROM Users WHERE id = ?').get(userId);
+    if (!user) return res.json({ success: false, error: '玩家不存在' });
+
+    const vipLevel = user.vip_level || user.vipLevel || 0;
+    if (vipLevel < 1) {
+      return res.json({ success: false, error: 'VIP等级不足1级，无法领取每日福利' });
+    }
+
+    const vipConfig = VIP_LEVELS[vipLevel];
+    if (!vipConfig) return res.json({ success: false, error: 'VIP等级配置异常' });
+
+    const now = Date.now();
+    // 使用上海时区日期字符串
+    const todayStr = new Date(now + 8 * 3600000).toISOString().slice(0, 10);
+
+    // 检查今日是否已领取
+    const existing = db.prepare('SELECT claim_date FROM vip_daily_claims WHERE user_id = ?').get(userId);
+    if (existing && existing.claim_date === todayStr) {
+      const nextReset = new Date(now + 8 * 3600000);
+      nextReset.setHours(24, 0, 0, 0);
+      const nextResetTime = (nextReset.getTime() - 8 * 3600000);
+      return res.json({ success: false, error: '今日已领取VIP福利，请明日再来', nextResetTime });
+    }
+
+    // 发放每日灵石福利
+    const bonus = vipConfig.dailyBonus || 0;
+    const newLingshi = (user.lingshi || 0) + bonus;
+    db.prepare('UPDATE Users SET lingshi = ? WHERE id = ?').run(newLingshi, userId);
+
+    // 写入领取记录
+    db.prepare(`INSERT OR REPLACE INTO vip_daily_claims (user_id, last_claim_time, claim_date) VALUES (?, ?, ?)`).run(userId, now, todayStr);
+
+    res.json({
+      success: true,
+      vipLevel,
+      bonus,
+      totalLingshi: newLingshi,
+      message: `VIP${vipLevel}每日福利领取成功！获得${bonus}灵石`,
+      benefits: vipConfig.benefits || [],
+      nextResetTime: new Date(now + 8 * 3600000).setHours(24, 0, 0, 0) - 8 * 3600000
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

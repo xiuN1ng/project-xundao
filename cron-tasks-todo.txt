@@ -2290,3 +2290,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - market.js: 系统商店铁锭listing(20灵石,99库存,限购99/玩家/日), quantity字段, purchase_limits表, 每日4点重置
 [P1-70-3] 世界BOSS：添加单次伤害上限(自身HP*50%)；添加鼓舞机制(50灵石全服+10%伤害)；添加复活时间表  # 完成 | 2026-03-28 0dc63abe
   - worldBoss.js: 伤害上限playerHp*0.5, encourageBonus(每次+10%,上限100%), /encourage端点(50灵石), status返回encourageBonus
+
+# ========== 2026-03-28 夜间版 [B] 任务（第68轮）===
+[P0-B-68-1] DailyQuest /progress 路径修复 — 在 dailyQuest.js 添加独立 router.get('/progress') 端点，支持 query.userId；从 userQuests[userId] 读取正确进度；旧 /:userId 保持兼容
+[P1-B-68-1] Bag UPSERT 修复 — bag.js addItem 用 INSERT...ON CONFLICT(player_id,item_id,type) 合并数量；写数据合并脚本（将同一用户同一物品多行合并为1行）
+[P1-B-68-2] Chapter 战斗材料写入背包 — chapter.js battle成功后，对materialDrops每个item调用bag.addItem写入player_items表
+[P1-B-68-3] Lundao题库系统 — 添加 GET /question(返回随机1题) + POST /answer(验证+积分)；在DB创建lundao_questions表，插入100道初始题目(分类:功法/丹药/历史/境界/阵法各20题)
+[P1-B-68-4] Paradise /explore 端点 — POST /explore(userId,landId)验证灵石足够+解锁状态，扣除灵石，异步倒计时explorationTime后发放奖励到玩家账户+背包
+[P2-B-68-1] Commission路由注册 — server.js添加 app.use('/api/commission', require('./routes/commission'))
+[P2-B-68-2] Deity封神榜路由 — server.js添加 app.use('/api/deity-list', require('./routes/deity'))（需确认deity.js路由前缀是否匹配）
+[P2-B-68-3] VIP /benefits端点 — POST /benefits(userId) 检查vipLevel>=1，每日领取对应等级灵石+装备，写入vip_daily_claims防重复
