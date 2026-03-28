@@ -1991,12 +1991,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   端点: GET /status, POST /propose, POST /accept, POST /reject, POST /divorce, GET /intimacy, POST /double-cultivate
   截止: 2026-03-30
 
-[P1-B-73-2] 【B】Adventure 奇遇路由 404 — /api/adventure/* 全部 Cannot GET
+[P1-B-73-2] 【B】Adventure 奇遇路由 404 — /api/adventure/* 全部 Cannot GET  # 完成 | 2026-03-28 cebced81
   文件: server/backend/routes/adventure.js
   问题: routes/adventure.js 未注册
   修复: 创建完整 adventure.js（含 types/status/explore/encounter/claim 端点）
   事件触发: 探索触发随机奇遇事件（山洞奇遇/仙人指路/魔物袭击），完成后发放奖励
   截止: 2026-03-30
+  - 6种奇遇类型(遗迹/仙人/妖兽/宝物/洞府/古修)+DB持久化(buffs/history/cooldowns/stats)  # 2026-03-28
+  - 端点: GET /types(解锁/冷却状态), GET /stats, POST /trigger, GET /history  # 2026-03-28
+  - server.js 注册 /api/adventure 路由  # 2026-03-28
 
 [P1-B-73-3] 【B】Lundao opponents 路由 404 — /api/lundao/opponents Cannot GET  # 完成 | 2026-03-28 ccb7eb0f
   文件: server/backend/routes/lundao.js
