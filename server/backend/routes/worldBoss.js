@@ -60,7 +60,7 @@ function initWorldBossTables() {
 
 // 记录伤害到DB（UPSERT）
 function recordDamageToDB(userId, bossId, damage) {
-  if (!db) return;
+  if (!db || !damage || isNaN(damage)) return;
   try {
     const existing = db.prepare('SELECT id, damage FROM world_boss_damage WHERE user_id = ? AND boss_id = ?').get(userId, bossId);
     if (existing) {
@@ -161,8 +161,8 @@ router.get('/status', (req, res) => {
       damageRecords: [],
       lastRefresh: now,
       status: 'alive',
-      encourageBonus: 1.0,
-      encourageCount: 0
+      encourageBonus: typeof worldBoss.encourageBonus === 'number' ? worldBoss.encourageBonus : 1.0,
+      encourageCount: typeof worldBoss.encourageCount === 'number' ? worldBoss.encourageCount : 0
     };
   }
   
@@ -214,7 +214,8 @@ router.post('/attack', (req, res) => {
   damage = Math.floor(damage * furyMultiplier);
   
   // 鼓舞加成：全服鼓舞每次+10%伤害
-  damage = Math.floor(damage * worldBoss.encourageBonus);
+  const encourageBonus = typeof worldBoss.encourageBonus === 'number' ? worldBoss.encourageBonus : 1.0;
+  damage = Math.floor(damage * encourageBonus);
 
   // 记录伤害到DB
   recordDamageToDB(userId, worldBoss.currentBoss.id, damage);
@@ -273,7 +274,7 @@ router.post('/attack', (req, res) => {
     killed,
     furyMultiplier,
     damageCap,
-    encourageBonus: worldBoss.encourageBonus,
+    encourageBonus: encourageBonus,
     bossRewards: killed ? worldBoss.currentBoss.reward : null,
     magicCrystalPreview: Math.max(1, mcReward),
   });
@@ -466,7 +467,9 @@ router.post('/refresh', (req, res) => {
     maxHp: boss.hp,
     damageRecords: [],
     lastRefresh: Date.now(),
-    status: 'alive'
+    status: 'alive',
+    encourageBonus: typeof worldBoss.encourageBonus === 'number' ? worldBoss.encourageBonus : 1.0,
+    encourageCount: typeof worldBoss.encourageCount === 'number' ? worldBoss.encourageCount : 0
   };
   
   res.json({ success: true, boss });
