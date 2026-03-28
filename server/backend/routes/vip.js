@@ -68,10 +68,15 @@ const MONTHLY_CARDS = {
 // 内存存储（月卡状态）
 const monthlyCardState = new Map(); // userId -> { cardType, purchaseTime, lastClaimTime, expireTime }
 
-// 初始化月卡表
+// 初始化月卡表 + DB迁移
 function initTables() {
   if (!db) return;
   try {
+    // 添加 vip_points 列到 Users 表（如不存在）
+    try {
+      db.exec("ALTER TABLE Users ADD COLUMN vip_points INTEGER DEFAULT 0");
+    } catch (e) { /* column may already exist */ }
+
     db.prepare(`
       CREATE TABLE IF NOT EXISTS vip_monthly_cards (
         user_id INTEGER PRIMARY KEY,
@@ -129,10 +134,10 @@ router.get('/', (req, res) => {
 
     // 优先从 Users 表读取真实 VIP 数据（VIP0 = 普通玩家，无任何特权）
     if (db) {
-      const user = db.prepare('SELECT vipLevel, vipPoints FROM Users WHERE id = ?').get(userId);
+      const user = db.prepare('SELECT vipLevel, vip_points FROM Users WHERE id = ?').get(userId);
       if (user) {
         vipLevel = user.vipLevel || 0;
-        vipPoints = user.vipPoints || 0;
+        vipPoints = user.vip_points || 0;
       }
     } else {
       // 后备：使用内存中的玩家数据
@@ -293,10 +298,10 @@ router.get('/:userId', (req, res) => {
     let lingshi = 0;
 
     if (db) {
-      const user = db.prepare('SELECT vipLevel, vipPoints, nickname, diamonds, lingshi FROM Users WHERE id = ?').get(userId);
+      const user = db.prepare('SELECT vipLevel, vip_points, nickname, diamonds, lingshi FROM Users WHERE id = ?').get(userId);
       if (user) {
         vipLevel = user.vipLevel || 0;
-        vipPoints = user.vipPoints || 0;
+        vipPoints = user.vip_points || 0;
         nickname = user.nickname || '修仙者';
         diamonds = user.diamonds || 0;
         lingshi = Number(user.lingshi) || 0;
