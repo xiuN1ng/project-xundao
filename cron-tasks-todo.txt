@@ -2299,4 +2299,4 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1-B-68-4] Paradise /explore 端点 — POST /explore(userId,landId)验证灵石足够+解锁状态，扣除灵石，异步倒计时explorationTime后发放奖励到玩家账户+背包
 [P2-B-68-1] Commission路由注册 — server.js添加 app.use('/api/commission', require('./routes/commission'))
 [P2-B-68-2] Deity封神榜路由 — server.js添加 app.use('/api/deity-list', require('./routes/deity'))（需确认deity.js路由前缀是否匹配）
-[P2-B-68-3] VIP /benefits端点 — POST /benefits(userId) 检查vipLevel>=1，每日领取对应等级灵石+装备，写入vip_daily_claims防重复
+[P2-B-68-3] VIP /benefits端点 — POST /benefits(userId) 检查vipLevel>=1，每日领取对应等级灵石+装备，写入vip_daily_claims防重复 # 完成 | 2026-03-28 21:51 | 52d7435f
