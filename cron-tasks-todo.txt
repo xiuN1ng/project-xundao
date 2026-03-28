@@ -1042,9 +1042,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   修复: /api/meridian/breakthrough，消耗点数打通穴位增加属性
   截止: 2026-04-10
 
-[NF-0327-3] 宗门篝火聊天系统 [P1] [B]
+[NF-0327-3] 宗门篝火聊天系统 [P1] [B] # 完成 | 2026-03-28 f01218d9
   背景: sect.js仅创建/列表，无社交聊天
-  修复: 新建 /api/sect/chat 路由，宗门成员闲聊+活跃度统计
+  修复: 新建 /api/sect/campfire/:sectId + /campfire/send + /campfire/members/:sectId，campfire_messages表
   截止: 2026-04-10
 
 ## 2026-03-27 策划提案 — [B] 后端任务
@@ -1861,3 +1861,97 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B] [P2-59-1] 灵兽遭遇捕获系统 - POST /api/beast/encounter，探索按钮消耗灵石触发随机灵兽遭遇+捕获判定  # 2026-04-02
 [B] [NF-59-1] 天道领悟系统 - routes/comprehension.js + game/comprehension_system.js，领悟点获取+技能树解锁  # 2026-04-05
 [B] [NF-59-2] 洞府访客系统 - POST /cave/visit + POST /cave/rate + GET /cave/ranking  # 2026-04-07
+
+# === 2026-03-28 Noon Round v2 (65th Round) ===
+
+# [P0-65-1] Festival+Commission路由未加载 — Server.started 12:14 < 文件created 12:41
+# → Server.js包含require但进程未加载，需重启Server（kill -HUP或重新node server.js）
+# → 重启后验证: GET /api/festival/ + GET /api/commission/list 返回真实数据
+  截止: 2026-03-28 14:00
+
+# [P0-65-2] Welfare API路径指向错误文件 — server.js line155用game/welfare_api而非routes/welfare
+# → 删除server.js中 app.use('/api/welfare', require('../game/welfare_api'))
+# → 重启Server后验证: POST /api/welfare/signin 正常响应
+  截止: 2026-03-28 14:00
+
+# [P1-65-1] sect-activity SQL双引号bug — strftime("%s","now")应用单引号
+# → 修复routes/sect-activity.js中所有strftime双引号为单引号(Line 109,114,161)
+# → 验证: GET /api/sect-activity/info?player_id=1 返回success:true
+  截止: 2026-03-29
+
+# [P1-65-2] Chapter stars+unlock不持久化 — 战斗返回stars但未写入DB
+# → routes/chapter.js: battle成功后UPDATE chapters SET stars=MAX(stars,?)
+# → 实现章节三星评价逻辑
+# → 验证: 打完chapter1后chapter/list显示stars>=1
+  截止: 2026-03-29
+
+# [P1-65-3] Arena对手战力失衡 — 玩家14级vs AI 30-80级
+# → /api/arena/opponents/:userId 基于玩家combatPower±30%筛选
+# → 为新玩家生成level10-15专属陪练AI
+# → 对战力差距>50%显示"实力悬殊"警告
+  截止: 2026-03-29
+
+# [P2-65-1] Meridian经脉auto-unlock内存泄漏
+# → 将meridian数据持久化到player_meridian表
+# → 修炼成功后emit事件更新meridianPoints
+# → 实现POST /api/meridian/activate
+  截止: 2026-04-02
+
+# [NF-65-1] 宗门突袭事件系统
+# → routes/sect_raid.js: POST /api/sect-raid/start + /join + /claim
+# → 每天12:00和20:00触发，10分钟限时，3人组队挑战
+  截止: 2026-04-05
+
+# ====== 2026-03-28 v66 新增任务 ======
+
+# [P0-66-1] Festival+Commission路由Server未重启
+# Server PID 1225535 启动于12:14，但festival.js(12:41)和commission.js(12:42)晚于启动时间
+# → kill 1225535 && cd /root/.openclaw/workspace/xundao-server/server/backend && node server.js &
+# → 验证 GET /api/festival/ 返回数据
+# → 验证 GET /api/commission/ 返回数据
+# → 验证 POST /api/worldboss/attack 不受影响
+  截止: 2026-03-28 14:30
+
+# [P0-66-2] WorldBoss数值重建
+# 当前仙帝残魂: hp=5,000,000, atk=1,000,000 → 调整为合理值
+# → 上古蛟龙(level=10): hp=5000, atk=100
+# → 远古巨龟(level=20): hp=15000, atk=200
+# → 暗黑魔龙(level=30): hp=50000, atk=400
+# → 九尾妖狐(level=40): hp=150000, atk=800
+# → 仙帝残魂(level=50): hp=500000, atk=1500
+# → totalParticipants改为真实计数(退出/死亡时-1)
+# → 伤害分摊: Boss HP ÷ participants
+  截止: 2026-03-29
+
+# [P1-66-1] /bag/list 路由未挂载
+# → 创建 routes/bag.js 路由，挂载 POST /api/bag/list 和 POST /api/bag/equip
+# → 返回玩家背包所有物品(id/name/icon/quantity/category)
+# → 物品标注来源(哪个副本/系统获得)
+  截止: 2026-03-29
+
+# [P1-66-2] 论道系统题库为空
+# → 向 lundao_questions 表插入30道修仙题目(难度1-3各10题)
+# → 实现 POST /api/lundao/start(获取今日题目) 和 POST /api/lundao/answer
+  截止: 2026-03-30
+
+# [P1-66-3] 装备强化端点缺失
+# → POST /api/equipment/enhance: 消耗强化石+灵石，成功率公式(base70%+vip5%-level5%)
+# → 成功level+1，失败不变
+# → POST /api/dungeon/challenge 返回"本次获得物品"告知
+  截止: 2026-03-30
+
+# [P2-66-1] Beast灵兽未持久化
+# → 创建user_beasts表并迁移现有userBeasts内存数据
+# → POST /api/beast/capture: 消耗"灵兽球"捕捉灵兽
+# → POST /api/beast/evolve: 消耗灵石提升品质
+  截止: 2026-04-02
+
+# [P2-66-2] Shop无购买API
+# → POST /api/shop/buy: {player_id, item_id, quantity}，扣灵石，加物品到背包
+# → 装备直接加到equipment表并装备
+  截止: 2026-04-02
+
+# [NF-66-1] 灵石回收/转化系统
+# → POST /api/material-exchange/recycle: 材料→灵石(白5/蓝20/紫100/橙500)
+# → routes/material_exchange.js 完善recycle端点
+  截止: 2026-03-31
