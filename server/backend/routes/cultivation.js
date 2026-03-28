@@ -34,6 +34,9 @@ try {
   // 确保 last_logout 列存在
   try { db.exec('ALTER TABLE Users ADD COLUMN last_logout DATETIME'); } catch (e) { /* 列已存在 */ }
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_claim_time DATETIME"); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_first_cultivate_date TEXT"); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Cultivations ADD COLUMN daily_exchange_count INTEGER DEFAULT 0"); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_exchange_date TEXT"); } catch (e) { /* 列已存在 */ }
   Logger.info('数据库连接成功');
 } catch (err) {
   Logger.error('数据库连接失败:', err.message);
@@ -58,14 +61,17 @@ const REALM_BASE_CONFIG = {
   8: { name: '飞升', icon: '🌈', realm_level: 8 },
 };
 
-// 动态境界配置（cost = realm × 10000）
-const realmConfig = {};
-for (const [realm, base] of Object.entries(REALM_BASE_CONFIG)) {
-  realmConfig[realm] = {
-    ...base,
-    cost: parseInt(realm) * 10000
-  };
-}
+// 境界突破消耗配置（境界1~3: 3000/8000/15000；境界4+: realm × 10000）
+const realmConfig = {
+  1: { name: '练气', icon: '🧘', realm_level: 1, cost: 3000 },
+  2: { name: '筑基', icon: '🔮', realm_level: 2, cost: 8000 },
+  3: { name: '金丹', icon: '🌟', realm_level: 3, cost: 15000 },
+  4: { name: '元婴', icon: '👼', realm_level: 4, cost: 40000 },
+  5: { name: '化神', icon: '✨', realm_level: 5, cost: 50000 },
+  6: { name: '炼虚', icon: '💫', realm_level: 6, cost: 60000 },
+  7: { name: '大乘', icon: '🔥', realm_level: 7, cost: 70000 },
+  8: { name: '飞升', icon: '🌈', realm_level: 8, cost: 80000 },
+};
 
 // 境界消耗灵石（修炼一次，动态计算）
 // 基础10灵石，随cultivationPower增长，每500点+5灵石，上限105
@@ -355,6 +361,14 @@ router.post('/start', (req, res) => {
       return res.json({ success: false, message: '灵石不足' });
     }
 
+    // ========== 每日首次修炼双倍灵气 ==========
+    const today = getShanghaiDateStr();
+    const lastFirstDate = cult.last_first_cultivate_date || '';
+    const isFirstCultivateToday = lastFirstDate !== today;
+    if (isFirstCultivateToday) {
+      db.prepare("UPDATE Cultivations SET last_first_cultivate_date = ? WHERE userId = ?").run(today, userId);
+    }
+
     // 修炼获得灵气值（基础 + 效率加成）
     // cultivationPower 必须从当前 value 提前计算并持久化，否则 powerBonus 永远为 0
     const baseGain = Math.floor(Math.random() * 100) + 50;
@@ -362,7 +376,11 @@ router.post('/start', (req, res) => {
     const powerBonus = currentCultivationPower > 0
       ? Math.min(baseGain * 5, Math.floor(baseGain * currentCultivationPower / 100))
       : 0;
-    const gain = baseGain + powerBonus;
+    let gain = baseGain + powerBonus;
+    // 每日首次修炼双倍灵气
+    if (isFirstCultivateToday) {
+      gain = gain * 2;
+    }
 
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
@@ -403,7 +421,8 @@ router.post('/start', (req, res) => {
       expGain,
       maxed: newValue >= config.cost,
       dailyTimes: dailyTimes + 1,
-      dailyLimit: DAILY_LIMIT
+      dailyLimit: DAILY_LIMIT,
+      firstCultivationBonus: isFirstCultivateToday // 每日首次双倍提示
     });
   } catch (err) {
     Logger.error('POST /start error:', err.message);
@@ -694,6 +713,73 @@ router.post('/claim', (req, res) => {
     });
   } catch (err) {
     Logger.error('POST /claim error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 灵石直接兑换灵气（100灵石 = 500灵气，每日限10次）
+router.post('/exchange', (req, res) => {
+  const userId = req.userId || 1;
+  const EXCHANGE_COST = 100;      // 消耗100灵石
+  const EXCHANGE_GAIN = 500;      // 获得500灵气
+  const DAILY_LIMIT = 10;
+
+  try {
+    const player = getPlayer(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    const cult = getOrCreateCultivation(userId);
+    const config = realmConfig[cult.realm] || realmConfig[1];
+    const today = getShanghaiDateStr();
+
+    // 检查每日兑换次数
+    if (cult.last_exchange_date === today) {
+      const currentCount = parseInt(cult.daily_exchange_count || 0);
+      if (currentCount >= DAILY_LIMIT) {
+        return res.json({ success: false, message: `今日兑换次数已用完（${DAILY_LIMIT}/${DAILY_LIMIT}），每天凌晨重置` });
+      }
+    }
+
+    // 灵石不足检查
+    const lingshi = parseInt(player.lingshi || 0);
+    if (lingshi < EXCHANGE_COST) {
+      return res.json({ success: false, message: '灵石不足' });
+    }
+
+    // 扣除灵石，添加灵气
+    const newValue = Math.min(parseInt(cult.value) + EXCHANGE_GAIN, config.cost);
+    const realmLevel = config.realm_level || 1;
+    const newPower = Math.floor(newValue * 0.1 + realmLevel * 50);
+    const newLingshi = lingshi - EXCHANGE_COST;
+    const newCount = (cult.last_exchange_date === today) ? (parseInt(cult.daily_exchange_count || 0) + 1) : 1;
+
+    db.prepare('UPDATE Users SET lingshi = ? WHERE id = ?').run(newLingshi, userId);
+    db.prepare("UPDATE Cultivations SET value = ?, cultivationPower = ?, daily_exchange_count = ?, last_exchange_date = ?, updatedAt = datetime('now') WHERE userId = ?").run(newValue, newPower, newCount, today, userId);
+
+    const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
+
+    // 每日任务触发
+    if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+      try { dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1); } catch (e) { /* */ }
+    }
+    if (eventBus) {
+      eventBus.emit('cultivation:exchange', { userId, gain: EXCHANGE_GAIN });
+    }
+
+    res.json({
+      success: true,
+      gained: EXCHANGE_GAIN,
+      cost: EXCHANGE_COST,
+      newValue,
+      progress: newProgress,
+      cultivationPower: newPower,
+      remainingLingshi: newLingshi,
+      exchangeCountToday: newCount,
+      dailyLimit: DAILY_LIMIT,
+      message: `消耗${EXCHANGE_COST}灵石，兑换${EXCHANGE_GAIN}灵气成功！`
+    });
+  } catch (err) {
+    Logger.error('POST /exchange error:', err.message);
     res.json({ success: false, message: err.message });
   }
 });
