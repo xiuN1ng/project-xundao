@@ -86,6 +86,7 @@ app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));
 app.use('/api/festival', require('./routes/festival'));
 app.use('/api/commission', require('./routes/commission'));
+app.use('/api/adventure', require('./routes/adventure'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));
 app.use('/api/market', require('./routes/market'));
