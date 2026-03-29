@@ -2752,10 +2752,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-31
 
 # ========== 2026-03-30 新增 P0/B 任务（紧急）==========
-[P0-B-30-1] Arena 每日挑战次数超限修复
+[P0-B-30-1] Arena 每日挑战次数超限修复  # 完成 | 2026-03-29 e334197a
   - 文件: server/backend/routes/arena.js
   - 问题: challengesUsed=8 > maxChallenges=5，超限后仍可挑战
-  - 修复: 挑战前检查 remainingChallenges>=1，不满足则直接返回错误
+  - 修复: 原子UPDATE预留挑战名额，防止竞态条件超限
+  - 新增: extra_challenges_bought列追踪额外购买，POST /buy-challenge端点
   - 截止: 2026-03-30
 
 [P0-B-30-2] 心魔幻境解锁判断逻辑修复
