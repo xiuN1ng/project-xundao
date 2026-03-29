@@ -626,44 +626,6 @@ router.post('/learn-skill', (req, res) => {
   }
 });
 
-// 获取灵兽详情
-router.get('/:id', (req, res) => {
-  try {
-    const { id } = req.params;
-    const { player_id } = req.query;
-
-    const beast = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(id);
-    if (!beast) {
-      return res.status(404).json({ success: false, error: '灵兽不存在' });
-    }
-
-    // 获取玩家拥有的该灵兽信息
-    let playerBeast = null;
-    if (player_id) {
-      playerBeast = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND beast_id = ?').get(player_id, id);
-    }
-
-    const result = {
-      ...beast,
-      quality_name: BEAST_QUALITY[beast.quality]?.name || beast.quality,
-      skill_detail: BEAST_SKILLS[beast.skill] || null,
-      owned: playerBeast ? {
-        level: playerBeast.level,
-        exp: playerBeast.exp,
-        affection: playerBeast.affection,
-        mood: playerBeast.mood,
-        is_active: playerBeast.is_active,
-        exp_to_next: BEAST_EXP_CURVE(playerBeast.level),
-        stats: calculateBeastStats(playerBeast, beast)
-      } : null
-    };
-
-    res.json({ success: true, data: result });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // ============ 灵兽遭遇 API ============
 
 // POST /api/beast/encounter - 探索遭遇灵兽（消耗灵石，随机触发）
@@ -2217,6 +2179,44 @@ router.post('/equipment/equip', (req, res) => {
     });
   } catch (error) {
     console.error('装备灵兽失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ 获取灵兽详情（必须放最后，避免拦截其他路由）===========
+router.get('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { player_id } = req.query;
+
+    const beast = db.prepare('SELECT * FROM beast_templates WHERE id = ?').get(id);
+    if (!beast) {
+      return res.status(404).json({ success: false, error: '灵兽不存在' });
+    }
+
+    // 获取玩家拥有的该灵兽信息
+    let playerBeast = null;
+    if (player_id) {
+      playerBeast = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND beast_id = ?').get(player_id, id);
+    }
+
+    const result = {
+      ...beast,
+      quality_name: BEAST_QUALITY[beast.quality]?.name || beast.quality,
+      skill_detail: BEAST_SKILLS[beast.skill] || null,
+      owned: playerBeast ? {
+        level: playerBeast.level,
+        exp: playerBeast.exp,
+        affection: playerBeast.affection,
+        mood: playerBeast.mood,
+        is_active: playerBeast.is_active,
+        exp_to_next: BEAST_EXP_CURVE(playerBeast.level),
+        stats: calculateBeastStats(playerBeast, beast)
+      } : null
+    };
+
+    res.json({ success: true, data: result });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
