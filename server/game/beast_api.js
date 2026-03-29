@@ -411,6 +411,57 @@ router.get('/list', (req, res) => {
   }
 });
 
+// GET /api/beast/my - 获取玩家拥有的灵兽列表（解决 /my 被 /:id 误匹配问题）
+router.get('/my', (req, res) => {
+  const { player_id } = req.query;
+  if (!player_id) return res.status(400).json({ success: false, error: '缺少 player_id' });
+
+  try {
+    const beasts = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? ORDER BY level DESC').all(parseInt(player_id));
+    const activeBeast = beasts.find(b => b.is_active === 1);
+
+    // 获取保底信息
+    let pity = null;
+    try {
+      pity = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(parseInt(player_id));
+    } catch(e) { /* pity表可能不存在 */ }
+
+    res.json({
+      success: true,
+      beasts: beasts.map(b => ({
+        id: b.id,
+        beastId: b.beast_id,
+        name: b.name,
+        level: b.level,
+        exp: b.exp || 0,
+        quality: b.quality,
+        attack: b.attack || 0,
+        hp: b.hp || 0,
+        isActive: !!b.is_active,
+        affection: b.affection || 0,
+        mood: b.mood || 'normal',
+        skillId: b.skill_id || null,
+        isEquipped: !!b.is_active
+      })),
+      activeBeast: activeBeast ? {
+        id: activeBeast.id,
+        beastId: activeBeast.beast_id,
+        name: activeBeast.name,
+        level: activeBeast.level,
+        quality: activeBeast.quality,
+        attack: activeBeast.attack || 0,
+        hp: activeBeast.hp || 0
+      } : null,
+      pity: pity ? {
+        count: pity.consecutive_non_mythical,
+        nextMythical: Math.max(0, 90 - pity.consecutive_non_mythical)
+      } : { count: 0, nextMythical: 90 }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 获取灵兽捕捉保底进度
 router.get('/pity/status', (req, res) => {
   try {

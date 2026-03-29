@@ -18,7 +18,7 @@ function initBeastTables(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS player_beasts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
       template_id INTEGER NOT NULL,
       name TEXT NOT NULL,
       level INTEGER DEFAULT 1,
@@ -29,7 +29,7 @@ function initBeastTables(db) {
       skill_id INTEGER,
       intimacy INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
-      UNIQUE(user_id, template_id)
+      UNIQUE(player_id, template_id)
     );
     CREATE TABLE IF NOT EXISTS beast_pity_counter (
       user_id INTEGER PRIMARY KEY,
@@ -94,11 +94,11 @@ router.get('/my', (req, res) => {
   initBeastTables(db);
   const userId = extractUserId(req);
   try {
-    const beasts = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? ORDER BY level DESC').all(userId);
+    const beasts = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? ORDER BY level DESC').all(userId);
     const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId);
     res.json({
       beasts: beasts.map(b => ({
-        id: b.id, userId: b.user_id, templateId: b.template_id, name: b.name,
+        id: b.id, userId: b.player_id, templateId: b.template_id, name: b.name,
         level: b.level, quality: b.quality, attack: b.attack, hp: b.hp,
         isActive: !!b.is_active, skillId: b.skill_id, intimacy: b.intimacy
       })),
@@ -114,9 +114,9 @@ router.get('/my/list', (req, res) => {
   initBeastTables(db);
   const userId = extractUserId(req);
   try {
-    const beasts = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? ORDER BY level DESC').all(userId);
+    const beasts = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? ORDER BY level DESC').all(userId);
     res.json(beasts.map(b => ({
-      id: b.id, userId: b.user_id, templateId: b.template_id, name: b.name,
+      id: b.id, userId: b.player_id, templateId: b.template_id, name: b.name,
       level: b.level, quality: b.quality, attack: b.attack, hp: b.hp,
       isActive: !!b.is_active, skillId: b.skill_id, intimacy: b.intimacy
     })));
@@ -176,9 +176,9 @@ router.post('/capture', (req, res) => {
 
   // 写入DB
   try {
-    db.prepare(`INSERT INTO player_beasts (user_id, template_id, name, level, quality, attack, hp, is_active, intimacy)
+    db.prepare(`INSERT INTO player_beasts (player_id, template_id, name, level, quality, attack, hp, is_active, intimacy)
       VALUES (?, ?, ?, 1, ?, ?, ?, 0, 0)
-      ON CONFLICT(user_id, template_id) DO UPDATE SET level = level + 0`).run(
+      ON CONFLICT(player_id, template_id) DO UPDATE SET level = level + 0`).run(
       userId, capturedTemplate.id, capturedTemplate.name, capturedTemplate.quality,
       capturedTemplate.baseAttack, capturedTemplate.baseHp
     );
@@ -207,9 +207,9 @@ router.post('/activate', (req, res) => {
 
   try {
     // 取消所有出战状态
-    db.prepare('UPDATE player_beasts SET is_active = 0 WHERE user_id = ?').run(userId);
+    db.prepare('UPDATE player_beasts SET is_active = 0 WHERE player_id = ?').run(userId);
     // 激活指定灵兽
-    const result = db.prepare('UPDATE player_beasts SET is_active = 1 WHERE id = ? AND user_id = ?').run(beastId, userId);
+    const result = db.prepare('UPDATE player_beasts SET is_active = 1 WHERE id = ? AND player_id = ?').run(beastId, userId);
     if (result.changes === 0) {
       return res.json({ success: false, message: '灵兽不存在' });
     }
@@ -226,7 +226,7 @@ router.post('/evolve', (req, res) => {
   const userId = extractUserId(req);
   const { beastId } = req.body;
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const rule = evolveRules[beast.quality];
@@ -258,7 +258,7 @@ router.post('/learnSkill', (req, res) => {
   const userId = extractUserId(req);
   const { beastId, skillId } = req.body;
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const skill = beastSkills.find(s => s.id === skillId);
@@ -277,7 +277,7 @@ router.post('/upgrade', (req, res) => {
   const userId = extractUserId(req);
   const { beastId } = req.body;
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const cost = beast.level * 50;
@@ -300,7 +300,7 @@ router.post('/feed', (req, res) => {
   const userId = extractUserId(req);
   const { beastId } = req.body;
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const cost = 30;
@@ -324,7 +324,7 @@ router.get('/battle-bonus', (req, res) => {
   const userId = extractUserId(req);
 
   try {
-    const active = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? AND is_active = 1').get(userId);
+    const active = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND is_active = 1').get(userId);
     if (!active) {
       return res.json({ hasBeast: false, atkBonus: 0, hpBonus: 0, skill: null });
     }
@@ -362,7 +362,7 @@ router.get('/stats', (req, res) => {
   initBeastTables(db);
   const userId = extractUserId(req);
   try {
-    const beasts = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? ORDER BY level DESC').all(userId);
+    const beasts = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? ORDER BY level DESC').all(userId);
     const active = beasts.find(b => b.is_active === 1);
     const totalAttack = beasts.reduce((sum, b) => sum + b.attack, 0);
     const totalHp = beasts.reduce((sum, b) => sum + b.hp, 0);
@@ -392,7 +392,7 @@ router.post('/release', (req, res) => {
   if (!beastId) return res.json({ success: false, message: '缺少beastId' });
 
   try {
-    const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+    const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
     if (!beast) return res.json({ success: false, message: '灵兽不存在' });
     if (beast.is_active === 1) return res.json({ success: false, message: '请先取消出战再放生' });
 
@@ -502,7 +502,7 @@ router.post('/feed-item', (req, res) => {
 
   if (!beastId || !itemId) return res.json({ success: false, message: '缺少参数' });
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const feedItems = {
@@ -551,7 +551,7 @@ router.post('/attack', (req, res) => {
   const eDef = parseInt(rawEnemyDef) || 0;
 
   try {
-    const active = db.prepare('SELECT * FROM player_beasts WHERE user_id = ? AND is_active = 1').get(userId);
+    const active = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND is_active = 1').get(userId);
     if (!active) {
       return res.json({ success: false, message: '请先激活一只灵兽出战', hasBeast: false });
     }
@@ -607,7 +607,7 @@ router.post('/learn-skill', (req, res) => {
   const userId = extractUserId(req);
   const { beastId, skillId } = req.body;
 
-  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND user_id = ?').get(beastId, userId);
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
   if (!beast) return res.json({ success: false, message: '灵兽不存在' });
 
   const skill = beastSkills.find(s => s.id === skillId);
