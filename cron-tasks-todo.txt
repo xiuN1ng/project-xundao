@@ -4025,3 +4025,28 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 验证: 离线30分钟后登录，检查顶部状态栏显示Buff图标
   - 截止: 2026-04-07
 
+
+# === 2026-03-30 第105轮新增任务 ===
+
+[B-P0-105-1] 注册 cultivation.js 路由到 server.js
+  - 文件: server/server.js
+  - 操作: require('./backend/routes/cultivation') + app.use('/api/cultivation', cultivationRoute)
+  - 验证: curl http://localhost:3001/api/cultivation?player_id=1 返回JSON
+  - 截止: 2026-04-02
+
+[B-P0-105-2] 注册 lundao.js 路由到 server.js  # 完成 | 2026-03-30 c846f425
+  - 文件: server/server.js
+  - 操作: require('./backend/routes/lundao') + app.use('/api/lundao', lundaoRoute)
+  - 验证: curl http://localhost:3001/api/lundao/?player_id=1 返回JSON
+  - 截止: 2026-04-03
+  - 修复: 将lundao路由注册到404处理程序之前，确保路由能正确匹配
+
+[B-P0-105-3] 注册 couple.js 路由到 server.js
+  - 文件: server/server.js
+  - 操作: require('./backend/routes/couple') + app.use('/api/couple', coupleRoute)
+  - 验证: curl http://localhost:3001/api/couple/status?player_id=1 返回JSON
+  - 截止: 2026-04-03
+
+[B-P1-105-4] 批量注册第二批路由（friend/sect-missions/quest/commission/fashion/mount/wing）
+  - 截止: 2026-04-17
+
