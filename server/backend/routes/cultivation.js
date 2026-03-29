@@ -260,6 +260,8 @@ router.get('/status', (req, res) => {
     const dailyTimes = getDailyCultivationTimes(userId);
     const realmLevel = config.realm_level || 1;
     const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const nextRealm = cult.realm + 1;
+    const canBreakthrough = realmConfig[nextRealm] && parseInt(cult.value) >= config.cost;
 
     res.json({
       success: true,
@@ -272,7 +274,9 @@ router.get('/status', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower
+        cultivationPower,
+        canBreakthrough,
+        nextRealm: realmConfig[nextRealm] ? nextRealm : null
       },
       player: {
         level: player.level,
