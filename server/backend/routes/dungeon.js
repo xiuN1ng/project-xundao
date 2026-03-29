@@ -164,17 +164,122 @@ router.post('/enter', (req, res) => {
   });
 });
 
+// ============================================================
+// 副本战斗服务端计算（安全修复）
+// 不信任客户端 won 参数，由服务器根据玩家/怪物属性计算胜负
+// ============================================================
+
+// 获取玩家有效战斗属性（含装备/功法/灵兽加成）
+function getPlayerBattleStats(userId) {
+  try {
+    const user = db.prepare('SELECT attack, defense, hp, level FROM Users WHERE id = ?').get(userId);
+    if (!user) return { attack: 100, defense: 50, hp: 1000, level: 1 };
+    // 读取装备加成
+    let equipAtk = 0, equipDef = 0, equipHp = 0;
+    try {
+      const equips = db.prepare(
+        'SELECT e.attack, e.defense, e.hp FROM player_equipment pe ' +
+        'JOIN equipment e ON e.id = pe.equipment_id ' +
+        'WHERE pe.player_id = ? AND pe.equipped = 1'
+      ).all(userId);
+      for (const eq of equips) {
+        equipAtk += (eq.attack || 0);
+        equipDef += (eq.defense || 0);
+        equipHp += (eq.hp || 0);
+      }
+    } catch (e) { /* ignore */ }
+
+    // 读取灵兽出战加成
+    let beastAtk = 0, beastHp = 0;
+    try {
+      const beast = db.prepare(
+        'SELECT attack, hp FROM player_beasts WHERE player_id = ? AND in_battle = 1 LIMIT 1'
+      ).get(userId);
+      if (beast) {
+        beastAtk = beast.attack || 0;
+        beastHp = beast.hp || 0;
+      }
+    } catch (e) { /* ignore */ }
+
+    return {
+      attack: (user.attack || 100) + equipAtk + beastAtk,
+      defense: (user.defense || 50) + equipDef,
+      hp: (user.hp || 1000) + equipHp + beastHp,
+      level: user.level || 1
+    };
+  } catch (e) {
+    return { attack: 100, defense: 50, hp: 1000, level: 1 };
+  }
+}
+
+// 获取副本怪物属性（基于副本等级缩放）
+function getDungeonMonsterStats(dungeon, playerLevel) {
+  // base stats grow with dungeon id and reqLevel
+  const baseLevel = dungeon.reqLevel || 1;
+  const scale = 1 + (baseLevel - 1) * 0.3;
+  const monsterHp = Math.floor(200 * scale);
+  const monsterAtk = Math.floor(30 * scale);
+  const monsterDef = Math.floor(15 * scale);
+  return { hp: monsterHp, attack: monsterAtk, defense: monsterDef };
+}
+
+// 服务器端战斗模拟：计算胜负
+// 模拟3回合内能否击杀怪物
+function simulateBattle(playerAtk, playerDef, playerHp, monsterAtk, monsterDef, monsterHp) {
+  let pHp = playerHp;
+  let mHp = monsterHp;
+  const maxRounds = 3;
+
+  for (let round = 1; round <= maxRounds; round++) {
+    // 玩家攻击怪物
+    const playerDmg = Math.max(1, playerAtk - monsterDef * 0.5);
+    mHp -= playerDmg;
+    if (mHp <= 0) return { won: true, rounds: round, playerDamageTaken: pHp - playerHp };
+
+    // 怪物攻击玩家
+    const monsterDmg = Math.max(1, monsterAtk - playerDef * 0.5);
+    pHp -= monsterDmg;
+    if (pHp <= 0) return { won: false, rounds: round, playerDamageTaken: playerHp - pHp };
+  }
+
+  // 3回合后未分胜负，以怪物HP比例决定
+  const monsterHpRatio = mHp / monsterHp;
+  const playerHpRatio = pHp / playerHp;
+  return { won: monsterHpRatio < playerHpRatio, rounds: maxRounds, playerDamageTaken: playerHp - pHp };
+}
+
 // 副本战斗结算
 router.post('/battle/:battleId', (req, res) => {
   const { battleId } = req.params;
-  const { userId, dungeonId, won, time } = req.body;
+  // won 由客户端传入，但服务器会重新计算，不依赖客户端
+  const { userId, dungeonId, won: clientWon, time } = req.body;
   
   const dungeon = dungeons.find(d => d.id === dungeonId);
   if (!dungeon) {
     return res.status(404).json({ success: false, error: '副本不存在' });
   }
   
-  // 计算掉落
+  // ============================================================
+  // 服务器端战斗计算（安全修复：不信任 won 参数）
+  // ============================================================
+  const playerStats = getPlayerBattleStats(userId);
+  const monsterStats = getDungeonMonsterStats(dungeon, playerStats.level);
+  const battleResult = simulateBattle(
+    playerStats.attack,
+    playerStats.defense,
+    playerStats.hp,
+    monsterStats.attack,
+    monsterStats.defense,
+    monsterStats.hp
+  );
+  
+  // 服务器计算结果为最终结果，客户端 won 仅作参考（日志记录）
+  const won = battleResult.won;
+  if (clientWon !== won) {
+    console.log(`[dungeon] battleId=${battleId} 客户端声称won=${clientWon}，服务器计算为won=${won}（已修正）`);
+  }
+  
+  // 计算掉落（仅胜利时）
   let drops = [];
   let message = '战斗失败';
   
@@ -260,7 +365,20 @@ router.post('/battle/:battleId', (req, res) => {
     message,
     dungeonId,
     drops,
-    reward: won ? { spiritStones: dungeon.cost * 0.5, exp: 50 } : null
+    // 服务器计算奖励（灵石=副本cost×0.5，经验=副本难度×5+玩家level×10）
+    reward: won ? {
+      spiritStones: Math.floor(dungeon.cost * 0.5),
+      exp: Math.floor((dungeon.reqLevel * 5 + playerStats.level * 10) * (dungeon.progress / 100))
+    } : null,
+    // 服务器计算属性对比（供前端展示）
+    serverCalc: {
+      playerAtk: playerStats.attack,
+      playerDef: playerStats.defense,
+      playerHp: playerStats.hp,
+      monsterHp: monsterStats.hp,
+      monsterAtk: monsterStats.attack,
+      rounds: battleResult.rounds
+    }
   });
 });
 
