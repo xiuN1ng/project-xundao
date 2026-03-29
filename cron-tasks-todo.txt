@@ -3737,15 +3737,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 # === 2026-03-31 第96轮追加 ===
 
 # ========== P1 ==========
-[P1-B-96-1] welfare_api.js 新增月卡购买和领取 API
-  - 文件: server/services/welfare_api.js
-  - 新增: POST /api/welfare/buy-card (月卡购买)
-  - 新增: GET /api/welfare/month-card (月卡状态)
+[P1-B-96-1] welfare_api.js 新增月卡购买和领取 API  # 完成 | 2026-03-30 5071aea7
+  - 文件: server/game/welfare_api.js + server/game/welfare_storage.js
+  - 新增: POST /api/welfare/buy-card (月卡购买), GET /api/welfare/month-card (月卡状态), POST /api/welfare/claim-card (领取每日奖励)
+  - welfare_monthly_cards表( player_id/card_type/purchase_time/last_claim_time/expire_time )
+  - 灵石月卡(100钻石/每日500灵石)和尊享月卡(300钻石/每日1000灵石+修炼经验+50%)
   - 截止: 2026-04-07
 
-[P1-B-96-2] server.js 注册 gacha 路由
-  - 文件: server/server.js
-  - 添加: app.use('/api/gacha', require('./backend/routes/gacha'))
+[P1-B-96-2] server.js 注册 gacha 路由  # 已确认完成 | 2026-03-28
+  - 文件: server/backend/server.js 第155行已注册 app.use('/api/gacha', require('./routes/gacha'))
   - 截止: 2026-04-05
 
 # ========== P2 ==========
