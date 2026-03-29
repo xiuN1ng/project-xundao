@@ -1854,7 +1854,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   截止: 2026-03-29
 
 # === 2026-03-28 Noon Round ===
-[B] [P0-59-1] SpiritAPI 端点适配 - spirit_artifact_api.js 已有完整数据，前端调用路径错误(`/api/spirit`→`/api/spirit-artifact/list`)  # 2026-03-29
+[B] [P0-59-1] SpiritAPI 端点适配 - spirit_artifact_api.js 已有完整数据，前端调用路径错误(`/api/spirit`→`/api/spirit-artifact/list`)  # 2026-03-29 完成 | 2026-03-29 49b8009c
 [B] [P1-59-1] Festival节日活动系统 - routes/festival.js: GET /festival + POST /festival/join，活动类型：红包雨/灯谜/烟花  # 2026-03-30 完成 | 2026-03-28 3b4702e2
 [B] [P1-59-2] Commission委托任务系统 - routes/commission.js: GET /list + POST /accept + POST /complete，难度分级+奖励  # 2026-03-30 完成 | 2026-03-28 3b4702e2
 [B] [P1-59-4] Lundao论道 API路径修复 - 确认 core/api.js 中 lundaoApi.getOpponents() 路径，改为 /lundao/?player_id=X  # 2026-03-29
