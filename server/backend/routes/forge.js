@@ -645,4 +645,194 @@ router.get('/daily-claim/status', (req, res) => {
   }
 });
 
+// ========== POST /forge/decompose — bulk decompose equipment into materials ==========
+router.post('/decompose', (req, res) => {
+  const db = getDb();
+  try {
+    const { player_id, userId: bodyUserId, item_ids } = req.body;
+    const userId = bodyUserId || player_id || extractUserId(req);
+
+    if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+      return res.json({ success: false, error: '缺少 item_ids 数组' });
+    }
+
+    const results = [];
+    const gained = {};
+
+    for (const itemId of item_ids) {
+      // Find equipment in player inventory
+      const item = db.prepare(`
+        SELECT * FROM player_items
+        WHERE id = ? AND player_id = ? AND item_type = 'equipment' AND count > 0
+      `).get(itemId, userId);
+
+      if (!item) {
+        results.push({ item_id: itemId, success: false, error: '装备不存在或已分解' });
+        continue;
+      }
+
+      // Determine quality from item name or a quality field
+      const name = (item.item_name || '').toLowerCase();
+      const quality = name.includes('紫') || name.includes('史诗') ? 'purple'
+        : name.includes('蓝') || name.includes('精良') ? 'blue'
+        : name.includes('橙') || name.includes('传说') ? 'orange'
+        : 'white';
+
+      // Calculate materials gained
+      let iron_ingot = 0, jade = 0, refined_iron = 0, gem = null;
+
+      if (quality === 'white') {
+        iron_ingot = 1;
+      } else if (quality === 'blue') {
+        iron_ingot = 2;
+        jade = 1;
+      } else if (quality === 'purple') {
+        iron_ingot = 0;
+        jade = 2;
+        refined_iron = 2;
+        // Determine gem type from name
+        if (name.includes('火')) gem = 'fire_crystal';
+        else if (name.includes('雷')) gem = 'thunder_crystal';
+        else if (name.includes('冰')) gem = 'ice_crystal';
+        else gem = 'jade';
+      }
+
+      // Reduce item count
+      if (item.count > 1) {
+        db.prepare(`UPDATE player_items SET count = count - 1 WHERE id = ?`).run(itemId);
+      } else {
+        db.prepare(`DELETE FROM player_items WHERE id = ?`).run(itemId);
+      }
+
+      // Add gained materials
+      gained.iron_ingot = (gained.iron_ingot || 0) + iron_ingot;
+      gained.jade = (gained.jade || 0) + jade;
+      gained.refined_iron = (gained.refined_iron || 0) + refined_iron;
+      if (gem) gained[gem] = (gained[gem] || 0) + 1;
+
+      results.push({
+        item_id: itemId,
+        success: true,
+        quality,
+        gained: { iron_ingot, jade, refined_iron, gem }
+      });
+    }
+
+    // Upsert gained materials into player_items / forge_materials
+    for (const [matName, count] of Object.entries(gained)) {
+      if (count <= 0) continue;
+      try {
+        db.prepare(`
+          INSERT INTO forge_materials (player_id, material_name, quantity, updated_at)
+          VALUES (?, ?, ?, datetime('now'))
+          ON CONFLICT(player_id, material_name)
+          DO UPDATE SET quantity = quantity + ?, updated_at = datetime('now')
+        `).run(userId, matName, count, count);
+      } catch (e) {
+        // Fallback: upsert in player_items
+        try {
+          const existing = db.prepare(`
+            SELECT id, count FROM player_items
+            WHERE player_id = ? AND item_name = ? AND item_type = 'material'
+          `).get(userId, matName);
+          if (existing) {
+            db.prepare(`UPDATE player_items SET count = count + ? WHERE id = ?`).run(count, existing.id);
+          } else {
+            db.prepare(`
+              INSERT INTO player_items (player_id, item_name, item_type, icon, count, source)
+              VALUES (?, ?, 'material', 'material', ?, 'forge_decompose')
+            `).run(userId, matName, count);
+          }
+        } catch (e2) {
+          console.error('[Forge] decompose material upsert error:', e2.message);
+        }
+      }
+    }
+
+    res.json({ success: true, results, total_gained: gained });
+  } catch (err) {
+    console.error('[Forge] POST /decompose error:', err.message);
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
+});
+
+// ========== POST /forge/recycle — recycle items/materials for spirit stones ==========
+router.post('/recycle', (req, res) => {
+  const db = getDb();
+  try {
+    const { player_id, userId: bodyUserId, item_id, quantity } = req.body;
+    const userId = bodyUserId || player_id || extractUserId(req);
+
+    if (!item_id) {
+      return res.json({ success: false, error: '缺少 item_id' });
+    }
+
+    const numQty = Math.max(1, parseInt(quantity) || 1);
+
+    // Find item in player inventory
+    const item = db.prepare(`
+      SELECT * FROM player_items
+      WHERE id = ? AND player_id = ?
+    `).get(item_id, userId);
+
+    if (!item) {
+      return res.json({ success: false, error: '物品不存在' });
+    }
+
+    if (item.count < numQty) {
+      return res.json({ success: false, error: `背包中只有 ${item.count} 个` });
+    }
+
+    const name = (item.item_name || '').toLowerCase();
+    const itemType = item.item_type || 'material';
+
+    // Determine recycle value (spirit stones gained)
+    let recycleValue = 0;
+    if (itemType === 'equipment') {
+      // Equipment: based on quality
+      if (name.includes('橙') || name.includes('传说')) recycleValue = 500;
+      else if (name.includes('紫') || name.includes('史诗')) recycleValue = 100;
+      else if (name.includes('蓝') || name.includes('精良')) recycleValue = 20;
+      else recycleValue = 5;
+    } else {
+      // Materials: predefined values
+      const MATERIAL_VALUES = {
+        iron_ingot: 5, steel_ingot: 15, refined_iron: 50,
+        jade: 20, jade_fragment: 10, fire_crystal: 50,
+        thunder_crystal: 50, ice_crystal: 50, dragon_scale: 200,
+      };
+      recycleValue = MATERIAL_VALUES[name] || 5;
+    }
+
+    const totalLingshi = recycleValue * numQty;
+
+    // Consume items
+    if (item.count > numQty) {
+      db.prepare(`UPDATE player_items SET count = count - ? WHERE id = ?`).run(numQty, item_id);
+    } else {
+      db.prepare(`DELETE FROM player_items WHERE id = ?`).run(item_id);
+    }
+
+    // Add spirit stones
+    try {
+      db.prepare(`UPDATE Users SET lingshi = lingshi + ? WHERE id = ?`).run(totalLingshi, userId);
+    } catch (e) {
+      console.error('[Forge] recycle lingshi update error:', e.message);
+    }
+
+    res.json({
+      success: true,
+      message: `回收成功！获得 ${totalLingshi} 灵石`,
+      recycled: { item_id, item_name: item.item_name, quantity: numQty, lingshi_gained: totalLingshi }
+    });
+  } catch (err) {
+    console.error('[Forge] POST /recycle error:', err.message);
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
+});
+
 module.exports = router;

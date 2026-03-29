@@ -409,4 +409,136 @@ router.post('/refresh', (req, res) => {
   }
 });
 
+// ========== GET /commission/tasks — alias for /list ==========
+router.get('/tasks', (req, res) => {
+  const db = getDb();
+  try {
+    const userId = extractUserId(req);
+    const realm = getPlayerRealm(db, userId);
+
+    const activeTasks = db.prepare(`
+      SELECT * FROM commission_tasks
+      WHERE player_id = ? AND status = 'active'
+    `).all(userId);
+
+    const completedTasks = db.prepare(`
+      SELECT * FROM commission_tasks
+      WHERE player_id = ? AND status = 'completed'
+      ORDER BY completed_at DESC LIMIT 5
+    `).all(userId);
+
+    const available = COMMISSION_TEMPLATES
+      .filter(t => t.minRealm <= realm)
+      .map(t => {
+        const active = activeTasks.find(at => at.template_id === t.id);
+        return {
+          ...t,
+          hasActive: !!active,
+          activeId: active?.id || null,
+          progress: active?.progress || 0,
+          status: active?.status || null,
+        };
+      });
+
+    res.json({
+      success: true,
+      available,
+      activeTasks,
+      completedTasks,
+      dailyLimit: 3,
+      todayCompleted: completedTasks.filter(t => {
+        const d = getShanghaiDateStr();
+        return t.completed_at && t.completed_at.startsWith(d);
+      }).length,
+    });
+  } catch (err) {
+    console.error('[Commission] GET /tasks error:', err.message);
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
+});
+
+// ========== POST /commission/complete — alias for /claim ==========
+router.post('/complete', (req, res) => {
+  const db = getDb();
+  try {
+    const { task_id, player_id, userId: bodyUserId } = req.body;
+    const userId = bodyUserId || player_id || extractUserId(req);
+
+    if (!task_id) {
+      return res.json({ success: false, error: '缺少task_id' });
+    }
+
+    const task = db.prepare(`
+      SELECT * FROM commission_tasks WHERE id = ? AND player_id = ?
+    `).get(task_id, userId);
+
+    if (!task) {
+      return res.json({ success: false, error: '任务不存在' });
+    }
+
+    if (task.status !== 'completed') {
+      return res.json({ success: false, error: '任务尚未完成，无法领取奖励' });
+    }
+
+    if (task.progress < task.target) {
+      return res.json({ success: false, error: '任务进度不足' });
+    }
+
+    const claimed = db.prepare(`
+      SELECT * FROM commission_rewards WHERE task_id = ?
+    `).get(task_id);
+
+    if (claimed) {
+      return res.json({ success: false, error: '奖励已领取' });
+    }
+
+    const template = COMMISSION_TEMPLATES.find(t => t.id === task.template_id);
+    const rewardLingshi = template?.reward_lingshi || task.reward_lingshi || 0;
+    const rewardExp = template?.reward_exp || task.reward_exp || 0;
+
+    db.prepare(`
+      UPDATE commission_tasks SET status = 'claimed' WHERE id = ?
+    `).run(task_id);
+
+    db.prepare(`
+      INSERT INTO commission_rewards (player_id, task_id, reward_lingshi, reward_exp)
+      VALUES (?, ?, ?, ?)
+    `).run(userId, task_id, rewardLingshi, rewardExp);
+
+    try {
+      db.prepare(`UPDATE Users SET lingshi = lingshi + ? WHERE id = ?`).run(rewardLingshi, userId);
+    } catch (e) {
+      console.error('[Commission] Failed to add lingshi:', e.message);
+    }
+
+    try {
+      const user = db.prepare('SELECT exp, level FROM Users WHERE id = ?').get(userId);
+      if (user) {
+        const newExp = (user.exp || 0) + rewardExp;
+        const expNeeded = user.level * 100;
+        if (newExp >= expNeeded) {
+          db.prepare('UPDATE Users SET exp = ?, level = level + 1 WHERE id = ?').run(newExp - expNeeded, userId);
+        } else {
+          db.prepare('UPDATE Users SET exp = ? WHERE id = ?').run(newExp, userId);
+        }
+      }
+    } catch (e) {
+      console.error('[Commission] Failed to add exp:', e.message);
+    }
+
+    res.json({
+      success: true,
+      message: `领取成功！获得 ${rewardLingshi} 灵石，${rewardExp} 经验`,
+      rewards: { lingshi: rewardLingshi, exp: rewardExp },
+    });
+  } catch (err) {
+    console.error('[Commission] POST /complete error:', err.message);
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
+});
+
 module.exports = router;
