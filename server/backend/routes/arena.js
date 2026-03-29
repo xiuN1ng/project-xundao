@@ -92,6 +92,7 @@ function initArenaTables() {
     // 为已有表添加新增列（ALTER TABLE 对已存在表无效，用此方式兼容）
     try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank INTEGER DEFAULT 0"); } catch(e) {}
     try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank_id INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE arena_player ADD COLUMN extra_challenges_bought INTEGER DEFAULT 0"); } catch(e) {}
     Logger.info('arena_player表初始化完成');
   } catch (err) {
     Logger.warn('arena_player表初始化失败:', err.message);
@@ -402,6 +403,8 @@ router.get('/rank/:userId', (req, res) => {
 
     // 检查每日数据
     const dailyInfo = checkAndResetDailyChallenges(userId);
+    const extraBought = arenaPlayer.extra_challenges_bought || 0;
+    const effectiveLimit = dailyChallengeCount + extraBought;
 
     res.json({
       success: true,
@@ -425,7 +428,9 @@ router.get('/rank/:userId', (req, res) => {
         daily: {
           challengesUsed: dailyInfo.challengesUsed,
           dailyChallengeCount,
-          remainingChallenges: dailyChallengeCount - dailyInfo.challengesUsed,
+          extraChallengesBought: extraBought,
+          effectiveMaxChallenges: effectiveLimit,
+          remainingChallenges: Math.max(0, effectiveLimit - dailyInfo.challengesUsed),
           dailyRewardClaimed: dailyInfo.dailyRewardClaimed
         },
         season: {
@@ -707,18 +712,60 @@ router.post('/challenge', (req, res) => {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
 
-    // 检查每日挑战次数
-    const dailyInfo = checkAndResetDailyChallenges(player_id);
+    // 检查每日挑战次数（原子操作：先尝试预留一个挑战名额）
     const vipLevel = player.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    const today = getDateString();
 
-    if (dailyInfo.challengesUsed >= dailyChallengeCount) {
-      return res.status(400).json({
-        success: false,
-        error: '今日挑战次数已用完',
-        remaining: 0,
-        maxChallenges: dailyChallengeCount
-      });
+    // 读取额外购买的挑战次数
+    const arenaPlayerInfo = db.prepare(
+      'SELECT extra_challenges_bought FROM arena_player WHERE player_id = ?'
+    ).get(player_id);
+    const extraBought = arenaPlayerInfo ? arenaPlayerInfo.extra_challenges_bought || 0 : 0;
+    const effectiveLimit = dailyChallengeCount + extraBought;
+
+    // 原子预留：只有当日挑战次数 < (基础次数 + 额外购买次数) 时才+1
+    const reserveResult = db.prepare(`
+      UPDATE arena_player
+      SET daily_challenges_used = daily_challenges_used + 1,
+          last_challenge_reset = COALESCE(last_challenge_reset, CURRENT_TIMESTAMP)
+      WHERE player_id = ?
+        AND (
+          DATE(last_challenge_reset) = ?
+          OR last_challenge_reset IS NULL
+        )
+        AND daily_challenges_used < ?
+    `).run(player_id, today, effectiveLimit);
+
+    if (reserveResult.changes === 0) {
+      // 可能：日期已跨天（自动重置为0）或者次数已满
+      const afterReset = checkAndResetDailyChallenges(player_id);
+      if (afterReset.challengesUsed >= effectiveLimit) {
+        return res.status(400).json({
+          success: false,
+          error: '今日挑战次数已用完',
+          remaining: 0,
+          maxChallenges: dailyChallengeCount,
+          extraChallengesBought: extraBought,
+          canBuyExtra: true
+        });
+      }
+      // 跨日重置后还有名额，再次尝试预留
+      const retryResult = db.prepare(`
+        UPDATE arena_player
+        SET daily_challenges_used = daily_challenges_used + 1
+        WHERE player_id = ? AND daily_challenges_used < ?
+      `).run(player_id, effectiveLimit);
+      if (retryResult.changes === 0) {
+        return res.status(400).json({
+          success: false,
+          error: '今日挑战次数已用完',
+          remaining: 0,
+          maxChallenges: dailyChallengeCount,
+          extraChallengesBought: extraBought,
+          canBuyExtra: true
+        });
+      }
     }
 
     // 获取对手信息
@@ -765,7 +812,6 @@ router.post('/challenge', (req, res) => {
     const defenderPointsLoss = attackerWin ? Math.max(defenderRank.losePoints, 5) : 0;
 
     // 更新数据
-    const today = getDateString();
     const newAttackerPoints = Math.max(0, attackerArena.arena_points + attackerPointsGain - attackerPointsLoss);
     const newDefenderPoints = Math.max(0, defenderArena.arena_points + defenderPointsGain - defenderPointsLoss);
 
@@ -781,7 +827,6 @@ router.post('/challenge', (req, res) => {
           win_count = win_count + ?,
           lose_count = lose_count + ?,
           total_battles = total_battles + 1,
-          daily_challenges_used = daily_challenges_used + 1,
           last_challenge_reset = ?,
           highest_rank = CASE WHEN ? > highest_rank THEN ? ELSE highest_rank END,
           highest_rank_id = CASE WHEN ? > highest_rank_id THEN ? ELSE highest_rank_id END,
@@ -896,7 +941,7 @@ router.post('/challenge', (req, res) => {
           pointsGained: attackerPointsGain,
           pointsLost: attackerPointsLoss
         },
-        remainingChallenges: dailyChallengeCount - dailyInfo.challengesUsed - 1
+        remainingChallenges: effectiveLimit - dailyInfo.challengesUsed - 1
       }
     });
 
@@ -1058,6 +1103,8 @@ router.get('/info', (req, res) => {
     const dailyInfo = checkAndResetDailyChallenges(userId);
     const vipLevel = db.prepare('SELECT vip_level FROM player WHERE id = ?').get(userId)?.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    const extraBought = arenaPlayer.extra_challenges_bought || 0;
+    const effectiveLimit = dailyChallengeCount + extraBought;
 
     // 计算排名
     const totalPlayers = db.prepare('SELECT COUNT(*) as count FROM arena_player').get().count || 1;
@@ -1083,7 +1130,9 @@ router.get('/info', (req, res) => {
           : 0,
         daily: {
           challengesUsed: dailyInfo.challengesUsed,
-          remainingChallenges: Math.max(0, dailyChallengeCount - dailyInfo.challengesUsed),
+          extraChallengesBought: extraBought,
+          effectiveMaxChallenges: effectiveLimit,
+          remainingChallenges: Math.max(0, effectiveLimit - dailyInfo.challengesUsed),
           maxChallenges: dailyChallengeCount
         },
         season: {
@@ -1118,13 +1167,18 @@ router.post('/match', (req, res) => {
     const dailyInfo = checkAndResetDailyChallenges(userId);
     const vipLevel = player.vip_level || 0;
     const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    const arenaPlayerForMatch = getOrCreateArenaPlayer(userId);
+    const extraBought = arenaPlayerForMatch ? arenaPlayerForMatch.extra_challenges_bought || 0 : 0;
+    const effectiveLimit = dailyChallengeCount + extraBought;
 
-    if (dailyInfo.challengesUsed >= dailyChallengeCount) {
+    if (dailyInfo.challengesUsed >= effectiveLimit) {
       return res.status(400).json({
         success: false,
         error: '今日挑战次数已用完',
         remainingChallenges: 0,
-        maxChallenges: dailyChallengeCount
+        maxChallenges: dailyChallengeCount,
+        extraChallengesBought: extraBought,
+        canBuyExtra: true
       });
     }
 
@@ -1205,12 +1259,93 @@ router.post('/match', (req, res) => {
             ? Math.round((target.win_count / (target.win_count + target.lose_count)) * 100)
             : 0
         },
-        remainingChallenges: dailyChallengeCount - dailyInfo.challengesUsed,
-        maxChallenges: dailyChallengeCount
+        remainingChallenges: Math.max(0, effectiveLimit - dailyInfo.challengesUsed),
+        maxChallenges: dailyChallengeCount,
+        extraChallengesBought: extraBought,
+        effectiveMaxChallenges: effectiveLimit
       }
     });
   } catch (error) {
     Logger.error('POST /match 错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /buy-challenge - 用灵石购买额外挑战次数
+router.post('/buy-challenge', (req, res) => {
+  try {
+    const userId = req.userId || parseInt(req.body.player_id) || parseInt(req.body.userId);
+    const quantity = Math.max(1, parseInt(req.body.quantity) || 1);
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+
+    if (!db || !ArenaSystem) {
+      return res.status(500).json({ success: false, error: '系统不可用' });
+    }
+
+    // 每额外挑战一次消耗50灵石
+    const costPerChallenge = ArenaSystem.challengeConfig.refreshCost || 50;
+    const totalCost = costPerChallenge * quantity;
+
+    // 获取玩家灵石
+    const player = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    if ((player.lingshi || 0) < totalCost) {
+      return res.status(400).json({
+        success: false,
+        error: `灵石不足，需要${totalCost}灵石，当前${player.lingshi || 0}`,
+        required: totalCost,
+        current: player.lingshi || 0
+      });
+    }
+
+    // 确保 arena_player 记录存在
+    getOrCreateArenaPlayer(userId);
+
+    // 重置每日次数（如跨日）
+    checkAndResetDailyChallenges(userId);
+
+    // 扣除灵石
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalCost, userId);
+
+    // 增加 extra_challenges_bought
+    db.prepare(`
+      UPDATE arena_player
+      SET extra_challenges_bought = extra_challenges_bought + ?
+      WHERE player_id = ?
+    `).run(quantity, userId);
+
+    // 获取最终挑战次数状态
+    const dailyInfo = checkAndResetDailyChallenges(userId);
+    const vipLevel = player.vip_level || 0;
+    const dailyChallengeCount = ArenaSystem.getDailyChallengeCount(vipLevel);
+    const arenaInfo = db.prepare(
+      'SELECT extra_challenges_bought FROM arena_player WHERE player_id = ?'
+    ).get(userId);
+    const extraBought = arenaInfo ? arenaInfo.extra_challenges_bought || 0 : 0;
+    const effectiveLimit = dailyChallengeCount + extraBought;
+    const remaining = Math.max(0, effectiveLimit - dailyInfo.challengesUsed);
+
+    res.json({
+      success: true,
+      data: {
+        message: `购买成功，获得${quantity}次额外挑战`,
+        cost: totalCost,
+        extraChallengesBought: quantity,
+        totalExtraChallenges: extraBought,
+        remainingChallenges: remaining,
+        maxChallenges: dailyChallengeCount,
+        effectiveMaxChallenges: effectiveLimit,
+        remainingSpiritStones: (player.lingshi || 0) - totalCost
+      }
+    });
+  } catch (error) {
+    Logger.error('POST /buy-challenge 错误:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
