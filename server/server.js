@@ -3582,6 +3582,15 @@ try {
   Logger.info('灵兽出战系统API不可用:', e.message);
 }
 
+// ============ 交易市场系统 API ============
+try {
+  const tradeApi = require('./backend/routes/trade');
+  app.use('/api/trade', tradeApi);
+  Logger.info('✅ 交易市场系统 API 已加载');
+} catch (e) {
+  Logger.info('交易市场API不可用:', e.message);
+}
+
 // ============ 仙侣系统 API ============
 
 // 亲密度等级配置
