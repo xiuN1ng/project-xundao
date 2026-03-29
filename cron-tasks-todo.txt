@@ -1858,7 +1858,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B] [P1-59-1] Festival节日活动系统 - routes/festival.js: GET /festival + POST /festival/join，活动类型：红包雨/灯谜/烟花  # 2026-03-30 完成 | 2026-03-28 3b4702e2
 [B] [P1-59-2] Commission委托任务系统 - routes/commission.js: GET /list + POST /accept + POST /complete，难度分级+奖励  # 2026-03-30 完成 | 2026-03-28 3b4702e2
 [B] [P1-59-4] Lundao论道 API路径修复 - 确认 core/api.js 中 lundaoApi.getOpponents() 路径，改为 /lundao/?player_id=X  # 2026-03-29
-[B] [P2-59-1] 灵兽遭遇捕获系统 - POST /api/beast/encounter，探索按钮消耗灵石触发随机灵兽遭遇+捕获判定  # 2026-04-02
+[B] [P2-59-1] 灵兽遭遇捕获系统 - POST /api/beast/encounter，探索按钮消耗灵石触发随机灵兽遭遇+捕获判定  # 完成 | 2026-03-29 c3e50817
 [B] [NF-59-1] 天道领悟系统 - routes/comprehension.js + game/comprehension_system.js，领悟点获取+技能树解锁  # 2026-04-05
 [B] [NF-59-2] 洞府访客系统 - POST /cave/visit + POST /cave/rate + GET /cave/ranking  # 2026-04-07
 
@@ -2850,3 +2850,111 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/game/equipment_set_storage.js (新建)
   - 内容: 套装配置数据(青云/玄武/朱雀)+套装激活检测逻辑+属性加成计算
   - 截止: 2026-04-03
+
+# ========== 从策划提案分发 — 2026-03-29（第75轮）============
+# 分发时间: 2026-03-29 08:24
+
+## P0 紧急（成就 + 每日任务）
+[B-P0-75-1] 成就进度驱动修复  # 完成 | 2026-03-29
+  文件: server/backend/routes/cultivation.js + game/achievement_trigger_service.js
+  问题: 31个成就 progress 全为0，玩家已达 Realm 4 但 cultivate 类成就进度为0
+  根因: achievement_trigger_service.js triggerAchievement() 接收的 realm 参数是字符串"元婴"而非数字4
+  修复1: cultivation.js POST /breakthrough 成功后直接用数值更新 achievement_progress 表
+  修复2: 对 playerId=1 一次性补偿写入: realm_break 类成就 (id 1-6) 的 progress
+  修复3: combat 类成就 (id 10-13): player combat=1850，应触发 id=10 (target=1000)
+  修复4: achievement_trigger_service.js 统一用 parseInt(realm) 而非直接比较字符串
+  验证: GET /api/achievement/list?player_id=1 → id=1 progress=4, completed=true
+  截止: 2026-03-30
+
+[B-P0-75-2] 每日任务 progress 写入  # 完成 | 2026-03-29
+  文件: server/backend/routes/dailyQuest.js
+  问题: GET /api/dailyQuest/daily 返回任务模板无 progress 字段
+  修复1: 查询 daily_quest_progress 表合并每个任务的当前 progress
+  修复2: 返回格式改为 rewards: [{id, name, progress, target, completed, claimed}]
+  修复3: cultivation.js POST /start 成功后调用 updateDailyQuestProgress(1, 'cultivate', 1)
+  修复4: 对 playerId=1 所有任务做补偿进度写入
+  验证: GET /api/dailyQuest/daily → rewards[0].progress=4
+  截止: 2026-03-30
+
+## P1 重要
+[B-P1-75-1] 排行榜实时计算 combatPower  # 完成 | 2026-03-29
+  文件: server/backend/routes/rank.js
+  问题: 真实玩家 userId=2~26 全部 combatPower=1350（默认值）
+  修复: SELECT u.id, FLOOR(u.attack*10 + u.defense*5 + u.hp/10) as combat_power FROM Users u WHERE u.id > 0
+  同时: UPDATE Users SET combat_power = FLOOR(attack*10+defense*5+hp/10) 批量更新
+  截止: 2026-03-31
+
+[B-P1-75-2] 竞技场 AI 池扩展  # 完成 | 2026-03-29
+  文件: server/backend/routes/arena.js
+  问题: 仅3个AI对手（level 5/10/18），玩家 Level 16 无合适对手
+  修复: 扩展 arena_ai_pool 至15个AI，level 5/10/15/20/25/30 各2-3个
+  AI combatPower 动态: level*100 + random(0, level*10)
+  截止: 2026-03-31
+
+[B-P1-75-3] 灵兽捕捉持久化修复  # 完成 | 2026-03-29
+  文件: server/backend/routes/beast.js
+  问题: 所有灵兽 owned=null，capture 端点未写入 player_beasts 表
+  修复: 检查 INSERT INTO player_beasts(player_id, template_id, ...) 列名匹配
+  验证: POST /api/beast/capture 后 GET /api/beast/list 返回 owned=true
+  截止: 2026-03-31
+
+## P2
+[B-P2-75-1] 世界BOSS自动刷新  # 完成 | 2026-03-29
+  文件: server/backend/routes/worldBoss.js
+  问题: hasBoss=false 后不会自动生成，BOSS 内容空白
+  修复: 每4小时自动刷新 BOSS，server.js 启动时检查距上次刷新
+  截止: 2026-04-02
+
+[B-P2-75-2] 经脉系统修复  # 完成 | 2026-03-29
+  文件: server/backend/routes/meridian.js
+  问题: meridianPoints=0，totalEffect 百分比全为"0.0%"
+  修复: realm>=2 自动 INSERT meridian_branches 记录
+  修复: totalEffect.percentage 渲染时 /100 处理
+  截止: 2026-04-02
+
+[B-P2-75-3] 天命探查器后端  # 完成 | 2026-03-29
+  文件: server/backend/routes/adventure_encounter.js (新建)
+  端点: GET /api/adventure-encounter/status, POST /api/adventure-encounter/trigger, POST /api/adventure-encounter/claim
+  冷却: 24小时，存储在 player_adventure_cooldown 表
+  截止: 2026-04-03
+
+
+## 2026-03-29 早间任务 (第58轮)
+[P0-29-1] sect.js: 修复DB路径 `path.join(__dirname, '..', '..', 'data')` → `path.join(__dirname, '..', 'data')` (line 6) — 指向server/data应改为server/backend/data
+[P1-29-1] chat.js: 第421行 SELECT combat_power 不存在，需从 attack*10+defense*5+hp/10 计算
+[P1-29-2] lundao: 新增 POST /answer 答案提交+结算逻辑
+[P2-29-1] sect: 挂载sect-activity路由到 /api/sect/activity
+[P2-29-2] adventure: 新增 POST /do 探索执行逻辑
+[P2-29-3] paradise: 新增 POST /enter 进入 + /collect 结算
+[持续] DailyQuest: cultivation/start成功后需 eventBus.emit('cultivation:completed')
+[持续] Welfare: 统一使用 Asia/Shanghai 时区处理日期
+
+# ========== 2026-03-29 新增 P0/B 任务 ==========
+[P0-B-77-1] 论道台 API 端点修复
+  文件: server/backend/routes/lundao.js
+  修复1: 添加 router.get('/status') 作为 router.get('/') 的别名
+  修复2: 添加 router.post('/fight') 作为 router.post('/challenge') 的别名
+  截止: 2026-03-30
+
+[P0-B-77-2] 充值系统全面修复
+  文件: server/backend/routes/payment.js
+  修复1: /callback 端点必须 UPDATE Users SET diamonds = diamonds + ? WHERE id = ?
+  修复2: 添加 GET /my-packages 端点
+  修复3: orders 数组改为 DB 持久化（payment_orders 表）
+  截止: 2026-03-30
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-77-1] 抽奖十连保底逻辑
+  文件: server/backend/routes/lottery.js
+  修复: drawTen() 前9次正常概率，第10次保证≥精良
+  截止: 2026-03-31
+
+[P1-B-77-2] 成就系统数据统一
+  文件: server/server.js (inline) + backend/routes/achievement.js
+  修复: 删除 server.js inline ACHIEVEMENTS，统一走 backend/routes/achievement
+  截止: 2026-03-31
+
+[NF-B-77-1] 宗门篝火答题活动后端
+  文件: server/backend/routes/sect-quiz.js (新建)
+  内容: 题目随机抽取/计时/奖励发放/排行榜
+  截止: 2026-04-05
