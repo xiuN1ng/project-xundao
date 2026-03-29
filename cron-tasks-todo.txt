@@ -1819,7 +1819,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B] [P1-28-N-2] Chat聊天路由创建 - 世界/宗门/私聊三频道，POST /send + GET历史  # 2026-03-29
 [B] [P1-28-N-4] Market挂单功能 - POST /market/list + 购买流程 + 材料来源打通  # 2026-03-29
 [B] [新功能-1] 灵兽出战激活系统 - 出战属性加成 + 战斗技能 + 升级吞噬  # 2026-03-29
-[B] [新功能-2] 每日限购礼包商城 - 灵气礼包/修炼礼包/突破礼包 + 月卡/战令入口  # 2026-03-29
+[B] [新功能-2] 每日限购礼包商城 - 灵气礼包/修炼礼包/突破礼包 + 月卡/战令入口  # 完成 | 2026-03-29 bde56e45
 
 # === P2（截止 2026-03-30）===
 [B] [P2-28-N-1] DailyQuest进度驱动修复 - cultivation/chapter/shop成功回调中调用updateDailyQuestProgress  # 2026-03-30
