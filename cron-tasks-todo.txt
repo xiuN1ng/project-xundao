@@ -2739,11 +2739,12 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-30
 
 # ========== 2026-03-29 新增 P2/B 任务 ==========
-[P2-B-29-1] Lingdao currentLingshi 读取错误
+[P2-B-29-1] Lingdao currentLingshi 读取错误  # 完成 | 2026-03-29 9f50c1e5
   - 文件: server/backend/routes/lingdao.js
   - 问题: 返回 currentLingshi:0，但玩家实际 lingshi=5903
   - 修复: 从 player.lingshi 正确读取
   - 截止: 2026-04-01
+  - 验证: GET /api/lingdao/check?player_id=1 → currentLingshi: 6614 ✓
 
 [P2-B-29-2] 成就七日冲刺活动后端
   - 文件: server/backend/routes/achievement.js 或新文件
@@ -2958,3 +2959,120 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   文件: server/backend/routes/sect-quiz.js (新建)
   内容: 题目随机抽取/计时/奖励发放/排行榜
   截止: 2026-04-05
+
+# ========== 2026-03-29 第83轮 游戏策划提案 ==========
+
+## P0 — 紧急修复（截止 2026-03-30）
+
+[P0-83-B-1] Achievement breakthrough 事件驱动修复
+  问题: cultivation breakthrough 到化神(realm=5)后，achievement id=5 progress=0, completed=0
+  根因: achievement_progress 表有旧数据但 breakthrough 后未更新
+  修复: 
+    1. cultivation.js POST /breakthrough 后执行 UPDATE achievement_progress SET progress=realm+1, completed=1 WHERE user_id=? AND achievement_id=? AND target<=realm+1
+    2. 补偿写入: player realm=5 → achievement id=5 progress=6, completed=1
+  文件: server/backend/routes/cultivation.js, routes/achievement.js
+  截止: 2026-03-30
+
+[P0-83-B-2] DailyQuest cultivation/start 进度未写入
+  问题: daily_quest_progress 今日(2026-03-29)完全为空，cultivation已进行8次
+  根因: cultivation/start 成功后未调用 updateDailyQuestProgress
+  修复:
+    1. cultivation.js POST /start 成功后调用 updateDailyQuestProgress(userId, 'cultivate', 1)
+    2. 补偿写入: user_id=1 今日 cultivate 类任务 progress=8
+  文件: server/backend/routes/cultivation.js, routes/dailyQuest.js
+  截止: 2026-03-30
+
+[P0-83-B-3] Rank/combat 战力严重失衡
+  问题: 排行榜第1名 combatPower=145000，玩家真实战力约2650，差距55倍
+  根因: arena_ai_pool AI等级/属性超出玩家阶段
+  修复:
+    1. AI池按玩家level分档: level<=20(tier0)/<=45(tier1)/<=70(tier2)/else(tier3)
+    2. 玩家16级 → AI池 level 10-25, combatPower 800-3500
+    3. rank/combat 查询改为 SELECT user_id>0 ORDER BY FLOOR(attack*10+defense*5+hp/10) DESC
+  文件: server/backend/routes/rank.js, routes/arena.js
+  截止: 2026-03-30
+
+## P1 — 重要（截止 2026-03-31）
+
+[P1-83-B-1] Paradise occupiedBy 信息
+  问题: spirit-field occupied=true 但无占用者名称/剩余时间
+  修复: GET /api/paradise/info 时 occupied=true 返回 { occupiedBy: { name, endTime, remainingSeconds } }
+  文件: server/backend/routes/paradise.js
+  截止: 2026-03-31
+
+[P1-83-B-2] Beast /my owned=null 错误
+  问题: /api/beast/my?userId=1 返回 "灵兽不存在"，所有灵兽 owned=null
+  修复: 检查 player_beasts INSERT 时 owned 字段设置，修复后重新测试 capture
+  文件: server/backend/routes/beast.js
+  截止: 2026-03-31
+
+[P1-83-B-3] 自动修炼挂机后端
+  问题: 玩家需手动反复点击修炼
+  修复: POST /api/cultivation/auto-start { userId, autoBreakthrough: bool }
+    - 每5秒自动调用 cultivation/start
+    - autoBreakthrough=true 时灵气满自动 breakthrough
+    - 灵石<100 或 realm达到上限时停止
+  文件: server/backend/routes/cultivation.js
+  截止: 2026-04-02
+
+## P2 — 体验优化（截止 2026-04-03）
+
+[P2-83-B-1] WorldBoss 自动刷新验证
+  问题: hasBoss=false，无BOSS可挑战
+  修复: 检查 worldboss.js 自动刷新逻辑；添加 POST /api/worldboss/refresh 手动刷新
+  文件: server/backend/routes/worldboss.js
+  截止: 2026-04-03
+
+[P2-83-B-2] Chapter stars 更新
+  问题: 所有章节 stars=0，通关无成就感
+  修复: chapter battle 胜利后 UPDATE chapters SET stars=MAX(stars, ?) 
+  文件: server/backend/routes/chapter.js
+  截止: 2026-04-03
+
+[P2-83-B-3] 宗门突袭事件系统
+  文件: server/backend/routes/sect_raid.js (新建)
+  端点: POST /api/sect-raid/start + /join + /claim
+  每天12:00和20:00触发，10分钟限时，3人组队
+  截止: 2026-04-07
+
+
+# ========== 2026-03-29 新增 P0/B 任务（紧急）==========
+[P0-B-29-1] worldboss.js 重导出修复
+  - 文件: server/backend/routes/worldboss.js
+  - 问题: module.exports = require('./WorldBoss') 引用不存在的文件（真正的文件是 worldBoss.js）
+  - 修复: 改为 module.exports = require('./worldBoss') 或直接删除 worldboss.js，保留 worldBoss.js
+  - 截止: 2026-03-29
+
+[P0-B-29-2] 离线收益 API 实现
+  - 文件: server/backend/routes/offline.js (新建)
+  - 实现:
+    GET /api/offline-income/preview?player_id=X → 离线时间+收益预览
+    POST /api/offline-income/claim → 发放收益+写入DB
+    GET /api/offline/info (fallback)
+  - 收益计算: base × level + realm_bonus，上限24小时，月卡加成
+  - 截止: 2026-03-29
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-29-1] 成就进度触发机制
+  - 文件: server/backend/routes/achievement.js
+  - 问题: 所有成就 progress=0，没有触发逻辑
+  - 修复:
+    1. 添加 updateProgress(userId, category, delta) 函数
+    2. 在 cultivation.js breakthrough → 触发 cultivate 类
+    3. 在 arena.js challenge → 触发 combat 类
+    4. 在 forge.js make → 触发 equipment 类
+    5. 在 chapter.js complete → 触发 chapter 类
+  - 截止: 2026-03-31
+
+[P1-B-29-2] 市场 API 完善
+  - 文件: server/backend/routes/market.js
+  - 实现: GET /listings (分页+筛选), POST /buy, POST /sell
+  - 确保在 server/index.js 中正确注册
+  - 截止: 2026-04-01
+
+# ========== 2026-03-29 新增 P1/B 新功能 ==========
+[NF-B-29-1] 装备套装效果后端
+  - 文件: server/backend/routes/equipment.js (新增 suit 相关)
+  - 套装配置: paradise套(2件:HP+1000, 4件:防御+200攻击+100)/心魔套(2件:攻击+150, 4件:暴击+5爆伤+20)/仙风道骨套(2件:修炼速度+20%, 4件:突破加成)
+  - 实现: 套装模板数据 + 穿装备时检查套装激活 + 套装效果叠加到 player stats
+  - 截止: 2026-04-02

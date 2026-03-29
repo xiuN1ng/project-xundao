@@ -737,4 +737,89 @@ router.get('/season', (req, res) => {
 initLundaoTables();
 seedQuestions();
 
+// GET /status - 别名：获取玩家论道状态（与 GET / 相同）
+router.get('/status', (req, res) => {
+  try {
+    const userId = req.user?.id || req.query.userId || req.query.player_id || 1;
+    const player = getPlayerRecord(userId);
+    const today = getTodayStr();
+    const todayChallenges = db.prepare('SELECT COUNT(*) as cnt FROM lundao_challenge WHERE player_id = ? AND DATE(created_at) = ? AND status = ?').get(userId, today, 'completed');
+
+    res.json({
+      success: true,
+      player: player ? {
+        totalScore: player.total_score,
+        currentStreak: player.current_streak,
+        highestStreak: player.highest_streak,
+        totalChallenges: player.total_challenges,
+        correctRate: player.total_challenges > 0 ? Math.round(player.correct_answers / player.total_challenges * 100) : 0,
+        rank: player.rank,
+        rankScore: player.rank_score,
+        season: player.season,
+        dailyRemaining: Math.max(0, 5 - (player.daily_challenges_used || 0)),
+        weeklyRemaining: Math.max(0, 20 - (player.weekly_challenges || 0)),
+      } : null,
+      todayChallenges: todayChallenges?.cnt || 0,
+      maxDaily: 5,
+      maxWeekly: 20,
+    });
+  } catch (err) {
+    Logger.error('GET /lundao/status 错误:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /fight - 别名：发起论道挑战（与 POST /challenge 相同）
+router.post('/fight', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+    const difficulty = parseInt(req.body.difficulty || '2');
+    const player = getPlayerRecord(userId);
+
+    if (!player) {
+      return res.status(400).json({ success: false, error: '玩家记录不存在' });
+    }
+
+    const remaining = Math.max(0, 5 - (player.daily_challenges_used || 0));
+    if (remaining <= 0) {
+      return res.status(400).json({ success: false, error: '今日论道次数已用完' });
+    }
+
+    const questions = getRandomQuestions(5, Math.min(difficulty, 3));
+
+    let challengeId;
+    try {
+      const result = db.prepare(`
+        INSERT INTO lundao_challenge (player_id, challenge_type, questions_count, start_time, status, season)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, 'active', ?)
+      `).run(userId, 'daily', questions.length, getSeason());
+      challengeId = result.lastInsertRowid;
+    } catch (err) {
+      Logger.error('创建论道挑战失败:', err.message);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+
+    const masked = questions.map(q => ({
+      questionId: q.question_id,
+      question: q.question,
+      optionA: q.option_a,
+      optionB: q.option_b,
+      optionC: q.option_c,
+      optionD: q.option_d,
+      difficulty: q.difficulty,
+      category: q.category,
+    }));
+
+    res.json({
+      success: true,
+      challengeId,
+      questions: masked,
+      dailyRemaining: remaining - 1,
+    });
+  } catch (err) {
+    Logger.error('POST /lundao/fight 错误:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
