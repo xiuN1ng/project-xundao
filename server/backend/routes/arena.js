@@ -451,6 +451,116 @@ router.get('/rank/:userId', (req, res) => {
 });
 
 // ============================================
+// GET /rivals/:userId - 获取可挑战对手列表（/opponents 的别名）
+// ============================================
+router.get('/rivals/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!db) {
+      return res.json({ success: false, error: '数据库不可用' });
+    }
+
+    // 获取玩家竞技场数据
+    const arenaPlayer = getOrCreateArenaPlayer(userId);
+    if (!arenaPlayer) {
+      return res.status(500).json({ success: false, error: '竞技场数据获取失败' });
+    }
+
+    // 获取玩家真实属性
+    const playerData = db.prepare('SELECT * FROM player WHERE user_id = ?').get(userId);
+    const usersData = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+    const playerLevel = playerData ? playerData.level : (usersData ? usersData.level : 1);
+    const playerRealm = playerData ? playerData.realm : (usersData ? usersData.realm : 1);
+    const baseAtk = playerData ? playerData.attack : (usersData ? usersData.attack : 100);
+    const baseDef = playerData ? playerData.defense : (usersData ? usersData.defense : 50);
+    const baseHP = playerData ? playerData.hp : (usersData ? usersData.hp : 1000);
+    // 功法加成
+    const gongfaRows = db.prepare(`
+      SELECT gi.*, gt.atkBonus, gt.defBonus, gt.hpBonus, gt.atkPercent, gt.defPercent, gt.hpPercent
+      FROM player_equipped_gongfa peg
+      JOIN gongfa_templates gt ON gt.id = peg.gongfa_id
+      JOIN player_gongfa pg ON pg.gongfa_id = peg.gongfa_id AND pg.user_id = peg.user_id
+      WHERE peg.user_id = ?
+    `).all(userId);
+    let totalGongfaAtk = 0, totalGongfaDef = 0, totalGongfaHp = 0;
+    for (const row of (gongfaRows || [])) {
+      totalGongfaAtk += (row.atkBonus || 0) + Math.floor((baseAtk * (row.atkPercent || 0)) / 100);
+      totalGongfaDef += (row.defBonus || 0) + Math.floor((baseDef * (row.defPercent || 0)) / 100);
+      totalGongfaHp += (row.hpBonus || 0) + Math.floor((baseHP * (row.hpPercent || 0)) / 100);
+    }
+    const finalAtk = baseAtk + totalGongfaAtk;
+    const finalDef = baseDef + totalGongfaDef;
+    const finalHP = baseHP + totalGongfaHp;
+    const playerCombatPower = Math.floor(finalAtk * 10 + finalDef * 5 + finalHP / 10);
+
+    // 根据玩家 tier 选择 AI 池
+    let tier;
+    if (playerLevel <= 20) tier = 0;
+    else if (playerLevel <= 45) tier = 1;
+    else if (playerLevel <= 70) tier = 2;
+    else tier = 3;
+
+    // 获取同 tier 的真实玩家对手
+    const minCp = Math.floor(playerCombatPower * 0.5);
+    const maxCp = Math.floor(playerCombatPower * 1.5);
+    let opponentList = db.prepare(`
+      SELECT u.id, u.nickname, u.level as level, u.realm as realm,
+             FLOOR(u.attack*10+u.defense*5+u.hp/10) as combatPower,
+             COALESCE(ap.total_battles, 0) as totalBattles,
+             COALESCE(ap.win_count, 0) as winCount,
+             'player' as type
+      FROM Users u
+      LEFT JOIN arena_player ap ON ap.player_id = u.id
+      WHERE u.id != ? AND u.id > 0
+        AND FLOOR(u.attack*10+u.defense*5+u.hp/10) BETWEEN ? AND ?
+      ORDER BY RANDOM()
+      LIMIT 5
+    `).all(userId, minCp, maxCp);
+
+    // 获取 AI 对手
+    const aiPool = [
+      { id: -1, nickname: '青云弟子', level: 5, realm: 1, combatPower: 800, totalBattles: 50, winCount: 25, type: 'ai' },
+      { id: -2, nickname: '玄武修士', level: 10, realm: 2, combatPower: 1200, totalBattles: 80, winCount: 40, type: 'ai' },
+      { id: -3, nickname: '金丹真人', level: 18, realm: 4, combatPower: 2200, totalBattles: 150, winCount: 90, type: 'ai' },
+      { id: -4, nickname: '筑基散修', level: 15, realm: 3, combatPower: 1600, totalBattles: 100, winCount: 55, type: 'ai' },
+      { id: -5, nickname: '化神长老', level: 25, realm: 5, combatPower: 3500, totalBattles: 200, winCount: 120, type: 'ai' },
+      { id: -6, nickname: '炼虚期高手', level: 35, realm: 6, combatPower: 5500, totalBattles: 300, winCount: 180, type: 'ai' },
+      { id: -7, nickname: '元婴期散人', level: 45, realm: 5, combatPower: 7500, totalBattles: 400, winCount: 240, type: 'ai' },
+      { id: -8, nickname: '大乘期强者', level: 65, realm: 8, combatPower: 12000, totalBattles: 500, winCount: 300, type: 'ai' },
+    ];
+
+    let tierAis = aiPool.filter(ai => {
+      if (tier === 0) return ai.level <= 25;
+      if (tier === 1) return ai.level > 20 && ai.level <= 50;
+      if (tier === 2) return ai.level > 45 && ai.level <= 75;
+      return ai.level > 70;
+    });
+    tierAis = tierAis.sort(() => Math.random() - 0.5).slice(0, 3);
+
+    // 合并
+    const allOpponents = [...opponentList, ...tierAis].map(opp => ({
+      ...opp,
+      isRecommend: opp.combatPower >= minCp && opp.combatPower <= maxCp,
+      combatWarning: playerCombatPower > 0 && Math.abs(opp.combatPower - playerCombatPower) / playerCombatPower > 0.5 ? '实力悬殊' : null
+    }));
+
+    return res.json({
+      success: true,
+      playerLevel,
+      playerRealm,
+      playerCombatPower,
+      opponents: allOpponents,
+      remainingChallenges: arenaPlayer.challenge_times || 0,
+      seasonEndTime: getSeasonEndTime()
+    });
+  } catch (error) {
+    Logger.error('GET /rivals/:userId 错误:', error);
+    return res.status(500).json({ success: false, error: '服务器错误: ' + error.message });
+  }
+});
+
+// ============================================
 // GET /opponents/:userId - 获取可挑战对手列表（基于战力匹配 + AI分级池）
 // ============================================
 router.get('/opponents/:userId', (req, res) => {

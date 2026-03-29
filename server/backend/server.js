@@ -43,6 +43,14 @@ try {
   // 列已存在
 }
 
+// 初始化任务触发服务（事件总线驱动）
+try {
+  const questTriggerService = require('../game/quest_trigger_service');
+  console.log('✓ 任务触发服务初始化成功');
+} catch (e) {
+  console.log('任务触发服务初始化:', e.message);
+}
+
 const app = express();
 app.locals.db = db; // 共享主数据库实例给所有路由，防止多实例写锁冲突
 const PORT = 3001;
