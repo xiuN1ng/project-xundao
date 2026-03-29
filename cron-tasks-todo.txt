@@ -2817,7 +2817,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-04-03
 
 # ========== 2026-03-29 新增 P0/B 任务（第4次！Beast列名错配）==========
-[P0-B-59-1] Beast player_beasts 列名错配修复（长期未修复！）
+[P0-B-59-1] Beast player_beasts 列名错配修复（长期未修复！）# 完成 | 2026-03-29 1cd0b8be
   - 文件: server/backend/routes/beast.js
   - 问题: SQL用user_id，DB列名是player_id，导致所有灵兽查询返回0行
   - DB实测: player_beasts表列名是player_id，但代码用user_id
@@ -2825,8 +2825,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 同时检查 beast_pity_counter 表的列名一致性
   - 验证: curl /api/beast/my?userId=1 应返回6条记录
   - 截止: 2026-03-30
+  - 完成: game/beast_api.js添加/api/beast/my路由解决被/:id误匹配；server/data/game.db添加缺失列(name/quality/attack/hp/skill_id)并同步backend数据
 
-[P0-B-59-2] Gongfa equip 参数名统一
+[P0-B-59-2] Gongfa equip 参数名统一 # 完成 | 2026-03-29 1cd0b8be
   - 文件: server/backend/routes/gongfa.js
   - 问题: /gongfa/equip 只接受userId，不接受player_id（与其他端点不一致）
   - 修复: 同时接受player_id和userId作为别名
@@ -3037,10 +3038,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 
 # ========== 2026-03-29 新增 P0/B 任务（紧急）==========
-[P0-B-29-1] worldboss.js 重导出修复
+[P0-B-29-1] worldboss.js 重导出修复 # 完成 | 2026-03-29 1cd0b8be
   - 文件: server/backend/routes/worldboss.js
   - 问题: module.exports = require('./WorldBoss') 引用不存在的文件（真正的文件是 worldBoss.js）
-  - 修复: 改为 module.exports = require('./worldBoss') 或直接删除 worldboss.js，保留 worldBoss.js
+  - 修复: 改为 module.exports = require('./worldBoss') 修正大小写
   - 截止: 2026-03-29
 
 [P0-B-29-2] 离线收益 API 实现
