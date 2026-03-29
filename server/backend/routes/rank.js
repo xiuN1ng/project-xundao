@@ -25,21 +25,21 @@ function calcCombatPower(p) {
   return Math.floor(atk * 10 + def * 5 + hp / 10 + level * 500 + realm * 2000);
 }
 
-// 获取战力榜（从 player 表实时查询）
+// 获取战力榜（从 Users 表实时查询，排除 fake AI，真实计算 combatPower）
 function getCombatRank(limit = 50) {
   if (!db) return [];
   try {
     const rows = db.prepare(`
-      SELECT p.user_id as userId,
+      SELECT u.id as userId,
              COALESCE(u.nickname, u.username, '玩家') as name,
-             p.level,
-             p.realm,
-             p.attack,
-             p.defense,
-             p.hp,
-             (p.attack * 10 + p.defense * 5 + p.hp / 10) as combatPower
-      FROM player p
-      LEFT JOIN Users u ON u.id = p.user_id
+             u.level,
+             u.realm,
+             u.attack,
+             u.defense,
+             u.hp,
+             FLOOR(u.attack * 10 + u.defense * 5 + u.hp / 10 + u.level * 50 + u.realm * 500) as combatPower
+      FROM Users u
+      WHERE u.id > 0
       ORDER BY combatPower DESC
       LIMIT ?
     `).all(limit);
@@ -57,18 +57,18 @@ function getCombatRank(limit = 50) {
   }
 }
 
-// 获取等级榜
+// 获取等级榜（从 Users 表，排除 fake AI）
 function getLevelRank(limit = 50) {
   if (!db) return [];
   try {
     const rows = db.prepare(`
-      SELECT p.user_id as userId,
+      SELECT u.id as userId,
              COALESCE(u.nickname, u.username, '玩家') as name,
-             p.level,
-             p.realm
-      FROM player p
-      LEFT JOIN Users u ON u.id = p.user_id
-      ORDER BY p.level DESC, p.realm DESC
+             u.level,
+             u.realm
+      FROM Users u
+      WHERE u.id > 0
+      ORDER BY u.level DESC, u.realm DESC
       LIMIT ?
     `).all(limit);
     return rows.map((r, i) => ({
@@ -112,7 +112,7 @@ function getWealthRank(limit = 50) {
   }
 }
 
-// 获取章节/爬塔榜（基于 tower_progress.highest_floor）
+// 获取章节/爬塔榜（基于 tower_progress.highest_floor，排除 fake AI）
 function getChapterRank(limit = 50) {
   if (!db) return [];
   try {
@@ -123,6 +123,7 @@ function getChapterRank(limit = 50) {
              tp.total_wins as wins
       FROM tower_progress tp
       LEFT JOIN Users u ON u.id = tp.player_id
+      WHERE tp.player_id > 0
       ORDER BY tp.highest_floor DESC, tp.total_wins DESC
       LIMIT ?
     `).all(limit);
