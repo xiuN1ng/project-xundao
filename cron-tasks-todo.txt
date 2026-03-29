@@ -3119,12 +3119,14 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 修改: const DATA_DIR = path.join(__dirname, '..', 'data');
 - 验证: /api/sect/info, /api/sect/create, /api/sect/join 均正常
 - 截止: 2026-03-30
+- # 完成 | 2026-03-29 d531f427
 
 ### [P1-30-AM-1] Arena每日挑战次数超限
 - 文件: server/backend/routes/arena.js
 - 修改: DATE(last_challenge_reset) != DATE('now') 而非字符串比较
 - 增加: challenge前检查remainingChallenges >= 1
 - 截止: 2026-03-30
+- # 完成 | 2026-03-29 d531f427
 
 ### [P1-30-AM-2] 成就系统进度更新
 - 创建: server/backend/services/achievement_trigger.js
@@ -3134,11 +3136,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ### [P1-30-AM-3] sect/applications路由补充
 - 在sect.js添加GET /applications端点（无需sectId参数）
 - 截止: 2026-03-31
+- # 完成 | 2026-03-29 d531f427
 
 ### [P2-30-AM-1] Forge recipeId参数兼容
 - 文件: server/backend/routes/forge.js
 - 修改: const recipeId = req.body.recipeId || req.body.id;
 - 截止: 2026-04-01
+- # 完成 | 2026-03-29 d531f427
 
 ### [NF-30-AM-1] 宗门争霸赛季系统
 - 截止: 2026-04-05
