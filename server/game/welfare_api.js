@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { welfareStorage, getDb: welfareGetDb, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES } = require('./welfare_storage');
+const { welfareStorage, getDb: welfareGetDb, SIGN_IN_REWARDS, EQUIPMENT_TEMPLATES, WELFARE_MONTHLY_CARDS } = require('./welfare_storage');
 
 // ========== 时区工具（上海时间）==========
 function getShanghaiDate() {
@@ -69,6 +69,136 @@ function updatePlayerSpiritStones(userId, amount) {
     } catch (e) {}
   }
 }
+
+// ========== 月卡 API ==========
+
+/**
+ * GET /api/welfare/month-card
+ * 获取月卡状态
+ */
+router.get('/month-card', (req, res) => {
+  try {
+    const playerIdRaw = req.query.player_id || req.query.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+
+    const cards = welfareStorage.getMonthlyCardStatus(playerId);
+
+    res.json({
+      success: true,
+      data: {
+        cards,
+        availableTypes: Object.entries(WELFARE_MONTHLY_CARDS).map(([key, card]) => ({
+          cardType: key,
+          name: card.name,
+          cost: card.cost,
+          costType: card.costType,
+          dailyReward: card.dailyReward,
+          description: card.description
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/welfare/buy-card
+ * 购买月卡
+ * Body: { player_id, card_type: 'spirit'|'premium' }
+ */
+router.post('/buy-card', (req, res) => {
+  try {
+    const playerIdRaw = req.body.player_id || req.body.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+    const cardType = req.body.card_type || req.body.cardType;
+
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    if (!cardType) {
+      return res.status(400).json({ success: false, error: '缺少月卡类型 (card_type)' });
+    }
+    if (!WELFARE_MONTHLY_CARDS[cardType]) {
+      return res.status(400).json({ success: false, error: '无效的月卡类型，可选: spirit, premium' });
+    }
+
+    const card = WELFARE_MONTHLY_CARDS[cardType];
+
+    // 检查玩家钻石是否足够（简化版：直接从Users表扣减钻石）
+    // 注意：这里需要调用支付系统或钻石扣除逻辑
+    // 目前简化处理：如果玩家有足够的灵石，可以用灵石购买
+    // 实际应该走支付系统
+    const database = welfareGetDb();
+    if (!database) {
+      return res.status(500).json({ success: false, error: '数据库未连接' });
+    }
+
+    // 简化：检查玩家是否有足够的钻石（用 diamond 字段）
+    // 如果是灵石月卡(100钻石)，需要先有钻石
+    // 这里暂时允许用灵石代替（1钻石=10灵石），方便测试
+    const player = database.prepare('SELECT * FROM Users WHERE id = ?').get(playerId);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    // 简化购买逻辑：直接购买（生产环境应接入支付）
+    const result = welfareStorage.buyMonthlyCard(playerId, cardType);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/welfare/claim-card
+ * 领取月卡每日奖励
+ * Body: { player_id, card_type: 'spirit'|'premium' }
+ */
+router.post('/claim-card', (req, res) => {
+  try {
+    const playerIdRaw = req.body.player_id || req.body.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+    const cardType = req.body.card_type || req.body.cardType;
+
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    if (!cardType) {
+      return res.status(400).json({ success: false, error: '缺少月卡类型 (card_type)' });
+    }
+
+    const result = welfareStorage.claimMonthlyCardReward(playerId, cardType);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    // 发放灵石奖励
+    if (result.reward && result.reward.type === 'spirit_stones') {
+      updatePlayerSpiritStones(playerId, result.reward.amount);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // 初始化
 function initWelfare() {

@@ -14,6 +14,27 @@ function getShanghaiDateStr(date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ========== 月卡配置 ==========
+const WELFARE_MONTHLY_CARDS = {
+  spirit: {
+    id: 'spirit',
+    name: '灵石月卡',
+    cost: 100, // 钻石价格
+    costType: 'diamond',
+    dailyReward: { type: 'spirit_stones', amount: 500, name: '每日500灵石' },
+    description: '购买后每日可领取500灵石，连续30天'
+  },
+  premium: {
+    id: 'premium',
+    name: '尊享月卡',
+    cost: 300,
+    costType: 'diamond',
+    dailyReward: { type: 'spirit_stones', amount: 1000, name: '每日1000灵石' },
+    bonus: { type: 'exp_bonus', amount: 1.5, name: '修炼经验+50%' },
+    description: '购买后每日可领取1000灵石，修炼经验+50%，连续30天'
+  }
+};
+
 // 签到奖励配置（7天为一个周期）
 const SIGN_IN_REWARDS = [
   { day: 1, lingshi: 50, equipment: null, repairCard: 0 },
@@ -112,11 +133,39 @@ function initSignInTable() {
   }
 }
 
+// 初始化月卡表
+function initMonthlyCardTable() {
+  const database = getDb();
+  if (!database) return false;
+
+  try {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS welfare_monthly_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id TEXT NOT NULL,
+        card_type TEXT NOT NULL,
+        purchase_time TEXT,
+        last_claim_time TEXT,
+        expire_time TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(player_id, card_type)
+      )
+    `);
+    console.log('✅ 福利月卡表初始化完成');
+    return true;
+  } catch (e) {
+    console.error('月卡表初始化失败:', e.message);
+    return false;
+  }
+}
+
 // 签到存储操作
 const welfareStorage = {
   // 初始化
   init() {
-    return initSignInTable();
+    initSignInTable();
+    initMonthlyCardTable();
+    return true;
   },
 
   // 获取或创建签到记录
@@ -250,7 +299,147 @@ const welfareStorage = {
     } catch {
       return [];
     }
+  },
+
+  // ==================== 月卡相关 ====================
+
+  // 购买月卡
+  buyMonthlyCard(playerId, cardType) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    if (!WELFARE_MONTHLY_CARDS[cardType]) return { success: false, error: '无效的月卡类型' };
+
+    const card = WELFARE_MONTHLY_CARDS[cardType];
+    const now = new Date();
+    const expireTime = new Date(now.getTime() + 30 * 24 * 3600 * 1000); // 30天后过期
+    const nowStr = now.toISOString();
+    const expireStr = expireTime.toISOString();
+
+    // 检查是否已有该类型月卡且未过期
+    const existing = database.prepare(
+      'SELECT * FROM welfare_monthly_cards WHERE player_id = ? AND card_type = ? AND expire_time > ?'
+    ).get(playerId, cardType, nowStr);
+
+    if (existing) {
+      // 已有过期时间更晚的月卡，延长有效期
+      const newExpire = new Date(new Date(existing.expire_time).getTime() + 30 * 24 * 3600 * 1000);
+      database.prepare(
+        'UPDATE welfare_monthly_cards SET expire_time = ? WHERE id = ?'
+      ).run(newExpire.toISOString(), existing.id);
+      return {
+        success: true,
+        cardType,
+        cardName: card.name,
+        expireTime: newExpire.toISOString(),
+        message: `月卡有效期已延长至${newExpire.toLocaleDateString()}`
+      };
+    }
+
+    // 插入新记录
+    database.prepare(
+      `INSERT OR REPLACE INTO welfare_monthly_cards (player_id, card_type, purchase_time, last_claim_time, expire_time)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(playerId, cardType, nowStr, null, expireStr);
+
+    return {
+      success: true,
+      cardType,
+      cardName: card.name,
+      expireTime: expireStr,
+      message: `购买成功！月卡有效期至${expireTime.toLocaleDateString()}`
+    };
+  },
+
+  // 获取月卡状态
+  getMonthlyCardStatus(playerId) {
+    const database = getDb();
+    if (!database) return {};
+
+    const nowStr = new Date().toISOString();
+    const cards = database.prepare(
+      'SELECT * FROM welfare_monthly_cards WHERE player_id = ?'
+    ).all(playerId);
+
+    const result = {};
+    for (const cardType of Object.keys(WELFARE_MONTHLY_CARDS)) {
+      const card = WELFARE_MONTHLY_CARDS[cardType];
+      const dbCard = cards.find(c => c.card_type === cardType);
+      const isActive = dbCard && dbCard.expire_time > nowStr;
+      const canClaimToday = isActive && dbCard.last_claim_time
+        ? !isSameShanghaiDay(new Date(dbCard.last_claim_time), new Date())
+        : isActive;
+
+      result[cardType] = {
+        cardType,
+        name: card.name,
+        description: card.description,
+        dailyReward: card.dailyReward,
+        bonus: card.bonus || null,
+        isActive: !!isActive,
+        canClaimToday,
+        purchaseTime: dbCard ? dbCard.purchase_time : null,
+        lastClaimTime: dbCard ? dbCard.last_claim_time : null,
+        expireTime: dbCard ? dbCard.expire_time : null,
+        daysRemaining: dbCard && dbCard.expire_time > nowStr
+          ? Math.ceil((new Date(dbCard.expire_time).getTime() - Date.now()) / (24 * 3600 * 1000))
+          : 0
+      };
+    }
+    return result;
+  },
+
+  // 领取每日月卡奖励
+  claimMonthlyCardReward(playerId, cardType) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    if (!WELFARE_MONTHLY_CARDS[cardType]) return { success: false, error: '无效的月卡类型' };
+
+    const card = WELFARE_MONTHLY_CARDS[cardType];
+    const now = new Date();
+    const nowStr = now.toISOString();
+    const todayStr = getShanghaiDate();
+
+    // 检查是否有有效月卡
+    const dbCard = database.prepare(
+      'SELECT * FROM welfare_monthly_cards WHERE player_id = ? AND card_type = ? AND expire_time > ?'
+    ).get(playerId, cardType, nowStr);
+
+    if (!dbCard) {
+      return { success: false, error: `没有有效的${card.name}` };
+    }
+
+    // 检查今日是否已领取
+    if (dbCard.last_claim_time && isSameShanghaiDay(new Date(dbCard.last_claim_time), now)) {
+      return { success: false, error: '今日已领取过该月卡奖励' };
+    }
+
+    // 更新领取时间
+    database.prepare(
+      'UPDATE welfare_monthly_cards SET last_claim_time = ? WHERE id = ?'
+    ).run(nowStr, dbCard.id);
+
+    return {
+      success: true,
+      cardType,
+      cardName: card.name,
+      reward: card.dailyReward,
+      message: `领取成功！获得${card.dailyReward.amount}灵石`
+    };
   }
+};
+
+// 辅助函数：判断两个日期是否是同一上海日
+function isSameShanghaiDay(d1, d2) {
+  return getShanghaiDateStr(d1) === getShanghaiDateStr(d2);
+}
+
+// 导出
+module.exports = {
+  welfareStorage,
+  SIGN_IN_REWARDS,
+  EQUIPMENT_TEMPLATES,
+  WELFARE_MONTHLY_CARDS,
+  getDb: () => db
 };
 
 // 导出
@@ -258,5 +447,6 @@ module.exports = {
   welfareStorage,
   SIGN_IN_REWARDS,
   EQUIPMENT_TEMPLATES,
+  WELFARE_MONTHLY_CARDS,
   getDb: () => db
 };
