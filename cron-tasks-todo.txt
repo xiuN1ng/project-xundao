@@ -3952,3 +3952,23 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
     6. 其余21个 require('./src/xxx') → require('./game/xxx')
   - 验证: curl http://localhost:3001/api/player/info?player_id=1 返回 {"level":23,"realm":8,"lingshi":6074}
   - 截止: 2026-03-30
+
+# === 2026-03-30 紧急修复 (运行时错误) ===
+[B-P0-30-RT-1] welfare_storage.js MySQL语法导致签到表初始化失败  # 完成 | 2026-03-30 01f03510
+  - 文件: server/services/welfare_storage.js
+  - 问题: "near AUTO_INCREMENT: syntax error" - SQLite不支持 INT PRIMARY KEY AUTO_INCREMENT
+  - 修复1: INT PRIMARY KEY AUTO_INCREMENT → INTEGER PRIMARY KEY AUTOINCREMENT
+  - 修复2: 移除 UNIQUE KEY (SQLite用 UNIQUE(player_id) 替代)
+  - 修复3: JSON_OBJECT/JSON_INSERT/JSON_LENGTH(MySQL) → JS字符串拼接(SQLite)
+  - 修复4: DATETIME → TEXT, VARCHAR → TEXT
+  - 验证: tail /tmp/server.log 无 "签到表初始化失败" 错误
+  - 截止: 2026-03-30
+
+[B-P0-30-RT-2] lingshi_api.js db.exec() 在db初始化前被调用  # 完成 | 2026-03-30 01f03510
+  - 文件: server/game/lingshi_api.js
+  - 问题: "Cannot read properties of undefined (reading 'exec')" - initLingshiLogTable()在模块加载时执行，此时db未初始化
+  - 修复1: initLingshiLogTable()调用前先执行loadDependencies()
+  - 修复2: CREATE TABLE语句中的INDEX移到独立CREATE INDEX语句(SQLite不支持表内INDEX)
+  - 修复3: DATETIME DEFAULT CURRENT_TIMESTAMP → TEXT DEFAULT (datetime('now'))
+  - 验证: tail /tmp/server.log 无 "灵石日志表" 错误
+  - 截止: 2026-03-30
