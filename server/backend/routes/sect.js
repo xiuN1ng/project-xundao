@@ -55,11 +55,11 @@ try {
   const count = db.prepare('SELECT COUNT(*) as c FROM sects').get().c;
   if (count === 0) {
     const insert = db.prepare(`
-      INSERT INTO sects (name, level, icon, description, leaderName, members, contribution, rank, leader_id, max_members, spirit_stones, level_req, realm_level_req, welfare)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 50, 100000, 1, 1, ?)
+      INSERT INTO sects (name, level, icon, description, leaderId, members, contribution, rank, max_members, spirit_stones, level_req, realm_level_req, welfare)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, 50, 100000, 1, 1, ?)
     `);
     for (const sect of sectTemplates) {
-      insert.run(sect.name, sect.level, sect.icon, sect.description || '', sect.leaderName, sect.members, sect.contribution, sect.rank, sect.welfare || '');
+      insert.run(sect.name, sect.level, sect.icon, sect.description || '', sect.members, sect.contribution, sect.rank, sect.welfare || '');
     }
     console.log(`[sect] 宗门模板初始化完成: ${sectTemplates.length} 个宗门已写入`);
   }
@@ -178,11 +178,11 @@ router.get('/', (req, res) => {
     const countRow = db.prepare(`SELECT COUNT(*) as total FROM sects${whereClause}`).get(...params);
     const total = countRow ? countRow.total : 0;
 
-    // 列表（JOIN users 获取掌门名称）
+    // 列表（JOIN Users 获取掌门名称）
     const list = db.prepare(`
-      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      SELECT s.*, COALESCE(u.username, '掌门') as leader_name
       FROM sects s
-      LEFT JOIN users u ON u.id = s.leader_id
+      LEFT JOIN Users u ON u.id = s.leaderId
       ${whereClause}
       ORDER BY ${orderClause}
       LIMIT ? OFFSET ?
@@ -197,7 +197,7 @@ router.get('/', (req, res) => {
         members: s.members,
         contribution: s.contribution,
         rank: s.rank,
-        leaderId: s.leader_id,
+        leaderId: s.leaderId,
         leaderName: s.leader_name,
         createdAt: s.created_at
       })),
@@ -247,9 +247,9 @@ router.get('/list', (req, res) => {
     const total = countRow ? countRow.total : 0;
 
     const list = db.prepare(`
-      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      SELECT s.*, COALESCE(u.username, '掌门') as leader_name
       FROM sects s
-      LEFT JOIN users u ON u.id = s.leader_id
+      LEFT JOIN Users u ON u.id = s.leaderId
       ${whereClause}
       ORDER BY ${orderClause}
       LIMIT ? OFFSET ?
@@ -299,9 +299,9 @@ router.get('/info', (req, res) => {
 
     // 从 DB 查询宗门信息
     const sectInfo = db.prepare(`
-      SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+      SELECT s.*, COALESCE(u.username, '掌门') as leader_name
       FROM sects s
-      LEFT JOIN users u ON u.id = s.leader_id
+      LEFT JOIN Users u ON u.id = s.leaderId
       WHERE s.id = ?
     `).get(user.sectId);
 
@@ -329,7 +329,7 @@ router.get('/info', (req, res) => {
         contribution: sectInfo.contribution,
         rank: sectInfo.rank,
         leaderId: sectInfo.leaderId,
-        leaderName: sectInfo.leaderName || '未知',
+        leaderName: sectInfo.leader_name || '未知',
         createdAt: sectInfo.createdAt
       }
     });
@@ -575,9 +575,9 @@ router.get('/list', (req, res) => {
     try {
       const total = db.prepare('SELECT COUNT(*) as count FROM sects').get().count || 0;
       const sects = db.prepare(`
-        SELECT s.*, COALESCE(u.username, s.leaderName, '掌门') as leader_name
+        SELECT s.*, COALESCE(u.username, '掌门') as leader_name
         FROM sects s
-        LEFT JOIN users u ON u.id = s.leader_id
+        LEFT JOIN Users u ON u.id = s.leaderId
         ORDER BY s.level DESC, s.members DESC
         LIMIT ? OFFSET ?
       `).all(parseInt(limit), offset);

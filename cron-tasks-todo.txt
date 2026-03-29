@@ -3214,3 +3214,28 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 文件: game/adventure_system.js (已存在需完善)
 - 完善: 奇遇触发概率、事件存储、冷却CD逻辑
 - 截止: 2026-04-07
+
+## 2026-03-29 下午任务（追加）
+### P0 - 宗门系统DB列名错误（sect.js）
+
+**问题**: sect.js第183/250/302/578行，COALESCE(u.username, s.leaderName, ...)引用了Sects表中不存在的leaderName列；JOIN条件用s.leader_id（应为s.leaderId）和users（应为Users）。
+
+**修复**: 将4处查询中的：
+- `s.leaderName` → 删除（改用 COALESCE(u.username, '掌门')）
+- `s.leader_id` → `s.leaderId`
+- `LEFT JOIN users u` → `LEFT JOIN Users u`
+
+参考DB实际结构：Sects表列 = id, name, leaderId, level, members, contribution, rank, createdAt, updatedAt
+
+### P1 - player.js sectId列名错误
+
+**问题**: player.js第105/144行使用 `user.sect_id`，但Users表列名是 `sectId`（camelCase）。
+
+**修复**: 将 `user.sect_id` 替换为 `user.sectId`
+
+### P2 - 路由缺失
+
+1. chat.js 添加 `GET /messages` 端点（从chat_messages表查询）
+2. shop.js 添加 `GET /items` 端点（从shop_items表查询）
+3. deity.js 添加 `GET /` 端点（返回仙神列表）
+4. forge.js 添加 `GET /daily-claim` 端点（复用/daily-claim/status逻辑）

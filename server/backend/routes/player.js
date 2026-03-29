@@ -102,7 +102,7 @@ router.get('/', (req, res) => {
           speed: baseSpd  + gb.speedBonus,
           baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
           gongfaBonuses: gb,
-          sectId: user.sect_id || null,
+          sectId: user.sectId || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt
         });
@@ -141,7 +141,7 @@ router.get('/info', (req, res) => {
           speed: baseSpd  + gb.speedBonus,
           baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
           gongfaBonuses: gb,
-          sectId: user.sect_id || null,
+          sectId: user.sectId || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt
         });
