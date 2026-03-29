@@ -3669,3 +3669,47 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/spirit.js 或 player API
   - 功能: GET /api/player 返回 spirit_root_bonus: {atk, def, hp}
   - 截止: 2026-04-10
+
+[P1-B-92-1] 灵根战斗属性接入 player API 和 game.js 伤害公式
+  - 文件: server/backend/routes/player.js, server/game/game.js
+  - 功能: /api/player 返回 spirit_root_bonus{atk,def,hp,critRate,burnDamage...}，game.js 伤害计算引用 critRate/burnDamage
+  - 截止: 2026-04-07
+
+[P1-B-92-2] 月卡系统后端激活逻辑
+  - 文件: server/backend/routes/payment.js, welfare.js
+  - 功能: 新建 player_subscriptions 表，/callback 时写入订阅，/welfare 查询有效月卡
+  - 截止: 2026-04-07
+
+[P1-B-92-3] 宗门捐献 API
+  - 文件: server/backend/routes/sect.js
+  - 功能: POST /api/sect/donate，扣灵石+加贡献+宗门资金，写入 SectMembers.contribution
+  - 截止: 2026-04-07
+
+[P2-B-92-4] 灵根切换后端扣灵石校验
+  - 文件: server/backend/routes/spirit_root.js
+  - 功能: switch API 扣灵石+写入 switch_records 表，禁止免费无限切换
+  - 截止: 2026-04-10
+
+# === 2026-03-29 夜 第94轮追加 ===
+[P0-B-94-1] VIP API 数据源修复  # 完成 | 2026-03-29 b94a8a52
+  - 文件: server/backend/routes/vip.js
+  - 功能: getPlayerData() 从 SQLite 读取 vipLevel，不从 in-memory player module
+  - 修复: db.prepare('SELECT vipLevel, vipPoints FROM Users WHERE id = ?')
+  - 修复详情: getPlayerData()优先SELECT * FROM Users DB; /claim-daily和/buy-month-card改用UPDATE Users持久化; /info的spiritStones改用lingshi列
+  - 截止: 2026-04-01
+
+[P1-B-94-1] 宗门捐献完整实现
+  - 文件: server/backend/routes/sect.js (donate 路由)
+  - 功能: 扣灵石 + 写 SectMembers.contribution + 统一前后端参数名(前端amount/后端lingshi)
+  - SQL: UPDATE Users SET lingshi=lingshi-? WHERE id=? AND lingshi>=?
+  - 截止: 2026-04-03
+
+[P1-B-94-2] 修炼费用计算统一
+  - 文件: server/backend/routes/cultivation.js
+  - 功能: start 和 status API 统一 cultivationPower 计算，统一用 realmConfig[cult.realm].realm_level
+  - 截止: 2026-04-03
+
+[P1-B-94-3] 灵兽参战系统后端
+  - 文件: server/backend/routes/beast.js
+  - 功能: POST /api/beast/enter {userId, beastId}, /leave {userId}, GET /api/beast/active {userId}
+  - 截止: 2026-04-10
