@@ -3763,3 +3763,60 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/adventure_encounter.js (新建)
   - 功能: 随机奇遇触发 + 秘境定时广播
   - 截止: 2026-04-15
+
+# === 2026-03-30 第98轮追加 ===
+
+# ========== P0 路由注册（一行代码，释放完整系统）============
+
+[P0-B-98-1] server.js 注册 mount.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/mount', require('./backend/routes/mount'))
+  - 效果: 坐骑系统（8种坐骑）立即生效
+  - 截止: 2026-04-05
+
+[P0-B-98-2] server.js 注册 wing.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/wing', require('./backend/routes/wing'))
+  - 效果: 翅膀系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-98-3] server.js 注册 auction.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/auction', require('./backend/routes/auction'))
+  - 截止: 2026-04-05
+
+[P0-B-98-4] server.js 注册 fashion.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/fashion', require('./backend/routes/fashion'))
+  - 截止: 2026-04-05
+
+# ========== P1 ==========
+
+[P1-B-98-1] friend.js 注册 + 路径统一
+  - 文件: server/server.js
+  - 添加: app.use('/api/friends', require('./backend/routes/friend'))
+  - 截止: 2026-04-07
+
+[P1-B-98-2] pet.js 新建（JS重写，非TS编译）  # 完成 | 2026-03-30 00:32 | 053d8e67
+  - 文件: server/backend/routes/pet.js (新建)
+  - 实现: GET /api/pet/list, POST /api/pet/equip, POST /api/pet/unequip, GET /api/pet/evolution-info
+  - 注册: app.use('/api/pet', require('./backend/routes/pet'))  # 2026-03-30
+  - 验证: curl /api/pet/create 创建灵兽成功, /equip, /unequip 正常工作  # 2026-03-30
+  - 截止: 2026-04-10
+
+[P1-B-98-3] title.js 重写（连接Users表）
+  - 文件: server/backend/routes/title.js (重写)
+  - 实现: 从 achievements/sect/rank 生成真实称号列表
+  - 注册: app.use('/api/title', require('./backend/routes/title'))
+  - 截止: 2026-04-10
+
+[P1-B-98-4] giftcode.js 注册
+  - 文件: server/server.js
+  - 添加: app.use('/api/giftcode', require('./backend/routes/giftcode'))
+  - 截止: 2026-04-10
+
+[P1-B-98-5] market.js + trade.js 注册
+  - 文件: server/server.js
+  - 添加: app.use('/api/market', require('./backend/routes/market'))
+  - 添加: app.use('/api/trade', require('./backend/routes/trade'))
+  - 截止: 2026-04-10
