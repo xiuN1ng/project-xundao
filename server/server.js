@@ -8616,6 +8616,15 @@ app.post('/api/equipment/repair-all', (req, res) => {
   }
 });
 
+// ==================== 论道系统路由 ====================
+try {
+  const lundaoRoute = require('./backend/routes/lundao');
+  app.use('/api/lundao', lundaoRoute);
+  Logger.info('✓ 论道系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 论道路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
