@@ -3428,7 +3428,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-04-05
 
 # ========== 2026-03-29 下午新增 P2/B 任务 ==========
-[P2-B-29-PM-1] cultivation/status增加canBreakthrough字段
+[P2-B-29-PM-1] cultivation/status增加canBreakthrough字段  # 完成 | 2026-03-30 325bd208
+  - cultivation.js GET /status 增加 canBreakthrough 和 nextRealm 字段
+  - canBreakthrough: value >= cost 时为 true（修炼满时可突破）
+  - nextRealm: 下一境界编号，无更高境界时为 null
   - 截止: 2026-04-01
 
 # ========== P0 延续任务 ==========
