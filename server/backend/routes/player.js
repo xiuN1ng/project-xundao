@@ -30,6 +30,61 @@ const GONGFAS = [
   { id: 12, name: '瞬风千里诀', type: 'speed',  level: 2, attackBonus: 0,   defenseBonus: 0, hpBonus: 0,    speedBonus: 15 },
 ];
 
+// 灵根类型配置（与 spirit_root.js 保持一致）
+const SPIRIT_ROOTS = {
+  metal:  { id: 'metal',  nameCN: '金灵根', bonus: { attack: 15, critRate: 5, critDamage: 10 } },
+  wood:   { id: 'wood',   nameCN: '木灵根', bonus: { hp: 100, defense: 8, healEffect: 15 } },
+  water:  { id: 'water',  nameCN: '水灵根', bonus: { skillDamage: 12, cdReduction: 8, maxHp: 50 } },
+  fire:   { id: 'fire',   nameCN: '火灵根', bonus: { attack: 12, critRate: 8, burnDamage: 20 } },
+  earth:  { id: 'earth',  nameCN: '土灵根', bonus: { defense: 12, hp: 80, resistance: 10 } },
+  wind:   { id: 'wind',   nameCN: '风灵根', bonus: { speed: 15, dodge: 10, attack: 5 } },
+  thunder:{ id: 'thunder',nameCN: '雷灵根', bonus: { attack: 10, comboRate: 15, stunChance: 5 } },
+  ice:    { id: 'ice',    nameCN: '冰灵根', bonus: { defense: 8, freezeChance: 8, hp: 40 } },
+  dark:   { id: 'dark',   nameCN: '暗灵根', bonus: { attack: 12, lifesteal: 8, critDamage: 15 } },
+  light:  { id: 'light',  nameCN: '光灵根', bonus: { healEffect: 20, shield: 15, defense: 5 } },
+};
+
+/**
+ * 获取玩家灵根属性加成
+ * @param {object} db - 数据库实例
+ * @param {number} userId - 玩家ID
+ * @returns {{ spiritRootId, spiritRootName, atk, def, hp, ... }}
+ */
+function getSpiritRootBonus(db, userId) {
+  if (!db || !userId) return { spiritRootId: 'fire', spiritRootName: '火灵根', atk: 0, def: 0, hp: 0 };
+  try {
+    const user = db.prepare('SELECT spirit_root FROM Users WHERE id = ?').get(userId);
+    const rootId = user && user.spirit_root ? user.spirit_root : 'fire';
+    const root = SPIRIT_ROOTS[rootId] || SPIRIT_ROOTS.fire;
+    const b = root.bonus;
+    return {
+      spiritRootId: root.id,
+      spiritRootName: root.nameCN,
+      atk: b.attack || 0,
+      def: b.defense || 0,
+      hp: b.hp || 0,
+      critRate: b.critRate || 0,
+      critDamage: b.critDamage || 0,
+      burnDamage: b.burnDamage || 0,
+      lifesteal: b.lifesteal || 0,
+      dodge: b.dodge || 0,
+      speed: b.speed || 0,
+      comboRate: b.comboRate || 0,
+      stunChance: b.stunChance || 0,
+      freezeChance: b.freezeChance || 0,
+      resistance: b.resistance || 0,
+      skillDamage: b.skillDamage || 0,
+      healEffect: b.healEffect || 0,
+      shield: b.shield || 0,
+      cdReduction: b.cdReduction || 0,
+      maxHp: b.maxHp || 0,
+    };
+  } catch (e) {
+    console.error('[player] getSpiritRootBonus错误:', e.message);
+    return { spiritRootId: 'fire', spiritRootName: '火灵根', atk: 0, def: 0, hp: 0 };
+  }
+}
+
 /**
  * 获取玩家已学功法的属性加成
  * @param {object} db - 数据库实例
@@ -85,6 +140,7 @@ router.get('/', (req, res) => {
       if (user) {
         // 获取已学功法的属性加成（学习即生效）
         const gb = getGongfaBonuses(dbRef, userId);
+        const gbRoot = getSpiritRootBonus(dbRef, userId);
         const baseHp  = user.hp      || 1000;
         const baseAtk = user.attack  || 50;
         const baseDef = user.defense || 50;
@@ -102,6 +158,7 @@ router.get('/', (req, res) => {
           speed: baseSpd  + gb.speedBonus,
           baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
           gongfaBonuses: gb,
+          spirit_root_bonus: gbRoot,
           sectId: user.sectId || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt
@@ -124,6 +181,7 @@ router.get('/info', (req, res) => {
       if (user) {
         // 获取已学功法的属性加成（学习即生效）
         const gb = getGongfaBonuses(dbRef, userId);
+        const gbRoot = getSpiritRootBonus(dbRef, userId);
         const baseHp  = user.hp      || 1000;
         const baseAtk = user.attack  || 50;
         const baseDef = user.defense || 50;
@@ -141,6 +199,7 @@ router.get('/info', (req, res) => {
           speed: baseSpd  + gb.speedBonus,
           baseHp, baseAttack: baseAtk, baseDefense: baseDef, baseSpeed: baseSpd,
           gongfaBonuses: gb,
+          spirit_root_bonus: gbRoot,
           sectId: user.sectId || null,
           vipLevel: user.vipLevel || 0,
           createdAt: user.createdAt
