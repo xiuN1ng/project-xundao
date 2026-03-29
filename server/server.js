@@ -1772,7 +1772,7 @@ function seedShopData() {
 
 // 种子数据 - 炼丹系统
 function seedAlchemyData() {
-  const { seedAlchemyData: alchemySeed } = require('./src/database');
+  const { seedAlchemyData: alchemySeed } = require('./backend/database');
   alchemySeed().then(() => {
     Logger.info('炼丹系统数据种子完成');
   }).catch(err => {
@@ -1782,7 +1782,7 @@ function seedAlchemyData() {
 
 // 种子数据 - 炼器系统
 function seedEquipmentData() {
-  const { seedEquipmentData: forgeSeed } = require('./src/database');
+  const { seedEquipmentData: forgeSeed } = require('./backend/database');
   forgeSeed().then(() => {
     Logger.info('炼器系统数据种子完成');
   }).catch(err => {
@@ -1838,7 +1838,7 @@ function seedSkillsData() {
 
 // 初始化数据库和数据
 initDatabase();
-const { runMigrations } = require('./src/database');
+const { runMigrations } = require('./services/database');
 runMigrations().catch(err => Logger.info('迁移检查:', err.message));
 seedGongfaData();
 seedShopData();
@@ -3223,7 +3223,7 @@ app.post('/api/skills/:skill_id/upgrade', (req, res) => {
 
 // 存储 API - 游戏数据持久化
 try {
-  const storageApi = require('./src/server.storage');
+  const storageApi = require('./game/server.storage');
   app.use('/api/storage', storageApi);
 } catch (e) {
   Logger.info('存储API不可用:', e.message);
@@ -3231,7 +3231,7 @@ try {
 
 // 宗门系统 API
 try {
-  const sectApi = require('./src/sect_api');
+  const sectApi = require('./game/sect_api');
   app.use('/api/sect', sectApi);
   // 兼容前端复数形式路由
   app.use('/api/sects', sectApi);
@@ -3319,7 +3319,7 @@ try {
 
 // 宗门战系统 API
 try {
-  const sectWarApi = require('./src/sect_war');
+  const sectWarApi = require('./game/sect_war');
   app.use('/api/sect-war', sectWarApi);
   Logger.info('✅ 宗门战系统 API 已加载');
 } catch (e) {
@@ -3328,7 +3328,7 @@ try {
 
 // 灵石消耗系统 API
 try {
-  const expenseApi = require('./src/expense_api');
+  const expenseApi = require('./game/expense_api');
   app.use('/api/expense', expenseApi);
   Logger.info('✅ 灵石消耗系统 API 已加载');
 } catch (e) {
@@ -3337,7 +3337,7 @@ try {
 
 // 炼器系统 API (包含装备分解功能)
 try {
-  const forgeApi = require('./src/forge_api');
+  const forgeApi = require('./game/forge_api');
   app.use('/api/forge', forgeApi);
   Logger.info('✅ 炼器系统 API 已加载');
 } catch (e) {
@@ -3346,7 +3346,7 @@ try {
 
 // 丹药系统 API
 try {
-  const alchemyApi = require('./src/alchemy_api');
+  const alchemyApi = require('./game/alchemy_api');
   app.use('/api/alchemy', alchemyApi);
   Logger.info('✅ 丹药系统 API 已加载');
 } catch (e) {
@@ -3355,7 +3355,7 @@ try {
 
 // 灵石消耗统一API（包含日志查询）
 try {
-  const lingshiApi = require('./src/core/lingshi_api');
+  const lingshiApi = require('./game/lingshi_api');
   app.use('/api/player', lingshiApi);
   Logger.info('✅ 灵石统一API (/player) 已加载');
 } catch (e) {
@@ -3364,13 +3364,13 @@ try {
 
 // 境界副本 API
 try {
-  const realmDungeonApi = require('./src/core/realm_dungeon_system');
+  const realmDungeonApi = require('./game/realm_dungeon_system');
   // 将境界副本功能注册为 API 路由
   app.get('/api/realm-dungeon/list', (req, res) => {
     // 获取可用的境界副本列表
     const available = [];
     try {
-      const realmDungeonModule = require('./src/core/realm_dungeon_system');
+      const realmDungeonModule = require('./game/realm_dungeon_system');
       const REALM_DUNGEON_DATA = realmDungeonModule.REALM_DUNGEON_DATA || {};
       for (const [realm, data] of Object.entries(REALM_DUNGEON_DATA)) {
         available.push({ id: realm, ...data });
@@ -3387,7 +3387,7 @@ try {
 
 // ============ 新手引导系统 API ============
 try {
-  const tutorialApi = require('./src/tutorial_api');
+  const tutorialApi = require('./game/tutorial_api');
   app.use('/api/tutorial', tutorialApi);
   Logger.info('✅ 新手引导系统 API 已加载');
 } catch (e) {
@@ -3396,7 +3396,7 @@ try {
 
 // ============ 剧情系统 API ============
 try {
-  const storyApi = require('./src/story_api');
+  const storyApi = require('./game/story_api');
   app.use('/api/story', storyApi);
   console.log('✅ 剧情系统 API 已加载');
 } catch (e) {
@@ -3405,7 +3405,7 @@ try {
 
 // ============ 离线收益系统 API ============
 try {
-  const offlineIncomeApi = require('./src/offline_income_api');
+  const offlineIncomeApi = require('./game/offline_income_api');
   app.use('/api/offline-income', offlineIncomeApi);
   console.log('✅ 离线收益系统 API 已加载');
 } catch (e) {
@@ -3414,7 +3414,7 @@ try {
 
 // ============ 器灵系统 API ============
 try {
-  const spiritArtifactApi = require('./src/spirit_artifact_api');
+  const spiritArtifactApi = require('./game/spirit_artifact_api');
   app.use('/api/spirit-artifact', spiritArtifactApi);
   console.log('✅ 器灵系统 API 已加载');
 } catch (e) {
@@ -3423,7 +3423,7 @@ try {
 
 // ============ 天梯系统 API ============
 try {
-  const ladderApi = require('./src/ladder_api');
+  const ladderApi = require('./game/ladder_api');
   app.use('/api/ladder', ladderApi);
   console.log('✅ 天梯系统 API 已加载');
 } catch (e) {
@@ -3432,7 +3432,7 @@ try {
 
 // ============ 封神榜系统 API ============
 try {
-  const deityListApi = require('./src/deity_list_api');
+  const deityListApi = require('./game/deity_list_api');
   app.use('/api/deity-list', deityListApi);
   console.log('✅ 封神榜系统 API 已加载');
 } catch (e) {
@@ -3441,11 +3441,11 @@ try {
 
 // ============ 宝石系统 API ============
 try {
-  const gemStorage = require('./src/gem_storage');
+  const gemStorage = require('./game/gem_storage');
   gemStorage.initGemTables().catch(err => Logger.info('宝石表初始化:', err.message));
   gemStorage.seedInitialGems().catch(err => Logger.info('宝石种子数据:', err.message));
   
-  const gemApi = require('./src/gem_api');
+  const gemApi = require('./game/gem_api');
   app.use('/api/gem', gemApi);
   Logger.info('✅ 宝石系统 API 已加载');
 } catch (e) {
@@ -3454,7 +3454,7 @@ try {
 
 // ============ 经脉系统 API ============
 try {
-  const meridianSystem = require('./src/core/meridian_system');
+  const meridianSystem = require('./game/meridian_system');
   meridianSystem.registerMeridianRoutes(app);
   Logger.info('✅ 经脉系统 API 已加载');
 } catch (e) {
@@ -3463,7 +3463,7 @@ try {
 
 // ============ 每日副本系统 API ============
 try {
-  const dailyDungeonApi = require('./src/daily_dungeon');
+  const dailyDungeonApi = require('./game/daily_dungeon');
   app.use('/api/daily-dungeon', dailyDungeonApi);
   Logger.info('✅ 每日副本系统 API 已加载');
 } catch (e) {
@@ -3482,7 +3482,7 @@ try {
 
 // ============ 灵兽装备系统 API ============
 try {
-  const beastEquipmentApi = require('./src/beast_equipment');
+  const beastEquipmentApi = require('./game/beast_equipment');
   app.use('/api/beast/equipment', beastEquipmentApi);
   Logger.info('✅ 灵兽装备系统 API 已加载');
 } catch (e) {
@@ -3491,7 +3491,7 @@ try {
 
 // ============ 性能优化模块 ============
 try {
-  const performance = require('./src/performance');
+  const performance = require('./game/performance');
   // 导出到全局，供各 API 模块使用
   global.gamePerformance = performance;
   Logger.info('✅ 性能优化模块已加载');
@@ -3501,11 +3501,11 @@ try {
 
 // ============ 缓存管理 API ============
 try {
-  const cacheApi = require('./src/cache_api');
+  const cacheApi = require('./game/cache_api');
   app.use('/api/cache', cacheApi);
   
   // 启动缓存定期清理
-  const cache = require('./src/cache');
+  const cache = require('./game/cache');
   cache.startCleanup(60000);
   Logger.info('✅ 缓存管理 API 已加载');
 } catch (e) {
@@ -3519,6 +3519,15 @@ try {
   Logger.info('✅ 福利系统 API 已加载');
 } catch (e) {
   Logger.info('福利API不可用:', e.message);
+}
+
+// ============ 称号系统 API ============
+try {
+  const titleApi = require('./backend/routes/title');
+  app.use('/api/title', titleApi);
+  Logger.info('✅ 称号系统 API 已加载');
+} catch (e) {
+  Logger.info('称号API不可用:', e.message);
 }
 
 // ============ 灵石引导系统 API ============
@@ -6859,7 +6868,7 @@ app.get('/api/players', (req, res) => {
 });
 
 // ==================== 爵位系统 API ====================
-const { rankSystem, RANK_DATA, HONOR_SOURCES } = require('./src/core/rank_system');
+const { rankSystem, RANK_DATA, HONOR_SOURCES } = require('./game/rank_system');
 
 // 获取所有爵位信息
 app.get('/api/rank/list', (req, res) => {
@@ -7482,7 +7491,7 @@ app.get('/api/player/realm-info', (req, res) => {
 // 引入竞技场系统
 let arenaSystem;
 try {
-  arenaSystem = require('./src/arena_system');
+  arenaSystem = require('./game/arena_system');
 } catch (e) {
   Logger.warn('竞技场系统加载失败:', e.message);
   arenaSystem = null;
@@ -8199,7 +8208,7 @@ function initializeEquipmentDurability(equipment) {
 function getEquipmentRarity(equipName) {
   // 尝试从 extended_systems.js 获取
   try {
-    const extendedSystems = require('./src/core/extended_systems');
+    const extendedSystems = require('./game/extended_systems');
     for (const slot of ['weapon', 'armor', 'accessory']) {
       if (extendedSystems.EQUIPMENT_DATA[slot] && extendedSystems.EQUIPMENT_DATA[slot][equipName]) {
         return extendedSystems.EQUIPMENT_DATA[slot][equipName].rarity || 1;
@@ -8211,7 +8220,7 @@ function getEquipmentRarity(equipName) {
   
   // 尝试从 artifact_system.js 获取
   try {
-    const artifactSystem = require('./src/core/artifact_system');
+    const artifactSystem = require('./game/artifact_system');
     if (artifactSystem.ARTIFACT_DATA && artifactSystem.ARTIFACT_DATA[equipName]) {
       const quality = artifactSystem.ARTIFACT_DATA[equipName].quality;
       const qualityMap = { mortal: 1, spirit: 2, treasure: 3, immortal: 4, divine: 5 };
