@@ -2,6 +2,12 @@
  * 福利系统存储层 - 签到数据管理
  */
 
+// 获取 Asia/Shanghai 时区的当日日期字符串 (YYYY-MM-DD)
+function getShanghaiDate(dateMs) {
+  const d = new Date((dateMs || Date.now()) + 8 * 3600000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 // 签到奖励配置（7天为一个周期）
 const SIGN_IN_REWARDS = [
   { day: 1, lingshi: 50, equipment: null, repairCard: 0 },
@@ -130,7 +136,7 @@ const welfareStorage = {
     const record = this.getOrCreateSignInRecord(playerId);
     if (!record) return null;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     const lastSignDate = record.last_sign_date;
     
     // 检查今天是否已签到
@@ -141,7 +147,7 @@ const welfareStorage = {
     if (lastSignDate) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdayStr = getShanghaiDate(yesterday.getTime());
       
       if (lastSignDate !== yesterdayStr && lastSignDate !== today) {
         // 中断了，重新开始
@@ -173,7 +179,7 @@ const welfareStorage = {
     const record = this.getOrCreateSignInRecord(playerId);
     if (!record) return { success: false, error: '记录不可用' };
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     if (record.last_sign_date === today) {
       return { success: false, error: '今天已经签到过了' };
     }
@@ -183,7 +189,7 @@ const welfareStorage = {
     if (record.last_sign_date) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdayStr = getShanghaiDate(yesterday.getTime());
       if (record.last_sign_date !== yesterdayStr && record.last_sign_date !== today) {
         currentStreak = 0;
       }
@@ -383,7 +389,7 @@ const welfareStorage = {
     const claimedDays = record ? JSON.parse(record.seven_day_claimed || '[]') : [];
     const signStatus = this.getSignInStatus(playerId);
     const streak = signStatus ? signStatus.currentStreak : 0;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getShanghaiDate();
     return this.SEVEN_DAY_REWARDS.map(reward => {
       const claimed = claimedDays.includes(reward.day);
       const canClaim = !claimed && streak >= reward.day;
