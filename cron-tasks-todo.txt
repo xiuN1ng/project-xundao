@@ -2359,8 +2359,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - server/backend/routes/trade.js (23KB): GET / /list /buy /bid /cancel /my-listings /transactions /market-prices /config
   - SQLite表: trade_orders, trade_transactions, trade_bids, market_prices; 5%交易税; 72小时有效期
   - server.js 注册 /api/trade 路由  # 完成 | 2026-03-29
-[P0] [B] 创建 routes/couple.js — 婚姻/求婚/双修API，包装 src/marriage/marriage-service.ts  # 待定
-[P0] [B] server.js 注册 /api/couple 路由  # 待定
+[P0] [B] 创建 routes/couple.js — 婚姻/求婚/双修API，包装 src/marriage/marriage-service.ts  # 完成 | 2026-03-29 14:10
+[P0] [B] server.js 注册 /api/couple 路由  # 完成 | 2026-03-29 14:10
 [P0] [B] 创建 routes/commission.js — 委托任务接受/完成API  # 已完成（2026-03-28）
 [P0] [B] server.js 注册 /api/commission 路由  # 已完成（2026-03-28）
 [P0] [B] 创建 routes/talent.js — 天赋解锁/加点点API，包装 src/talent/talent-system.ts  # 完成 | 2026-03-29
