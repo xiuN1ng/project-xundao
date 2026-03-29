@@ -3111,3 +3111,35 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/sect.js (新增职位逻辑)
   - 实现: 掌门/长老/成员三级权限 + 俸禄系统
   - 截止: 2026-04-03
+
+## 2026-03-30 上午第二轮任务 [B]
+
+### [P0-30-AM-1] sect.js DB路径修复
+- 文件: server/backend/routes/sect.js 第6行
+- 修改: const DATA_DIR = path.join(__dirname, '..', 'data');
+- 验证: /api/sect/info, /api/sect/create, /api/sect/join 均正常
+- 截止: 2026-03-30
+
+### [P1-30-AM-1] Arena每日挑战次数超限
+- 文件: server/backend/routes/arena.js
+- 修改: DATE(last_challenge_reset) != DATE('now') 而非字符串比较
+- 增加: challenge前检查remainingChallenges >= 1
+- 截止: 2026-03-30
+
+### [P1-30-AM-2] 成就系统进度更新
+- 创建: server/backend/services/achievement_trigger.js
+- 在cultivation.js/battle.js/equipment.js等关键操作后调用成就更新
+- 截止: 2026-03-31
+
+### [P1-30-AM-3] sect/applications路由补充
+- 在sect.js添加GET /applications端点（无需sectId参数）
+- 截止: 2026-03-31
+
+### [P2-30-AM-1] Forge recipeId参数兼容
+- 文件: server/backend/routes/forge.js
+- 修改: const recipeId = req.body.recipeId || req.body.id;
+- 截止: 2026-04-01
+
+### [NF-30-AM-1] 宗门争霸赛季系统
+- 截止: 2026-04-05
+

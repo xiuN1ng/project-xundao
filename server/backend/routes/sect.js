@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 
 // 模块级 DB 连接（避免 TDZ）
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 let db = null;
 try {
@@ -842,6 +842,48 @@ router.post('/apply', (req, res) => {
     }
     console.error('[sect] /apply 错误:', error.message);
     return res.status(500).json({ success: false, message: '申请失败: ' + error.message });
+  }
+});
+
+// GET /applications - 查看当前玩家宗门的待处理申请（无需sectId参数，自动查找玩家宗门）
+router.get('/applications', (req, res) => {
+  const userId = req.userId || parseInt(req.query.userId) || parseInt(req.query.player_id) || 1;
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    // 获取玩家宗门ID
+    const player = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(userId);
+    if (!player || !player.sectId) {
+      return res.json({ success: true, applications: [], message: '你尚未加入宗门' });
+    }
+
+    const applications = db.prepare(`
+      SELECT sa.*, u.nickname as player_name, u.level as player_level
+      FROM sect_applications sa
+      LEFT JOIN Users u ON u.id = sa.player_id
+      WHERE sa.sect_id = ? AND sa.status = 'pending'
+      ORDER BY sa.created_at ASC
+    `).all(player.sectId);
+
+    return res.json({
+      success: true,
+      sectId: player.sectId,
+      applications: applications.map(a => ({
+        id: a.id,
+        playerId: a.player_id,
+        playerName: a.player_name || '玩家' + a.player_id,
+        playerLevel: a.player_level || 1,
+        message: a.message || '',
+        status: a.status,
+        createdAt: a.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('[sect] /applications 错误:', error.message);
+    return res.status(500).json({ success: false, message: '查询失败: ' + error.message });
   }
 });
 

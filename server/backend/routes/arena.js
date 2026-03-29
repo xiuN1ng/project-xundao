@@ -228,31 +228,35 @@ function getOrCreateArenaPlayer(playerId) {
   }
 }
 
-// 工具函数：检查并重置每日挑战次数
+// 工具函数：检查并重置每日挑战次数（使用SQL DATE()比较避免时区/格式问题）
 function checkAndResetDailyChallenges(playerId) {
   if (!db) return { challengesUsed: 0, dailyRewardClaimed: false };
 
   try {
-    const arenaPlayer = db.prepare('SELECT * FROM arena_player WHERE player_id = ?').get(playerId);
-    const today = getDateString();
+    // 使用 SQL DATE() 比较，兼容任何 datetime 存储格式
+    const result = db.prepare(`
+      SELECT daily_challenges_used, daily_reward_claimed,
+             DATE(last_challenge_reset) as reset_date
+      FROM arena_player WHERE player_id = ?
+    `).get(playerId);
 
-    if (!arenaPlayer || arenaPlayer.last_challenge_reset !== today) {
-      // 重置每日挑战次数
-      if (arenaPlayer) {
+    if (!result || result.reset_date !== getDateString()) {
+      // 日期不同（跨日），重置挑战次数
+      if (result) {
         db.prepare(`
           UPDATE arena_player
           SET daily_challenges_used = 0,
-              last_challenge_reset = ?,
+              last_challenge_reset = CURRENT_TIMESTAMP,
               daily_reward_claimed = 0
           WHERE player_id = ?
-        `).run(today, playerId);
+        `).run(playerId);
       }
       return { challengesUsed: 0, dailyRewardClaimed: false };
     }
 
     return {
-      challengesUsed: arenaPlayer.daily_challenges_used || 0,
-      dailyRewardClaimed: !!arenaPlayer.daily_reward_claimed
+      challengesUsed: result.daily_challenges_used || 0,
+      dailyRewardClaimed: !!result.daily_reward_claimed
     };
   } catch (err) {
     Logger.error('checkAndResetDailyChallenges错误:', err.message);

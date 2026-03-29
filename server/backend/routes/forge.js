@@ -234,7 +234,7 @@ router.get('/materials', (req, res) => {
 // POST /api/forge/forge - 锻造装备
 router.post('/forge', (req, res) => {
   const playerId = parseInt(req.body.player_id || req.body.userId || 1);
-  const { recipeId } = req.body;
+  const recipeId = req.body.recipeId || req.body.id;
   const db = getDb();
   try {
     const recipe = recipes.find(r => r.id === recipeId);
@@ -292,7 +292,7 @@ router.post('/forge', (req, res) => {
 // POST /api/forge/make - 锻造装备 (/forge 别名)
 router.post('/make', (req, res) => {
   const playerId = parseInt(req.body.player_id || req.body.userId || 1);
-  const { recipeId } = req.body;
+  const recipeId = req.body.recipeId || req.body.id;
   const db = getDb();
   try {
     const recipe = recipes.find(r => r.id === recipeId);
