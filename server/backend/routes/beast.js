@@ -9,8 +9,9 @@ function getDb(req) {
     return req.app.locals.db;
   }
   // 后备：独立连接
+  const Database = require('better-sqlite3');
   const DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
-  return new (require('better-sqlite3')(DB_PATH, { readonly: false }));
+  return new Database(DB_PATH);
 }
 
 // 初始化数据库表
@@ -737,6 +738,80 @@ router.post('/learn-skill', (req, res) => {
   db.prepare('UPDATE player_beasts SET skill_id = ? WHERE id = ?').run(skillId, beastId);
 
   res.json({ success: true, skill });
+});
+
+// POST /api/beast/enter - 灵兽出战（设置active=1）
+router.post('/enter', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const { beastId } = req.body;
+
+  const beast = db.prepare('SELECT * FROM player_beasts WHERE id = ? AND player_id = ?').get(beastId, userId);
+  if (!beast) return res.json({ success: false, message: '灵兽不存在' });
+
+  // 只能有一只灵兽出战，先取消所有出战状态
+  db.prepare('UPDATE player_beasts SET is_active = 0 WHERE player_id = ?').run(userId);
+  // 设置指定灵兽为出战
+  db.prepare('UPDATE player_beasts SET is_active = 1 WHERE id = ?').run(beastId);
+
+  res.json({
+    success: true,
+    message: `${beast.name}已出战！`,
+    beast: {
+      id: beast.id,
+      name: beast.name,
+      level: beast.level,
+      quality: beast.quality,
+      attack: beast.attack,
+      hp: beast.hp,
+      intimacy: beast.intimacy,
+      skillId: beast.skill_id,
+      isActive: true
+    }
+  });
+});
+
+// POST /api/beast/leave - 灵兽休息（取消出战状态）
+router.post('/leave', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+
+  const active = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND is_active = 1').get(userId);
+  if (!active) return res.json({ success: false, message: '当前没有出战的灵兽' });
+
+  db.prepare('UPDATE player_beasts SET is_active = 0 WHERE player_id = ?').run(userId);
+  res.json({ success: true, message: `${active.name}已休息`, beastId: active.id });
+});
+
+// GET /api/beast/active - 获取当前出战的灵兽
+router.get('/active', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+
+  const active = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND is_active = 1').get(userId);
+  if (!active) return res.json({ success: true, hasActive: false, beast: null });
+
+  res.json({
+    success: true,
+    hasActive: true,
+    beast: {
+      id: active.id,
+      name: active.name,
+      level: active.level,
+      quality: active.quality,
+      attack: active.attack,
+      hp: active.hp,
+      intimacy: active.intimacy,
+      skillId: active.skill_id,
+      isActive: true,
+      // 出战加成：好感度影响属性
+      bonusAtk: Math.floor(active.attack * (active.intimacy / 100)),
+      bonusHp: Math.floor(active.hp * (active.intimacy / 100))
+    }
+  });
 });
 
 module.exports = router;
