@@ -3331,3 +3331,108 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   3. 消耗体力挑战，返回材料掉落
   4. 体力系统: 每5分钟恢复1点，上限100点
 - 截止: 2026-04-05
+
+# ========== 2026-03-30 下午新增 P0/B 任务 ==========
+[P0-B-30-PM-1] 心魔幻境解锁逻辑修复（持续崩溃，跨5轮） # 完成 | 2026-03-29 74602a68
+  - 文件: server/backend/routes/heart_demon.js
+  - 问题: level=19 玩家，reqLevel=5 的 floor 2 仍显示 unlocked=false
+  - 修复: 添加getPlayerLevel()从Users表读取玩家等级，unlocked判断改为 f.floor <= maxFloor && playerLevel >= reqLevel
+  - 截止: 2026-03-30
+
+# ========== 2026-03-30 下午新增 P1/B 任务 ==========
+[P1-B-30-PM-1] 每日任务进度联动修复 # 完成 | 2026-03-29 2472ed27
+  - 文件: server/backend/routes/dailyQuest.js
+  - 文件: server/backend/routes/dailyQuest.js
+  - 问题: 所有 dailyQuest progress=0，修炼12次/战斗9场均不更新
+  - 修复1: 在 cultivation/start/challenge/chapter/battle 成功后调用 updateDailyQuestProgress
+  - 修复2: 修复 dailyQuest/list 从 daily_quest_progress 表实时读取
+  - 修复3: 添加每日重置逻辑
+  - 截止: 2026-03-31
+
+[P1-B-30-PM-2] 排行榜/DeityList 数据源替换为真实玩家
+  - 文件: server/backend/routes/rank.js + routes/deity.js
+  - 问题: rank/combat 和 deity-list/combat 只显示 player_id<0 的假AI
+  - 修复: 从 Users 表 SELECT 真实玩家，按战力/境界/灵石排序
+  - 修复: 排除 player_id < 0 的假数据
+  - 截止: 2026-03-31
+
+[P1-B-30-PM-3] 装备列表属性字段修复
+  - 文件: server/backend/routes/equipment.js
+  - 问题: /equipment/list 返回 quality=null, attack=null
+  - 修复: 确保返回 quality/attack/defense 字段，从配置表读取默认值
+  - 截止: 2026-03-31
+
+[P1-B-30-PM-4] 灵田福地占用详情 + claim/harvest API
+  - 文件: server/backend/routes/paradise.js
+  - 修复1: occupied地块返回 occupiedBy: {name, endsAt, remainingSeconds}
+  - 修复2: POST /api/paradise/claim (强占未占用地块)
+  - 修复3: POST /api/paradise/harvest (收获到期产物)
+  - 截止: 2026-03-31
+
+# ========== 2026-03-30 下午新增 P2/B 任务 ==========
+[P2-B-30-PM-1] 竞技场挑战次数扣减时机修复
+  - 文件: server/backend/routes/arena.js
+  - 问题: 参数错误时也消耗挑战次数
+  - 修复: remainingChallenges 扣减移到所有校验通过之后
+  - 截止: 2026-04-01
+
+[P2-B-30-PM-2] WorldBoss 错误信息规范化
+  - 文件: server/backend/routes/worldboss.js
+  - 修复: 错误 message 改为明确表述，status 字段标注 active/inactive
+  - 截止: 2026-04-01
+
+[P2-B-30-PM-3] 离线挂机收益系统实现
+  - 文件: server/backend/routes/offline.js (新建)
+  - 功能: 记录 last_logout_at，计算离线收益(上限8小时)
+  - API: GET /api/offline/income, POST /api/offline/claim
+  - 截止: 2026-04-02
+
+# ========== 2026-03-30 下午新增 P1/B 新功能 ==========
+[NF-B-30-PM-1] 灵石消费返利系统后端
+  - 文件: server/backend/routes/consume.js (新建) + routes/rebate.js (新建)
+  - 功能: 消费积分累计/返利计算/返利领取
+  - API: POST /api/consume, GET /api/rebate/status, POST /api/rebate/claim
+  - 截止: 2026-04-05
+
+# ========== 2026-03-29 下午新增 P0/B 任务 ==========
+[P0-B-29-PM-1] 修炼效率传承机制（cultivationPower突破后清零修复）
+  - 文件: server/backend/routes/cultivation.js
+  - 问题: breakthrough后value=0导致cultivationPower=350（从6350暴跌94%）
+  - 修复: 突破时 retainedPower = oldPower × 0.3，finalPower = retainedPower + (value×0.1 + realmLevel×50)
+  - 验证: 突破后首次修炼gain应≥突破前的70%
+  - 截止: 2026-03-31
+
+# ========== 2026-03-29 下午新增 P1/B 任务 ==========
+[P1-B-29-PM-1] 每日任务进度读取修复（内存缓存不同步DB） # 完成 | 2026-03-29 2472ed27
+  - 文件: server/backend/routes/dailyQuest.js
+  - 问题: /list返回progress=0，但cultivation正确调用updateDailyQuestProgress并写DB
+  - 修复: /list端点从DB实时读取progress，或确保updateDailyQuestProgress同时更新内存缓存
+  - 截止: 2026-03-31
+
+[P1-B-29-PM-2] 成就进度读取修复（trigger service与achievement缓存不同步）
+  - 文件: server/backend/routes/achievement.js + game/achievement_trigger_service.js
+  - 问题: 突破触发triggerAchievement但/list仍progress=0
+  - 修复1: 确保saveProgressCallback在triggerAchievement调用时已注册
+  - 修复2: /list改用DB实时读取替代纯内存
+  - 截止: 2026-03-31
+
+[P1-B-29-PM-3] 灵田福地占用详情API
+  - 文件: server/backend/routes/paradise.js
+  - 修复: occupied地块返回occupiedBy: {name, endsAt, remainingSeconds}
+  - 新增: POST /api/paradise/claim, POST /api/paradise/harvest
+  - 截止: 2026-03-31
+
+[P1-B-29-PM-4] 每日活跃积分系统后端
+  - 文件: server/backend/routes/activityScore.js (新建)
+  - API: GET /api/activity/score, POST /api/activity/score/claim
+  - 截止: 2026-04-05
+
+# ========== 2026-03-29 下午新增 P2/B 任务 ==========
+[P2-B-29-PM-1] cultivation/status增加canBreakthrough字段
+  - 截止: 2026-04-01
+
+# ========== P0 延续任务 ==========
+[P0-B-29-PM-E1] 心魔幻境解锁逻辑修复（跨8轮） # 完成 | 2026-03-29 74602a68
+  - 文件: server/backend/routes/heart_demon.js
+  - 修复: unlocked判断改为 player.level >= f.reqLevel && f.floor <= player.maxFloor
+  - 截止: 2026-03-30
