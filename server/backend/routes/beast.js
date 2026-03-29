@@ -196,6 +196,126 @@ router.post('/capture', (req, res) => {
   });
 });
 
+// POST /api/beast/summon - 灵兽召唤（支持单抽/十连 + 保底系统）
+router.post('/summon', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+  const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 10);
+
+  // 灵石消耗：单抽50，十连450（九折优惠）
+  const costPerSummon = 50;
+  const totalCost = count === 10 ? costPerSummon * 10 * 0.9 : costPerSummon * count;
+
+  // 扣除灵石
+  try {
+    const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!player || player.lingshi < totalCost) {
+      return res.json({ success: false, message: '灵石不足' });
+    }
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalCost, userId);
+  } catch(e) {
+    console.log('[beast/summon] lingshi deduct error:', e.message);
+    return res.json({ success: false, message: '灵石扣除失败' });
+  }
+
+  // 获取当前保底进度
+  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId) || { count: 0 };
+  let currentPityCount = pityRow.count;
+
+  const results = [];
+  let mythicalAppeared = false;
+
+  // 执行召唤
+  for (let i = 0; i < count; i++) {
+    currentPityCount++;
+    const guaranteedMyth = currentPityCount >= 90;
+
+    let capturedTemplate;
+    if (guaranteedMyth) {
+      capturedTemplate = beastTemplates.find(t => t.quality === 'legendary');
+      currentPityCount = 0; // 保底触发，重置
+      mythicalAppeared = true;
+    } else {
+      // 普通抽取: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%
+      const roll = Math.random() * 100;
+      let quality;
+      if (roll < 1) { quality = 'legendary'; mythicalAppeared = true; }
+      else if (roll < 5) quality = 'epic';
+      else if (roll < 15) quality = 'rare';
+      else if (roll < 40) quality = 'uncommon';
+      else quality = 'common';
+
+      const templates = beastTemplates.filter(t => t.quality === quality);
+      capturedTemplate = templates[Math.floor(Math.random() * templates.length)] || beastTemplates[0];
+
+      // 如果随机到神话，重置保底
+      if (quality === 'legendary') currentPityCount = 0;
+    }
+
+    // 写入DB（已有则合并，level+1）
+    try {
+      const existing = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND template_id = ?').get(userId, capturedTemplate.id);
+      if (existing) {
+        db.prepare('UPDATE player_beasts SET level = level + 1, attack = attack + ? * (level + 1) / level, hp = hp + ? * (level + 1) / level WHERE id = ?').run(
+          capturedTemplate.baseAttack, capturedTemplate.baseHp, existing.id
+        );
+      } else {
+        db.prepare(`INSERT INTO player_beasts (player_id, template_id, name, level, quality, attack, hp, is_active, intimacy)
+          VALUES (?, ?, ?, 1, ?, ?, ?, 0, 0)
+          ON CONFLICT(player_id, template_id) DO UPDATE SET level = level + 0`).run(
+          userId, capturedTemplate.id, capturedTemplate.name, capturedTemplate.quality,
+          capturedTemplate.baseAttack, capturedTemplate.baseHp
+        );
+      }
+    } catch(e) {
+      console.log('[beast/summon] insert error:', e.message);
+    }
+
+    results.push({
+      templateId: capturedTemplate.id,
+      name: capturedTemplate.name,
+      quality: capturedTemplate.quality,
+      attack: capturedTemplate.baseAttack,
+      hp: capturedTemplate.baseHp,
+      level: 1,
+      isNew: !existing
+    });
+  }
+
+  // 更新保底计数器
+  db.prepare('INSERT OR REPLACE INTO beast_pity_counter (user_id, count, last_capture_at) VALUES (?, ?, datetime("now"))').run(userId, currentPityCount);
+
+  res.json({
+    success: true,
+    count,
+    cost: totalCost,
+    beasts: results,
+    pity: {
+      count: currentPityCount,
+      nextMythical: Math.max(0, 90 - currentPityCount),
+      mythicalAppeared
+    }
+  });
+});
+
+// GET /api/beast/summon-status - 获取召唤状态（保底进度）
+router.get('/summon-status', (req, res) => {
+  const db = getDb(req);
+  initBeastTables(db);
+  const userId = extractUserId(req);
+
+  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId) || { count: 0 };
+  const count = pityRow.count || 0;
+
+  res.json({
+    userId,
+    count,
+    nextMythical: Math.max(0, 90 - count),
+    progress: Math.min(100, Math.round(count / 90 * 100))
+  });
+});
+
 // POST /api/beast/activate - 出战激活（DB持久化）
 router.post('/activate', (req, res) => {
   const db = getDb(req);
