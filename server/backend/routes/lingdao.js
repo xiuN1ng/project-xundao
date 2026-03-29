@@ -130,8 +130,11 @@ const CHANNEL_CONFIG = {
 function getPlayerLingshi(playerId) {
   if (!db) return 0;
   try {
-    const row = db.prepare('SELECT lingshi FROM player WHERE id = ?').get(playerId);
-    return row ? Number(row.lingshi) : 0;
+    // 优先从 Users 表读取（权威数据源），备用 player 表
+    const row = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(playerId);
+    if (row) return Number(row.lingshi);
+    const playerRow = db.prepare('SELECT spirit_stones FROM player WHERE user_id = ?').get(playerId);
+    return playerRow ? Number(playerRow.spirit_stones) : 0;
   } catch (e) {
     Logger.error('获取玩家灵石失败:', e.message);
     return 0;
