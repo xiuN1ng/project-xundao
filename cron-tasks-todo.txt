@@ -3701,7 +3701,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 修复详情: getPlayerData()优先SELECT * FROM Users DB; /claim-daily和/buy-month-card改用UPDATE Users持久化; /info的spiritStones改用lingshi列
   - 截止: 2026-04-01
 
-[P1-B-94-1] 宗门捐献完整实现
+[P1-B-94-1] 宗门捐献完整实现 # 完成 | 2026-03-30 40dee990
   - 文件: server/backend/routes/sect.js (donate 路由)
   - 功能: 扣灵石 + 写 SectMembers.contribution + 统一前后端参数名(前端amount/后端lingshi)
   - SQL: UPDATE Users SET lingshi=lingshi-? WHERE id=? AND lingshi>=?
