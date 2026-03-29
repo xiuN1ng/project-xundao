@@ -3713,10 +3713,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 功能: start 和 status API 统一 cultivationPower 计算，统一用 realmConfig[cult.realm].realm_level
   - 截止: 2026-04-03
 
-[P1-B-94-3] 灵兽参战系统后端
+[P1-B-94-3] 灵兽参战系统后端  # 完成 | 2026-03-30 05:10 | e1c28d16
   - 文件: server/backend/routes/beast.js
   - 功能: POST /api/beast/enter {userId, beastId}, /leave {userId}, GET /api/beast/active {userId}
-  - 截止: 2026-04-10
+  - server/server.js 注册 /api/beast 路由 (backend/routes/beast.js)
+  - 截止: 2026-04-10 | 完成于 2026-03-30
 
 # === 2026-03-29 深夜 第95轮追加 ===
 [P0-B-95-1] server.js 注册缺失的4个路由
