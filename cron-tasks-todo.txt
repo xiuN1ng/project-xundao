@@ -3572,3 +3572,21 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/lundao.js
   - 功能: 赛季重置+段位奖励发放+season-rank API
   - 截止: 2026-04-05
+
+## 2026-03-30-v2 提案任务 ([B])
+
+### P0
+- [B-58-P0-1] Lottery十连：修改/draw路由识别type="ten"并执行十连逻辑，或确保前端调用正确接口 /drawTen  # 完成 | 2026-03-29 4fb96af9
+
+### P1
+- [B-58-P1-1] Tribulation：修复realm_level读取，playerId正确传递，成功率基于真实realm计算
+- [B-58-P1-2] Achievement：注册eventBus事件驱动，cultivation/chapter/arena/beast/friend等触发成就更新
+- [B-58-P1-3] Chapter battle：修复/battle路由逻辑，确保kills/stars正确写入chapter_progress表
+
+### P2
+- [B-58-P2-1] Master师徒系统：注册路由到/api/master，实现apply/accept/list基础功能
+- [B-58-P2-2] 离线挂机收益：Users表加last_active_at，核心操作更新该字段，/api/player/offline-rewards接口
+
+### 新功能
+- [B-58-NF-1] 实时世界频道聊天：POST /api/chat/send + GET /api/chat/history，消息持久化
+- [B-58-NF-2] 装备套装系统：sets表+配置，/api/equipment/sets查询，套装效果叠加
