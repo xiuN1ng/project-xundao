@@ -3438,11 +3438,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-30
 
 # ========== 2026-03-29 第65轮新增 P0/B 任务 ==========
-[P0-B-65-1] 任务系统进度追踪（quest_trigger_service.js）
-  - 文件: server/game/quest_trigger_service.js (新建)
+[P0-B-65-1] 任务系统进度追踪（quest_trigger_service.js）# 完成 | 2026-03-29 24d1f7ad
+  - 文件: server/game/quest_trigger_service.js (新建) + server.js注册
   - 问题: 18个任务全部progress=0，targetType完全未对接
-  - 接入事件: cultivation:breakthrough, arena:battle, sect:join, dungeon:clear
-  - 实现: updateQuestProgress(userId, targetType, delta)
+  - 接入事件: cultivation:start, cultivation:breakthrough, chapter:battle, chapter:complete, arena:challenge, forge:make, forge:strengthen, dungeon:complete, beast:obtain, login
+  - 实现: updateDailyQuestProgress(userId, category, delta) + updateMainQuestProgress(userId, targetType, delta)
   - 验证: realm_breakthrough事件触发后，questId=5(筑基成功) progress=1
   - 截止: 2026-03-31
 
@@ -3471,9 +3471,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 接口: GET /auto-battle/status, POST /auto-battle/start, POST /sweep/:id
   - 截止: 2026-04-03
 
-[P1-B-65-4] Arena rivals端点别名
+[P1-B-65-4] Arena rivals端点别名  # 完成 | 2026-03-29 24d1f7ad
   - 文件: server/backend/routes/arena.js
-  - 修复: router.get('/rivals/:userId') → /opponents/:userId
+  - 修复: router.get('/rivals/:userId') → /opponents/:userId（完整复制对手列表逻辑）
   - 截止: 2026-03-31
 
 [P1-B-65-5] HeartDemon enter 500错误
