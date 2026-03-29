@@ -421,22 +421,49 @@ router.get('/daily', (req, res) => {
     const todayStr = getShanghaiDate();
     const dailyReward = { type: 'lingshi', amount: 100, name: '每日登录礼' };
 
-    // 检查今日是否已领取
-    let canClaim = true;
+    // 检查今日是否已领取每日登录礼
+    let canClaimDaily = true;
     const database = welfareGetDb();
     if (database) {
       const existing = database.prepare(
         'SELECT id FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
       ).get(playerId, todayStr);
-      canClaim = !existing;
+      canClaimDaily = !existing;
     }
+
+    // 获取首充双倍状态
+    const firstRechargeStatus = welfareStorage.getFirstRechargeStatus(playerId);
+
+    // 获取成长基金状态
+    const growthFundStatus = welfareStorage.getGrowthFundStatus(playerId);
+
+    // 获取玩家等级（用于成长基金资格判断）
+    let playerLevel = 1;
+    if (playerModule && playerModule._players && playerModule._players[playerId]) {
+      playerLevel = playerModule._players[playerId].level || 1;
+    } else if (database) {
+      try {
+        const user = database.prepare('SELECT level FROM Users WHERE id = ?').get(playerId);
+        if (user) playerLevel = user.level || 1;
+      } catch (_) {}
+    }
+
+    // 过滤成长基金可领取等级
+    const availableLevels = growthFundStatus.levels
+      .filter(l => !growthFundStatus.claimedLevels.includes(l.level) && playerLevel >= l.minLevel)
+      .map(l => ({ level: l.level, reward: l.reward, minLevel: l.minLevel }));
 
     res.json({
       success: true,
       data: {
         date: todayStr,
-        canClaim: canClaim,
-        reward: dailyReward
+        daily: { canClaim: canClaimDaily, reward: dailyReward },
+        firstRecharge: firstRechargeStatus,
+        growthFund: {
+          purchased: growthFundStatus.purchased,
+          claimedLevels: growthFundStatus.claimedLevels || [],
+          levels: availableLevels
+        }
       }
     });
   } catch (error) {
@@ -491,6 +518,56 @@ router.post('/daily', (req, res) => {
         reward: { type: 'lingshi', amount: rewardAmount, name: '每日登录礼' }
       }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/welfare/claim
+ * 通用福利领取 - 支持首充双倍和成长基金
+ * body: { type: 'first_recharge' | 'growth_fund', level?: number, ... }
+ */
+router.post('/claim', async (req, res) => {
+  try {
+    const playerIdRaw = req.body.player_id || req.body.playerId || req.headers['x-user-id'] || 1;
+    const playerId = parseInt(playerIdRaw) || 1;
+    const { type, level } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+
+    // 获取玩家当前等级
+    let playerLevel = 1;
+    const database = welfareGetDb();
+    if (database) {
+      try {
+        const user = database.prepare('SELECT level FROM Users WHERE id = ?').get(playerId);
+        if (user) playerLevel = user.level || 1;
+      } catch (_) {}
+    }
+
+    if (type === 'first_recharge') {
+      const result = welfareStorage.claimFirstRechargeReward(playerId);
+      if (result.success) {
+        updatePlayerSpiritStones(playerId, result.reward.amount);
+      }
+      return res.json(result);
+    }
+
+    if (type === 'growth_fund') {
+      if (!level) {
+        return res.status(400).json({ success: false, error: '缺少level参数' });
+      }
+      const result = welfareStorage.claimGrowthFundReward(playerId, parseInt(level), playerLevel);
+      if (result.success) {
+        updatePlayerSpiritStones(playerId, result.reward.amount);
+      }
+      return res.json(result);
+    }
+
+    return res.status(400).json({ success: false, error: '无效的福利类型' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

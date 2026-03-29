@@ -159,12 +159,61 @@ function initMonthlyCardTable() {
   }
 }
 
+// 初始化首充表
+function initFirstRechargeTable() {
+  try {
+    const database = getDb();
+    if (!database) return false;
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS welfare_first_recharge (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        purchased INTEGER DEFAULT 0,
+        purchased_at TEXT,
+        claimed INTEGER DEFAULT 0,
+        claimed_at TEXT,
+        reward_amount INTEGER DEFAULT 600,
+        UNIQUE(player_id)
+      )
+    `);
+    return true;
+  } catch (e) {
+    console.error('首充表初始化失败:', e.message);
+    return false;
+  }
+}
+
+// 初始化成长基金表
+function initGrowthFundTable() {
+  try {
+    const database = getDb();
+    if (!database) return false;
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS welfare_growth_fund (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        purchased INTEGER DEFAULT 0,
+        purchased_at TEXT,
+        claimed_levels TEXT DEFAULT '[]',
+        last_claim_at TEXT,
+        UNIQUE(player_id)
+      )
+    `);
+    return true;
+  } catch (e) {
+    console.error('成长基金表初始化失败:', e.message);
+    return false;
+  }
+}
+
 // 签到存储操作
 const welfareStorage = {
   // 初始化
   init() {
     initSignInTable();
     initMonthlyCardTable();
+    initFirstRechargeTable();
+    initGrowthFundTable();
     return true;
   },
 
@@ -425,6 +474,115 @@ const welfareStorage = {
       reward: card.dailyReward,
       message: `领取成功！获得${card.dailyReward.amount}灵石`
     };
+  },
+
+  // ========== 首充双倍 ==========
+  getFirstRechargeStatus(playerId) {
+    const database = getDb();
+    if (!database) return { purchased: false, claimed: false, rewardAmount: 600 };
+    const record = database.prepare(
+      'SELECT * FROM welfare_first_recharge WHERE player_id = ?'
+    ).get(playerId);
+    if (!record) return { purchased: false, claimed: false, rewardAmount: 600 };
+    return {
+      purchased: !!record.purchased,
+      claimed: !!record.claimed,
+      rewardAmount: record.reward_amount || 600,
+      purchasedAt: record.purchased_at,
+      claimedAt: record.claimed_at
+    };
+  },
+
+  purchaseFirstRecharge(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    database.prepare(
+      'INSERT OR REPLACE INTO welfare_first_recharge (player_id, purchased, purchased_at) VALUES (?, 1, ?)'
+    ).run(playerId, new Date().toISOString());
+    return { success: true, message: '首充双倍已激活，充值时获得双倍灵石' };
+  },
+
+  claimFirstRechargeReward(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    const record = database.prepare(
+      'SELECT * FROM welfare_first_recharge WHERE player_id = ? AND purchased = 1'
+    ).get(playerId);
+    if (!record) return { success: false, error: '未购买首充双倍' };
+    if (record.claimed) return { success: false, error: '已领取过首充奖励' };
+    database.prepare(
+      'UPDATE welfare_first_recharge SET claimed = 1, claimed_at = ? WHERE player_id = ?'
+    ).run(new Date().toISOString(), playerId);
+    return {
+      success: true,
+      reward: { type: 'first_recharge', amount: record.reward_amount || 600, name: '首充双倍奖励' },
+      message: `领取成功！获得${record.reward_amount || 600}灵石`
+    };
+  },
+
+  // ========== 成长基金 ==========
+  GROWTH_FUND_LEVELS: [
+    { level: 1, cost: 30, reward: 100, minLevel: 1 },
+    { level: 2, cost: 50, reward: 200, minLevel: 5 },
+    { level: 3, cost: 50, reward: 200, minLevel: 10 },
+    { level: 4, cost: 50, reward: 200, minLevel: 15 },
+    { level: 5, cost: 68, reward: 400, minLevel: 20 },
+    { level: 6, cost: 68, reward: 400, minLevel: 25 },
+    { level: 7, cost: 68, reward: 400, minLevel: 30 },
+    { level: 8, cost: 100, reward: 600, minLevel: 35 },
+    { level: 9, cost: 100, reward: 600, minLevel: 40 },
+    { level: 10, cost: 100, reward: 1000, minLevel: 45 }
+  ],
+
+  getGrowthFundStatus(playerId) {
+    const database = getDb();
+    const levels = this.GROWTH_FUND_LEVELS;
+    if (!database) return { purchased: false, claimedLevels: [], levels };
+    const record = database.prepare(
+      'SELECT * FROM welfare_growth_fund WHERE player_id = ?'
+    ).get(playerId);
+    if (!record || !record.purchased) return { purchased: false, claimedLevels: [], levels };
+    let claimedLevels = [];
+    try { claimedLevels = JSON.parse(record.claimed_levels || '[]'); } catch (_) {}
+    return { purchased: true, claimedLevels, levels, purchasedAt: record.purchased_at };
+  },
+
+  purchaseGrowthFund(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    const existing = database.prepare(
+      'SELECT * FROM welfare_growth_fund WHERE player_id = ? AND purchased = 1'
+    ).get(playerId);
+    if (existing) return { success: false, error: '已购买过成长基金' };
+    database.prepare(
+      'INSERT INTO welfare_growth_fund (player_id, purchased, purchased_at) VALUES (?, 1, ?)'
+    ).run(playerId, new Date().toISOString());
+    return { success: true, message: '成长基金购买成功' };
+  },
+
+  claimGrowthFundReward(playerId, level, currentPlayerLevel) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库未连接' };
+    const fundRecord = database.prepare(
+      'SELECT * FROM welfare_growth_fund WHERE player_id = ? AND purchased = 1'
+    ).get(playerId);
+    if (!fundRecord) return { success: false, error: '未购买成长基金' };
+    const fundLevel = this.GROWTH_FUND_LEVELS[level - 1];
+    if (!fundLevel) return { success: false, error: '无效的成长基金等级' };
+    let claimedLevels = [];
+    try { claimedLevels = JSON.parse(fundRecord.claimed_levels || '[]'); } catch (_) {}
+    if (claimedLevels.includes(level)) return { success: false, error: '该等级奖励已领取' };
+    if (currentPlayerLevel < fundLevel.minLevel) return { success: false, error: `需要达到${fundLevel.minLevel}级才能领取` };
+    claimedLevels.push(level);
+    database.prepare(
+      'UPDATE welfare_growth_fund SET claimed_levels = ?, last_claim_at = ? WHERE player_id = ?'
+    ).run(JSON.stringify(claimedLevels), new Date().toISOString(), playerId);
+    return {
+      success: true,
+      level,
+      reward: { type: 'growth_fund', amount: fundLevel.reward, name: `成长基金L${level}` },
+      message: `领取成功！获得${fundLevel.reward}灵石`
+    };
   }
 };
 
@@ -442,11 +600,3 @@ module.exports = {
   getDb: () => db
 };
 
-// 导出
-module.exports = {
-  welfareStorage,
-  SIGN_IN_REWARDS,
-  EQUIPMENT_TEMPLATES,
-  WELFARE_MONTHLY_CARDS,
-  getDb: () => db
-};
