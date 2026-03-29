@@ -613,6 +613,84 @@ router.get('/:id', (req, res) => {
   }
 });
 
+// ============ 灵兽遭遇 API ============
+
+// POST /api/beast/encounter - 探索遭遇灵兽（消耗灵石，随机触发）
+router.post('/encounter', (req, res) => {
+  try {
+    const { player_id, userId } = req.body;
+    const actualPlayerId = player_id || userId || 1;
+
+    const ENCOUNTER_COST = 100; // 探索消耗100灵石
+
+    // 读取玩家灵石（优先从 Users 表，否则从 player 表）
+    let player = null;
+    let lingshi = 0;
+    try {
+      player = db.prepare('SELECT * FROM Users WHERE id = ?').get(actualPlayerId);
+    } catch(e) {}
+    if (player) {
+      lingshi = player.lingshi;
+    } else {
+      player = db.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
+      if (player) lingshi = player.spirit_stones;
+    }
+
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    if (lingshi < ENCOUNTER_COST) {
+      return res.json({ success: false, error: `灵石不足，需要${ENCOUNTER_COST}灵石，当前${lingshi}` });
+    }
+
+    // 按稀有度加权随机选择灵兽
+    // common=35%, uncommon=25%, rare=20%, epic=12%, legendary=5%, mythical=3%
+    const weights = { common: 35, uncommon: 25, rare: 20, epic: 12, legendary: 5, mythical: 3 };
+    const pool = Object.entries(BEAST_DATA).map(([id, b]) => ({ id, ...b, weight: weights[b.quality] || 5 }));
+    const totalWeight = pool.reduce((s, b) => s + b.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let selected = pool[0];
+    for (const b of pool) {
+      roll -= b.weight;
+      if (roll <= 0) { selected = b; break; }
+    }
+
+    // 扣除灵石
+    try {
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(ENCOUNTER_COST, actualPlayerId);
+    } catch(e) {
+      try {
+        db.prepare('UPDATE player SET spirit_stones = spirit_stones - ? WHERE id = ?').run(ENCOUNTER_COST, actualPlayerId);
+      } catch(e2) {
+        return res.status(500).json({ success: false, error: '灵石扣除失败' });
+      }
+    }
+
+    const encounter = {
+      encounterId: Math.random().toString(36).substr(2, 8),
+      beastId: selected.id,
+      name: selected.name,
+      icon: selected.icon,
+      quality: selected.quality,
+      qualityName: { common: '普通', uncommon: '优秀', rare: '稀有', epic: '史诗', legendary: '传说', mythical: '神话' }[selected.quality] || selected.quality,
+      captureRate: selected.capture_rate || 0.1,
+      baseAtk: selected.base_atk,
+      baseHp: selected.base_hp,
+      description: selected.description || '',
+      skill: selected.skill_name || '',
+      cost: ENCOUNTER_COST,
+      remainingLingshi: lingshi - ENCOUNTER_COST,
+      message: `在探索中遭遇了${selected.name}！`
+    };
+
+    console.log(`[beast] encounter: player=${actualPlayerId} beast=${selected.id} cost=${ENCOUNTER_COST}`);
+    res.json({ success: true, encounter });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ 宠物捕捉 API ============
 
 // 捕捉灵兽
