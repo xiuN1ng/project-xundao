@@ -231,6 +231,24 @@ function initDailyQuests(userId) {
     };
   }
 
+  // 如果quests为空（服务器重启后首次调用），从DB加载已保存的进度
+  const hasAnyProgress = Object.keys(userQuests[userId].quests).length > 0;
+  if (!hasAnyProgress && db) {
+    try {
+      const rows = db.prepare('SELECT quest_id, progress, completed, claimed FROM daily_quest_progress WHERE user_id = ? AND quest_date = ?').all(userId, today);
+      rows.forEach(row => {
+        userQuests[userId].quests[row.quest_id] = {
+          questId: row.quest_id,
+          progress: row.progress || 0,
+          completed: !!row.completed,
+          claimed: !!row.claimed
+        };
+      });
+    } catch (e) {
+      // DB加载失败，使用内存初始化
+    }
+  }
+
   // 初始化未完成的每日任务
   questTemplates.forEach(quest => {
     if (!userQuests[userId].quests[quest.id]) {
