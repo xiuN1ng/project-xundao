@@ -8625,6 +8625,25 @@ try {
   Logger.warn('⚠ 论道路由加载失败:', e.message);
 }
 
+// ==================== 修炼系统路由 ====================
+try {
+  const cultivationRoute = require('./backend/routes/cultivation');
+  app.use('/api/cultivation', cultivationRoute);
+  Logger.info('✓ 修炼系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 修炼路由加载失败:', e.message);
+}
+
+// ==================== 婚姻系统路由 ====================
+try {
+  const coupleModule = require('./backend/routes/couple');
+  app.use('/api/couple', coupleModule.router);
+  if (db && coupleModule.setDb) coupleModule.setDb(db);
+  Logger.info('✓ 婚姻系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 婚姻路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
