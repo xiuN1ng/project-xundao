@@ -3546,3 +3546,29 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/game/event_bus.js
   - 功能: 定义CULTIVATE_COMPLETE/BATTLE_COMPLETE/CHAPTER_COMPLETE事件，daily_quest订阅
   - 截止: 2026-03-31
+
+# === 2026-03-30 傍晚 第89轮追加 ===
+[P0-B-89-1] 境界突破cultivationPower崩溃修复
+  - 文件: server/backend/routes/cultivation.js
+  - 功能: ①ALTER TABLE Cultivations ADD COLUMN accumulated_powerINTEGER ②修改power公式 ③突破时保留accumulated_power
+  - 截止: 2026-04-01
+
+[P1-B-89-2] spiritRootApi 补充 getRoots/getMyRoot 方法
+  - 文件: client/src/core/api.js + client/src/components/SpiritRootPanel.vue
+  - 功能: 添加GET方法，loadData()调用API
+  - 截止: 2026-04-02
+
+[B-89-3] 论道正确率公式修复
+  - 文件: server/backend/routes/lundao.js
+  - 功能: Math.min(100, Math.round(correct/total*100))
+  - 截止: 2026-04-01
+
+[B-89-4] 每日任务根路由merge DB进度
+  - 文件: server/backend/routes/dailyQuest.js
+  - 功能: router.get('/') 合并DB progress/completed/claimed
+  - 截止: 2026-04-03
+
+[P1-B-89-5] 论道赛季制+段位奖励后端
+  - 文件: server/backend/routes/lundao.js
+  - 功能: 赛季重置+段位奖励发放+season-rank API
+  - 截止: 2026-04-05

@@ -421,7 +421,7 @@ router.get('/online', (req, res) => {
       SELECT id, nickname, level, realm, combat_power
       FROM Users
       WHERE id != ?
-      ORDER BY last_login DESC
+      ORDER BY last_logout DESC
       LIMIT 50
     `).all(userId);
     res.json({ success: true, players });

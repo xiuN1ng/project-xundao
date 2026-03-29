@@ -438,7 +438,7 @@ router.get('/rank/:userId', (req, res) => {
           seasonRemainingTime: seasonInfo.remainingDays
         },
         ranking: {
-          current,
+          current: ranking,
           total: totalPlayers,
           percentage: Math.round((1 - (ranking / totalPlayers)) * 100)
         }

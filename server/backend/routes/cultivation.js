@@ -37,6 +37,7 @@ try {
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_first_cultivate_date TEXT"); } catch (e) { /* 列已存在 */ }
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN daily_exchange_count INTEGER DEFAULT 0"); } catch (e) { /* 列已存在 */ }
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_exchange_date TEXT"); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Cultivations ADD COLUMN accumulated_power INTEGER DEFAULT 0"); } catch (e) { /* 列已存在 */ }
   Logger.info('数据库连接成功');
 } catch (err) {
   Logger.error('数据库连接失败:', err.message);
@@ -353,7 +354,9 @@ router.post('/start', (req, res) => {
 
     // 先计算 currentCultivationPower，再计算动态灵石消耗
     const realmLevel = config.realm_level || 1;
-    const currentCultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    // 优先使用DB中存储的cultivationPower（突破后保留值），再加上当前修炼值的贡献
+    const storedPower = parseInt(cult.cultivationPower) || 0;
+    const currentCultivationPower = storedPower + Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
     const LINGSHI_COST = getCultivationCost(currentCultivationPower);
 
     // 灵石不足检查
@@ -448,8 +451,15 @@ router.post('/breakthrough', (req, res) => {
 
     const nextConfig = realmConfig[nextRealm];
 
-    // 重置修炼值，境界+1
-    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, userId);
+    // ========== 突破时保留30%修炼效率（防止cultivationPower从6350暴跌至350）==========
+    const oldCultivationPower = parseInt(cult.cultivationPower) || 0;
+    const retainedPower = Math.floor(oldCultivationPower * 0.3);
+    const nextRealmLevel = nextConfig.realm_level || 1;
+    // 突破后cultivationPower = 保留值 + 新境界基础值
+    const breakthroughCultivationPower = retainedPower + nextRealmLevel * 50;
+
+    // 重置修炼值，境界+1，保留cultivationPower
+    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, breakthroughCultivationPower, userId);
     // 同步更新 Users 表（权威源）和 player 表
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
@@ -509,7 +519,13 @@ router.post('/advance', (req, res) => {
 
     const nextConfig = realmConfig[nextRealm];
 
-    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, userId);
+    // ========== 跃迁时保留30%修炼效率（与breakthrough相同）==========
+    const oldCultivationPower = parseInt(cult.cultivationPower) || 0;
+    const retainedPower = Math.floor(oldCultivationPower * 0.3);
+    const nextRealmLevel = nextConfig.realm_level || 1;
+    const breakthroughCultivationPower = retainedPower + nextRealmLevel * 50;
+
+    db.prepare('UPDATE Cultivations SET value = 0, realm = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, breakthroughCultivationPower, userId);
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
 
