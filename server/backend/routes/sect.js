@@ -478,9 +478,54 @@ router.get('/admin', (req, res) => {
 
 // /donate - 捐赠
 router.post('/donate', (req, res) => {
-  const { player_id, amount } = req.body;
-  sect.contribution += amount || 100;
-  res.json({ success: true, message: '捐赠成功', contribution: sect.contribution });
+  const userId = parseInt(req.body.player_id || req.body.userId || req.body.playerId) || (req.user && req.user.id) || 1;
+  const amount = parseInt(req.body.amount || req.body.lingshi || req.body.spirit_stones) || 100;
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库未连接' });
+  }
+
+  try {
+    // 检查玩家是否存在，是否有宗门
+    const player = db.prepare('SELECT id, sectId, lingshi FROM Users WHERE id = ?').get(userId);
+    if (!player) {
+      return res.status(404).json({ success: false, message: '玩家不存在' });
+    }
+    if (!player.sectId) {
+      return res.status(400).json({ success: false, message: '未加入宗门' });
+    }
+    if (player.lingshi < amount) {
+      return res.status(400).json({ success: false, message: '灵石不足' });
+    }
+
+    // 扣除玩家灵石
+    const updateUser = db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ? AND lingshi >= ?').run(amount, userId, amount);
+    if (updateUser.changes === 0) {
+      return res.status(400).json({ success: false, message: '灵石扣除失败' });
+    }
+
+    // 更新宗门成员贡献
+    const sectId = player.sectId;
+    db.prepare('UPDATE SectMembers SET contribution = contribution + ? WHERE userId = ? AND sectId = ?').run(amount, userId, sectId);
+
+    // 更新宗门总贡献
+    db.prepare('UPDATE sects SET contribution = contribution + ? WHERE id = ?').run(amount, sectId);
+
+    // 查询最新贡献
+    const member = db.prepare('SELECT contribution FROM SectMembers WHERE userId = ? AND sectId = ?').get(userId, sectId);
+    const newLingshi = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+
+    res.json({
+      success: true,
+      message: '捐赠成功',
+      contributed: amount,
+      totalContribution: member ? member.contribution : 0,
+      remainingLingshi: newLingshi ? newLingshi.lingshi : 0
+    });
+  } catch (e) {
+    console.error('[sect] donate error:', e.message);
+    res.status(500).json({ success: false, message: '服务器错误: ' + e.message });
+  }
 });
 
 // 创建宗门
