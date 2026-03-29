@@ -3591,6 +3591,15 @@ try {
   Logger.info('交易市场API不可用:', e.message);
 }
 
+// ============ 位面之子 Buff 系统 API ============
+try {
+  const buffApi = require('./services/buff_api');
+  app.use('/api/buff', buffApi);
+  Logger.info('✅ 位面之子 Buff 系统 API 已加载');
+} catch (e) {
+  Logger.info('Buff系统API不可用:', e.message);
+}
+
 // ============ 仙侣系统 API ============
 
 // 亲密度等级配置
