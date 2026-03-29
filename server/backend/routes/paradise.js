@@ -156,23 +156,55 @@ const paradiseInfoHandler = (req, res) => {
        ORDER BY completed_time DESC LIMIT 10`
     ).get(userId);
 
-    // 获取已占领的福地（根据探索完成次数）
+    // 获取已占领的福地详情（包含占用者信息和可收获时间）
     const occupiedRows = db.prepare(
-      `SELECT land_id, COUNT(*) as count FROM paradise_explorations
+      `SELECT land_id, completed_time, COUNT(*) as count
+       FROM paradise_explorations
        WHERE user_id = ? AND status = 'completed' AND rewards_claimed = 1
        GROUP BY land_id`
     ).all(userId);
 
-    const occupiedLands = occupiedRows.map(r => r.land_id);
+    // 获取当前用户名
+    let playerName = '修士';
+    try {
+      const userRow = db.prepare('SELECT nickname FROM Users WHERE id = ?').get(userId);
+      if (userRow && userRow.nickname) playerName = userRow.nickname;
+    } catch(e) {}
 
-    // 获取所有福地（带境界锁定状态）
+    // 构建 occupiedLands 详情（keyed by landId for easy lookup）
+    const occupiedLandsMap = {};
+    for (const r of occupiedRows) {
+      const land = PARADISE_LANDS[r.land_id];
+      const cooldownMs = (land?.explorationTime || 300) * 1000;
+      const nextHarvestAt = r.completed_time + cooldownMs;
+      const remainingMs = Math.max(0, nextHarvestAt - Date.now());
+      occupiedLandsMap[r.land_id] = {
+        landId: r.land_id,
+        occupiedBy: {
+          name: playerName,
+          completedAt: r.completed_time,
+          endsAt: nextHarvestAt,
+          remainingSeconds: Math.floor(remainingMs / 1000),
+          harvestReady: remainingMs <= 0,
+          exploreCount: r.count
+        }
+      };
+    }
+
+    const occupiedLands = Object.keys(occupiedLandsMap);
+
+    // 获取所有福地（带境界锁定状态 + 占用详情）
     const playerRealm = getPlayerRealm(userId);
-    const availableLands = Object.values(PARADISE_LANDS).map(land => ({
-      ...land,
-      locked: playerRealm < land.minRealm,
-      minRealmName: REALM_MAP[land.minRealm] || '未知',
-      occupied: occupiedLands.includes(land.id)
-    }));
+    const availableLands = Object.values(PARADISE_LANDS).map(land => {
+      const occ = occupiedLandsMap[land.id];
+      return {
+        ...land,
+        locked: playerRealm < land.minRealm,
+        minRealmName: REALM_MAP[land.minRealm] || '未知',
+        occupied: !!occ,
+        occupiedBy: occ ? occ.occupiedBy : undefined
+      };
+    });
 
     // 构建 currentQuest 对象
     let quest = null;
@@ -553,17 +585,123 @@ router.get('/', (req, res) => {
 
   const stats = db.prepare('SELECT * FROM paradise_stats WHERE user_id = ?').get(userId);
   const occupiedRows = db.prepare(
-    `SELECT land_id, COUNT(*) as count FROM paradise_explorations
-     WHERE user_id = ? AND status = 'completed' AND rewards_claimed = 1 GROUP BY land_id`
+    `SELECT land_id, completed_time, COUNT(*) as count
+     FROM paradise_explorations
+     WHERE user_id = ? AND status = 'completed' AND rewards_claimed = 1
+     GROUP BY land_id`
   ).all(userId);
+
+  let playerName = '修士';
+  try {
+    const userRow = db.prepare('SELECT nickname FROM Users WHERE id = ?').get(userId);
+    if (userRow && userRow.nickname) playerName = userRow.nickname;
+  } catch(e) {}
+
+  const occupiedLands = occupiedRows.map(r => {
+    const land = PARADISE_LANDS[r.land_id];
+    const cooldownMs = (land?.explorationTime || 300) * 1000;
+    const nextHarvestAt = r.completed_time + cooldownMs;
+    const remainingMs = Math.max(0, nextHarvestAt - Date.now());
+    return {
+      landId: r.land_id,
+      exploreCount: r.count,
+      harvestReady: remainingMs <= 0,
+      remainingSeconds: Math.floor(remainingMs / 1000),
+      occupiedBy: { name: playerName, completedAt: r.completed_time, endsAt: nextHarvestAt }
+    };
+  });
 
   db.close();
 
   res.json({
     types: Object.values(PARADISE_LANDS),
     totalExplorations: stats?.total_explorations || 0,
-    occupiedLands: occupiedRows.map(r => r.land_id)
+    occupiedLands
   });
+});
+
+// ========== POST /api/paradise/harvest ==========
+// 查询当前可收获的福地列表（返回所有已完成冷却的探索）
+router.post('/harvest', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+    const db = getDb();
+    initParadiseTables(db);
+
+    const now = Date.now();
+
+    // 找出所有已完成的探索（status=completed 且 rewards_claimed=0）
+    const completedExplorations = db.prepare(
+      `SELECT pe.*, pl.explorationTime
+       FROM paradise_explorations pe
+       JOIN (
+         SELECT 'spirit-field' as land_id, 120 as explorationTime
+         UNION ALL SELECT 'spiritual-spring', 300
+         UNION ALL SELECT 'ancient-ruins', 600
+         UNION ALL SELECT 'immortal-island', 900
+         UNION ALL SELECT 'chaos-rift', 1200
+       ) pl ON pl.land_id = pe.land_id
+       WHERE pe.user_id = ? AND pe.status IN ('exploring', 'completed')
+         AND pe.rewards_claimed = 0
+       ORDER BY pe.id DESC`
+    ).all(userId);
+
+    const harvestable = [];
+    for (const exp of completedExplorations) {
+      const remaining = Math.max(0, exp.end_time - now);
+      if (remaining <= 0) {
+        // 可收获
+        const land = PARADISE_LANDS[exp.land_id];
+        harvestable.push({
+          id: exp.id,
+          landId: exp.land_id,
+          landName: land?.name || exp.land_id,
+          icon: land?.icon || '🏞️',
+          status: 'ready',
+          remainingSeconds: 0
+        });
+      } else {
+        // 还在冷却中
+        harvestable.push({
+          id: exp.id,
+          landId: exp.land_id,
+          landName: PARADISE_LANDS[exp.land_id]?.name || exp.land_id,
+          icon: PARADISE_LANDS[exp.land_id]?.icon || '🏞️',
+          status: 'cooling',
+          remainingSeconds: Math.floor(remaining / 1000)
+        });
+      }
+    }
+
+    db.close();
+    res.json({ success: true, harvestable, total: harvestable.length });
+  } catch (e) {
+    console.error('[Paradise] /harvest error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ========== POST /api/paradise/claim ==========
+// 占领/开始福地探索（alias for /explore，支持 claim landId）
+router.post('/claim', (req, res) => {
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || 1;
+    const { landId } = req.body;
+
+    if (!landId) {
+      return res.status(400).json({ error: '缺少 landId 参数' });
+    }
+
+    const db = getDb();
+    initParadiseTables(db);
+    const quest = startParadiseExploration(userId, landId, db);
+    db.close();
+
+    res.json({ success: true, quest });
+  } catch (e) {
+    console.error('[Paradise] POST /claim error:', e.message);
+    res.status(400).json({ error: e.message });
+  }
 });
 
 module.exports = router;

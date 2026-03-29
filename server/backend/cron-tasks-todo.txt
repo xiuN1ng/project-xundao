@@ -57,3 +57,24 @@
 - 修复: 登录时结算离线收益=min(离线秒数/3600,8)*速率*0.5；前端显示弹窗
 - 负责人: [B]+[F]
 - 截止: 2026-04-02
+
+# === 2026-03-29 夜 第91轮追加 ===
+[P0-B-91-1] 坐骑/翅膀 JSON迁移DB
+  - 文件: xundao-server/server/backend/routes/mount.js + wing.js
+  - 功能: ①建表player_mounts②建表player_wings③迁移JSON数据到DB④替换load/save为DB
+  - 截止: 2026-04-05
+
+[P1-B-91-2] 拍卖行系统完整实现
+  - 文件: xundao-server/server/game/auction_system.js
+  - 功能: POST /publish + POST /buy + GET /list + 建auction_listings表 + 5%交易税
+  - 截止: 2026-04-05
+
+[P1-B-91-3] VIP系统修复
+  - 文件: xundao-server/server/backend/routes/vip.js
+  - 功能: GET从DB读player_vip_points + POST /daily领取奖励 + 删除假buy
+  - 截止: 2026-04-03
+
+[P1-B-91-4] 聊天系统后端完善
+  - 文件: xundao-server/server/backend/routes/chat.js
+  - 功能: 喇叭功能 + 宗门频道隔离 + 历史消息分页
+  - 截止: 2026-04-07
