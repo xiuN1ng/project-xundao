@@ -18,12 +18,18 @@ function setSaveProgressCallback(fn) { saveProgressCallback = fn; }
 
 // 每次进度更新后自动持久化
 function autoPersist(userId) {
-  if (!saveProgressCallback) return;
+  if (!saveProgressCallback) {
+    console.warn(`[achievement] autoPersist: saveProgressCallback not set for user ${userId}, skipping persist`);
+    return;
+  }
   const userData = userAchievementProgress.get(userId);
   if (!userData) return;
+  let savedCount = 0;
   for (const [achId, achProgress] of userData) {
     saveProgressCallback(userId, Number(achId), achProgress.progress, achProgress.completed, achProgress.claimed);
+    savedCount++;
   }
+  console.log(`[achievement] autoPersist: saved ${savedCount} achievements for user ${userId}`);
 }
 
 // ==================== 触发器 → 成就ID映射 ====================
@@ -138,6 +144,7 @@ const notificationQueue = new Map();
 
 /**
  * 初始化用户成就数据（所有 numeric ID）
+ * 注意：只初始化不存在的成就，保留已有的 in-memory 进度（避免覆盖已完成的成就）
  */
 function initUserAchievements(userId) {
   if (!userAchievementProgress.has(userId)) {
@@ -154,7 +161,42 @@ function initUserAchievements(userId) {
       });
     }
   }
+  console.log(`[achievement] initUserAchievements: user ${userId}, ${userData.size} achievements loaded (preserving existing progress)`);
   return userData.get(userId);
+}
+
+/**
+ * 从外部（如 achievement.js DB加载结果）加载已有进度到 trigger service
+ * 解决服务器重启后 in-memory 数据丢失问题
+ */
+function loadUserProgressFromExternal(userId, externalData) {
+  if (!userAchievementProgress.has(userId)) {
+    userAchievementProgress.set(userId, new Map());
+  }
+  const userData = userAchievementProgress.get(userId);
+  if (!externalData) return;
+  for (const [achIdStr, achData] of Object.entries(externalData)) {
+    const achId = Number(achIdStr);
+    if (userData.has(achId)) {
+      // 合并：保留 in-memory 中更"完成"的状态
+      const existing = userData.get(achId);
+      if (achData.completed && !existing.completed) {
+        existing.completed = achData.completed;
+        existing.progress = achData.progress;
+      }
+      if (achData.claimed && !existing.claimed) {
+        existing.claimed = achData.claimed;
+      }
+    } else {
+      userData.set(achId, {
+        progress: achData.progress || 0,
+        completed: !!achData.completed,
+        claimed: !!achData.claimed,
+        notified: !!achData.notified
+      });
+    }
+  }
+  console.log(`[achievement] loadUserProgressFromExternal: user ${userId}, merged external data (${Object.keys(externalData).length} entries)`);
 }
 
 /**
@@ -191,6 +233,7 @@ function triggerAchievement(userId, trigger, value, extra = {}) {
   const newlyCompleted = [];
 
   const achievements = getAchievementsByTrigger(trigger);
+  console.log(`[achievement] triggerAchievement: user=${userId}, trigger=${trigger}, value=${value}, achievements=${achievements.length}`);
   for (const achDef of achievements) {
     const numericId = achDef.id;
     const achProgress = userData.get(numericId);
@@ -406,6 +449,7 @@ module.exports = {
   ACHIEVEMENT_DEFINITIONS,
   TRIGGER_MAP,
   initUserAchievements,
+  loadUserProgressFromExternal,
   getUserProgress,
   triggerAchievement,
   popNotifications,

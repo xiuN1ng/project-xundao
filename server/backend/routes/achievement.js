@@ -59,6 +59,18 @@ function loadAchievementsFromDB() {
   }
 }
 
+/**
+ * 将 DB 加载的成就数据同步到 achievement_trigger_service
+ * 解决服务器重启后 trigger service 内存为空导致成就被错误覆盖的问题
+ */
+function syncAchievementsToTriggerService() {
+  if (!achievementTrigger || !achievementTrigger.loadUserProgressFromExternal) return;
+  for (const [userIdStr, achData] of Object.entries(userAchievements)) {
+    achievementTrigger.loadUserProgressFromExternal(Number(userIdStr), achData);
+  }
+  console.log(`[achievement] 已将 ${Object.keys(userAchievements).length} 个用户的成就数据同步到 trigger service`);
+}
+
 function saveAchievementToDB(userId, achievementId, progress, completed, claimed) {
   if (!db) return;
   try {
@@ -86,6 +98,8 @@ try {
   achievementTrigger = require('../../game/achievement_trigger_service');
   // 注册持久化回调：每次成就进度更新自动写入 DB
   achievementTrigger.setSaveProgressCallback(saveAchievementToDB);
+  // 将 DB 已加载的成就数据同步到 trigger service（解决重启后内存为空的问题）
+  syncAchievementsToTriggerService();
 } catch (e) {
   console.log('[achievement] 成就触发服务加载:', e.message);
   achievementTrigger = null;
@@ -226,6 +240,25 @@ router.get('/:userId', (req, res) => {
   
   if (!userAchievements[userId]) {
     userAchievements[userId] = {};
+  }
+  
+  // 确保 in-memory 数据与 DB 同步（解决直接 DB 更新后 in-memory 仍为 0 的问题）
+  if (db) {
+    try {
+      const rows = db.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
+      rows.forEach(row => {
+        const achId = Number(row.achievement_id);
+        if (!userAchievements[userId][achId] || userAchievements[userId][achId].progress === 0) {
+          userAchievements[userId][achId] = {
+            progress: row.progress,
+            completed: !!row.completed,
+            claimed: !!row.claimed
+          };
+        }
+      });
+    } catch (e) {
+      console.warn('[achievement] DB同步失败:', e.message);
+    }
   }
   
   const achievements = achievementTemplates.map(ach => {
