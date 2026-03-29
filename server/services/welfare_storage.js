@@ -57,7 +57,7 @@ function getDb() {
     try {
       const Database = require('better-sqlite3');
       const path = require('path');
-      const dbPath = path.join(__dirname, '..', 'data', 'game.db');
+      const dbPath = path.join(__dirname, '..', 'backend', 'data', 'game.db');
       db = new Database(dbPath);
     } catch (e) {
       console.error('数据库连接失败:', e.message);
@@ -222,6 +222,239 @@ const welfareStorage = {
     } catch {
       return [];
     }
+  },
+
+  // ==================== 登录奖励存储（次日/三日/七日） ====================
+
+  // 初始化登录奖励表
+  initLoginRewardsTable() {
+    const database = getDb();
+    if (!database) return false;
+    try {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS welfare_login_rewards (
+          player_id INTEGER PRIMARY KEY,
+          second_day_claimed INTEGER DEFAULT 0,
+          third_day_claimed INTEGER DEFAULT 0,
+          seven_day_claimed TEXT DEFAULT '[]',
+          first_recharge_claimed INTEGER DEFAULT 0,
+          first_recharge_claimed_at TEXT
+        )
+      `);
+      return true;
+    } catch (e) {
+      console.error('登录奖励表初始化失败:', e.message);
+      return false;
+    }
+  },
+
+  // 获取或创建登录奖励记录
+  getOrCreateLoginRewardRecord(playerId) {
+    const database = getDb();
+    if (!database) return null;
+    let record = database.prepare(
+      'SELECT * FROM welfare_login_rewards WHERE player_id = ?'
+    ).get(playerId);
+    if (!record) {
+      database.prepare(
+        'INSERT OR IGNORE INTO welfare_login_rewards (player_id) VALUES (?)'
+      ).run(playerId);
+      record = database.prepare(
+        'SELECT * FROM welfare_login_rewards WHERE player_id = ?'
+      ).get(playerId);
+    }
+    return record;
+  },
+
+  // 获取次日登录奖励状态
+  getSecondDayRewardStatus(playerId) {
+    const database = getDb();
+    if (!database) return { claimed: false, canClaim: false };
+    const record = this.getOrCreateLoginRewardRecord(playerId);
+    if (!record) return { claimed: false, canClaim: false };
+    const signStatus = this.getSignInStatus(playerId);
+    const canClaim = signStatus && signStatus.totalSignDays >= 2 && !record.second_day_claimed;
+    return {
+      claimed: !!record.second_day_claimed,
+      canClaim,
+      items: [
+        { icon: '💎', name: '钻石', amount: 30 },
+        { icon: '💰', name: '灵石', amount: 200 }
+      ]
+    };
+  },
+
+  // 领取次日奖励
+  claimSecondDayReward(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库不可用' };
+    const record = this.getOrCreateLoginRewardRecord(playerId);
+    if (!record) return { success: false, error: '记录不存在' };
+    if (record.second_day_claimed) return { success: false, error: '已领取过次日奖励' };
+    const signStatus = this.getSignInStatus(playerId);
+    if (!signStatus || signStatus.totalSignDays < 2) return { success: false, error: '需要连续签到2天以上' };
+    database.prepare(
+      'UPDATE welfare_login_rewards SET second_day_claimed = 1 WHERE player_id = ?'
+    ).run(playerId);
+    return {
+      success: true,
+      rewards: [
+        { icon: '💎', name: '钻石', amount: 30 },
+        { icon: '💰', name: '灵石', amount: 200 }
+      ],
+      message: '领取成功！获得30钻石+200灵石'
+    };
+  },
+
+  // 获取三日登录奖励状态
+  getThirdDayRewardStatus(playerId) {
+    const database = getDb();
+    if (!database) return { claimed: false, canClaim: false };
+    const record = this.getOrCreateLoginRewardRecord(playerId);
+    if (!record) return { claimed: false, canClaim: false };
+    const signStatus = this.getSignInStatus(playerId);
+    const canClaim = signStatus && signStatus.totalSignDays >= 3 && !record.third_day_claimed;
+    return {
+      claimed: !!record.third_day_claimed,
+      canClaim,
+      items: [
+        { icon: '💎', name: '钻石', amount: 50 },
+        { icon: '💰', name: '灵石', amount: 500 }
+      ]
+    };
+  },
+
+  // 领取三日奖励
+  claimThirdDayReward(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库不可用' };
+    const record = this.getOrCreateLoginRewardRecord(playerId);
+    if (!record) return { success: false, error: '记录不存在' };
+    if (record.third_day_claimed) return { success: false, error: '已领取过三日奖励' };
+    const signStatus = this.getSignInStatus(playerId);
+    if (!signStatus || signStatus.totalSignDays < 3) return { success: false, error: '需要连续签到3天以上' };
+    database.prepare(
+      'UPDATE welfare_login_rewards SET third_day_claimed = 1 WHERE player_id = ?'
+    ).run(playerId);
+    return {
+      success: true,
+      rewards: [
+        { icon: '💎', name: '钻石', amount: 50 },
+        { icon: '💰', name: '灵石', amount: 500 }
+      ],
+      message: '领取成功！获得50钻石+500灵石'
+    };
+  },
+
+  // 七日豪礼奖励配置
+  SEVEN_DAY_REWARDS: [
+    { day: 1, items: [{ icon: '💰', name: '灵石', amount: 100 }] },
+    { day: 2, items: [{ icon: '💰', name: '灵石', amount: 200 }] },
+    { day: 3, items: [{ icon: '⚗️', name: '经验丹', amount: 3 }] },
+    { day: 4, items: [{ icon: '💰', name: '灵石', amount: 300 }] },
+    { day: 5, items: [{ icon: '💎', name: '钻石', amount: 10 }] },
+    { day: 6, items: [{ icon: '💰', name: '灵石', amount: 500 }, { icon: '⚗️', name: '经验丹', amount: 5 }] },
+    { day: 7, items: [{ icon: '🎁', name: '豪华礼包', amount: 1 }] }
+  ],
+
+  // 获取七日豪礼状态
+  getSevenDayRewardStatus(playerId) {
+    const database = getDb();
+    if (!database) return [];
+    this.getOrCreateLoginRewardRecord(playerId);
+    const record = database.prepare(
+      'SELECT seven_day_claimed FROM welfare_login_rewards WHERE player_id = ?'
+    ).get(playerId);
+    const claimedDays = record ? JSON.parse(record.seven_day_claimed || '[]') : [];
+    const signStatus = this.getSignInStatus(playerId);
+    const streak = signStatus ? signStatus.currentStreak : 0;
+    const today = new Date().toISOString().split('T')[0];
+    return this.SEVEN_DAY_REWARDS.map(reward => {
+      const claimed = claimedDays.includes(reward.day);
+      const canClaim = !claimed && streak >= reward.day;
+      return {
+        ...reward,
+        claimed,
+        canClaim,
+        isToday: reward.day === Math.min(streak + 1, 7)
+      };
+    });
+  },
+
+  // 领取七日奖励
+  claimSevenDayReward(playerId, day) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库不可用' };
+    const record = database.prepare(
+      'SELECT seven_day_claimed FROM welfare_login_rewards WHERE player_id = ?'
+    ).get(playerId);
+    if (!record) {
+      this.getOrCreateLoginRewardRecord(playerId);
+    }
+    const claimedDays = JSON.parse(record?.seven_day_claimed || '[]');
+    if (claimedDays.includes(day)) return { success: false, error: '已领取过该日奖励' };
+    const signStatus = this.getSignInStatus(playerId);
+    if (!signStatus || signStatus.currentStreak < day) return { success: false, error: `需要连续签到${day}天才能领取` };
+    claimedDays.push(day);
+    database.prepare(
+      'UPDATE welfare_login_rewards SET seven_day_claimed = ? WHERE player_id = ?'
+    ).run(JSON.stringify(claimedDays), playerId);
+    const reward = this.SEVEN_DAY_REWARDS.find(r => r.day === day);
+    return {
+      success: true,
+      rewards: reward ? reward.items : [],
+      message: `领取成功！获得第${day}天奖励`
+    };
+  },
+
+  // 获取首充状态（来自 welfare_first_recharge 表）
+  getFirstRechargeStatus(playerId) {
+    const database = getDb();
+    if (!database) return { claimed: false, purchased: false, isActive: true, countdown: 0 };
+    const record = database.prepare(
+      'SELECT * FROM welfare_first_recharge WHERE player_id = ?'
+    ).get(playerId);
+    if (!record) return { claimed: false, purchased: false, isActive: true, countdown: 0 };
+    return {
+      claimed: !!record.claimed,
+      purchased: !!record.purchased,
+      isActive: true,
+      countdown: 0,
+      rewards: {
+        spirit_stones: 1200,
+        skill_book_purple: 1,
+        strengthening_stone: 50,
+        linggen_fruit: 3
+      },
+      title: '仙盟创始人'
+    };
+  },
+
+  // 领取首充奖励
+  claimFirstRechargeReward(playerId) {
+    const database = getDb();
+    if (!database) return { success: false, error: '数据库不可用' };
+    const record = database.prepare(
+      'SELECT * FROM welfare_first_recharge WHERE player_id = ?'
+    ).get(playerId);
+    if (!record) return { success: false, error: '未购买首充' };
+    if (!record.purchased) return { success: false, error: '未购买首充双倍' };
+    if (record.claimed) return { success: false, error: '已领取过首充奖励' };
+    const now = new Date().toISOString();
+    database.prepare(
+      'UPDATE welfare_first_recharge SET claimed = 1, claimed_at = ? WHERE player_id = ?'
+    ).run(now, playerId);
+    return {
+      success: true,
+      rewards: {
+        spirit_stones: 1200,
+        skill_book_purple: 1,
+        strengthening_stone: 50,
+        linggen_fruit: 3
+      },
+      title: '仙盟创始人',
+      message: '领取成功！获得首充双倍奖励'
+    };
   }
 };
 

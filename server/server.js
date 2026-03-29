@@ -3521,6 +3521,15 @@ try {
   Logger.info('福利API不可用:', e.message);
 }
 
+// ============ 首充双倍系统 API ============
+try {
+  const firstRechargeApi = require('./services/first_recharge');
+  app.use('/api/first-recharge', firstRechargeApi);
+  Logger.info('✅ 首充双倍系统 API 已加载');
+} catch (e) {
+  Logger.info('首充API不可用:', e.message);
+}
+
 // ============ 称号系统 API ============
 try {
   const titleApi = require('./backend/routes/title');
@@ -3562,6 +3571,15 @@ try {
   Logger.info('✅ 渡劫系统 API 已加载（动画阶段 + 飞升奖励）');
 } catch (e) {
   Logger.info('渡劫系统API不可用:', e.message);
+}
+
+// ============ 灵兽出战系统 API ============
+try {
+  const beastApi = require('./backend/routes/beast');
+  app.use('/api/beast', beastApi);
+  Logger.info('✅ 灵兽出战系统 API 已加载');
+} catch (e) {
+  Logger.info('灵兽出战系统API不可用:', e.message);
 }
 
 // ============ 仙侣系统 API ============

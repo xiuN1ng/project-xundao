@@ -36,6 +36,7 @@ function loadDependencies() {
 // 初始化
 function initWelfare() {
   welfareStorage.init();
+  welfareStorage.initLoginRewardsTable();
 }
 
 // 获取签到配置信息
@@ -172,7 +173,7 @@ router.post('/claim-sign-in', async (req, res) => {
     
     // 3. 补签卡奖励
     if (reward.repairCard > 0) {
-      const database = welfareStorage.getDb ? welfareStorage.getDb() : null;
+      const database = getDb();
       if (database) {
         database.prepare(
           'UPDATE welfare_sign_in SET repair_cards = repair_cards + ? WHERE player_id = ?'
@@ -226,6 +227,115 @@ router.get('/history', (req, res) => {
       data: history
     });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 次日登录奖励 ====================
+
+// 获取次日奖励状态
+router.get('/second-day-reward', (req, res) => {
+  try {
+    const playerId = req.query.player_id || req.query.playerId || 1;
+    const status = welfareStorage.getSecondDayRewardStatus(playerId);
+    res.json({ success: true, data: status });
+  } catch (error) {
+    console.error('次日奖励状态错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 领取次日奖励
+router.post('/second-day-reward/claim', async (req, res) => {
+  try {
+    loadDependencies();
+    const playerId = req.body.player_id || req.body.playerId || 1;
+    const result = welfareStorage.claimSecondDayReward(playerId);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    // 发放灵石
+    if (playerStorage) {
+      playerStorage.updateSpiritStones(playerId, 200);
+    }
+    res.json({ success: true, message: result.message, data: { rewards: result.rewards } });
+  } catch (error) {
+    console.error('领取次日奖励错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 三日登录奖励 ====================
+
+// 获取三日奖励状态
+router.get('/third-day-reward', (req, res) => {
+  try {
+    const playerId = req.query.player_id || req.query.playerId || 1;
+    const status = welfareStorage.getThirdDayRewardStatus(playerId);
+    res.json({ success: true, data: status });
+  } catch (error) {
+    console.error('三日奖励状态错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 领取三日奖励
+router.post('/third-day-reward/claim', async (req, res) => {
+  try {
+    loadDependencies();
+    const playerId = req.body.player_id || req.body.playerId || 1;
+    const result = welfareStorage.claimThirdDayReward(playerId);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    // 发放灵石
+    if (playerStorage) {
+      playerStorage.updateSpiritStones(playerId, 500);
+    }
+    res.json({ success: true, message: result.message, data: { rewards: result.rewards } });
+  } catch (error) {
+    console.error('领取三日奖励错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== 七日豪礼 ====================
+
+// 获取七日豪礼状态
+router.get('/seven-day', (req, res) => {
+  try {
+    const playerId = req.query.player_id || req.query.playerId || 1;
+    const status = welfareStorage.getSevenDayRewardStatus(playerId);
+    res.json({ success: true, data: status });
+  } catch (error) {
+    console.error('七日豪礼状态错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 领取七日奖励
+router.post('/seven-day/claim', async (req, res) => {
+  try {
+    loadDependencies();
+    const playerId = req.body.player_id || req.body.playerId || 1;
+    const day = parseInt(req.body.day || 0);
+    if (!day || day < 1 || day > 7) {
+      return res.status(400).json({ success: false, error: '无效的天数' });
+    }
+    const result = welfareStorage.claimSevenDayReward(playerId, day);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    // 发放灵石奖励
+    if (playerStorage && result.rewards) {
+      const lingshiReward = result.rewards.find(r => r.name === '灵石');
+      if (lingshiReward) {
+        playerStorage.updateSpiritStones(playerId, lingshiReward.amount);
+      }
+    }
+    res.json({ success: true, message: result.message, data: { rewards: result.rewards } });
+  } catch (error) {
+    console.error('领取七日奖励错误:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
