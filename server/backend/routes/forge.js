@@ -372,6 +372,25 @@ router.get('/equipment', (req, res) => {
   }
 });
 
+// GET /api/forge/player/equipment - 玩家装备列表（/equipment 的别名，供前端调用）
+router.get('/player/equipment', (req, res) => {
+  const playerId = parseInt(req.query.player_id || req.query.userId || 1);
+  const db = getDb();
+  try {
+    const equipped = getEquipped(db, playerId);
+    const equips = db.prepare('SELECT * FROM forge_equipment WHERE player_id=?').all(playerId);
+    const result = equips.map(e => ({
+      ...e, stats: JSON.parse(e.stats || '{}'), bonusStats: JSON.parse(e.bonusStats || '{}'),
+      isEquipped: equipped[e.type + '_id'] === e.id
+    }));
+    res.json({ success: true, equipment: result });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  } finally {
+    db.close();
+  }
+});
+
 // GET /api/forge/equipment/:id - 装备详情（含强化信息）
 router.get('/equipment/:id', (req, res) => {
   const equipId = parseInt(req.params.id);
