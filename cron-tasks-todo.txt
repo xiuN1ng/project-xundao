@@ -1246,7 +1246,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## [B] P1 — 2026-03-27
 
-[P1-B-58-1] 【B】排行榜 player 表缺失真实玩家数据
+[P1-B-58-1] 【B】排行榜 player 表缺失真实玩家数据  # 完成 | 2026-03-29 e2059ab3
   问题: rank/combat/level/wealth 全部返回空，真实玩家不在player表
   任务:
     1. 在每次修改玩家属性的API成功后同步到player表
@@ -3349,7 +3349,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 修复3: 添加每日重置逻辑
   - 截止: 2026-03-31
 
-[P1-B-30-PM-2] 排行榜/DeityList 数据源替换为真实玩家
+[P1-B-30-PM-2] 排行榜/DeityList 数据源替换为真实玩家  # 完成 | 2026-03-29 e2059ab3
   - 文件: server/backend/routes/rank.js + routes/deity.js
   - 问题: rank/combat 和 deity-list/combat 只显示 player_id<0 的假AI
   - 修复: 从 Users 表 SELECT 真实玩家，按战力/境界/灵石排序
@@ -3436,3 +3436,62 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/heart_demon.js
   - 修复: unlocked判断改为 player.level >= f.reqLevel && f.floor <= player.maxFloor
   - 截止: 2026-03-30
+
+# ========== 2026-03-29 第65轮新增 P0/B 任务 ==========
+[P0-B-65-1] 任务系统进度追踪（quest_trigger_service.js）
+  - 文件: server/game/quest_trigger_service.js (新建)
+  - 问题: 18个任务全部progress=0，targetType完全未对接
+  - 接入事件: cultivation:breakthrough, arena:battle, sect:join, dungeon:clear
+  - 实现: updateQuestProgress(userId, targetType, delta)
+  - 验证: realm_breakthrough事件触发后，questId=5(筑基成功) progress=1
+  - 截止: 2026-03-31
+
+[P0-B-65-2] cultivationPower突破传承机制
+  - 文件: server/backend/routes/cultivation.js breakthrough端点
+  - 修复: retainedPower = oldPower × 0.3，finalPower = retainedPower + (realmLevel×50)
+  - 验证: 突破后首次修炼gain应≥突破前的55%
+  - 截止: 2026-03-31
+
+# ========== 2026-03-29 第65轮新增 P1/B 任务 ==========
+[P1-B-65-1] 副本battle结果服务器端计算（安全漏洞）
+  - 文件: server/backend/routes/dungeon.js battle端点
+  - 问题: won参数来自客户端body，服务器无验证
+  - 修复: 战斗结果由服务器根据玩家/怪物属性自动计算
+  - 修复: battleId作为服务端session key，无需body传dungeonId
+  - 截止: 2026-04-01
+
+[P1-B-65-2] 灵兽攻击加成未计入player info
+  - 文件: server/backend/routes/player.js info端点
+  - 问题: player info attack=150，未包含灵兽加成+10
+  - 修复: attack += beastBonus.attack, hp += beastBonus.hp
+  - 截止: 2026-03-31
+
+[P1-B-65-3] 副本自动战斗+扫荡系统
+  - 文件: server/backend/routes/dungeon.js (新建auto-battle相关端点)
+  - 接口: GET /auto-battle/status, POST /auto-battle/start, POST /sweep/:id
+  - 截止: 2026-04-03
+
+[P1-B-65-4] Arena rivals端点别名
+  - 文件: server/backend/routes/arena.js
+  - 修复: router.get('/rivals/:userId') → /opponents/:userId
+  - 截止: 2026-03-31
+
+[P1-B-65-5] HeartDemon enter 500错误
+  - 文件: server/backend/routes/heart_demon.js
+  - 修复: 添加try-catch，定位heart_demon_instances表schema问题
+  - 截止: 2026-03-31
+
+[P1-B-65-6] Lundao correctRate上限修正
+  - 文件: server/backend/routes/lundao.js
+  - 修复: correctRate = Math.min(100, Math.round(correctCount * 100 / totalChallenges))
+  - 截止: 2026-03-31
+
+[P1-B-65-7] Activity progress实时计算
+  - 文件: server/backend/routes/activity.js
+  - 修复: level_up progress从player.level实时读取
+  - 截止: 2026-03-31
+
+[P1-B-65-8] VIP月卡系统完善
+  - 文件: server/backend/routes/vip.js
+  - 修复: monthlyCard返回详细数据 + 月卡购买/每日领取API
+  - 截止: 2026-03-31
