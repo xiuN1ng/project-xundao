@@ -162,6 +162,7 @@ app.use('/api/gem', require('./routes/gem'));
 app.use('/api/fashion', require('./routes/fashion'));
 app.use('/api/vip', require('./routes/vip'));
 app.use('/api/friend', require('./routes/friend'));
+app.use('/api/friends', require('./routes/friend')); // 前端 /api/friends 路径兼容
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/auction', require('./routes/auction'));
 app.use('/api/cave', require('./routes/cave'));

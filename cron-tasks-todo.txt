@@ -3820,3 +3820,93 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 添加: app.use('/api/market', require('./backend/routes/market'))
   - 添加: app.use('/api/trade', require('./backend/routes/trade'))
   - 截止: 2026-04-10
+
+# === 2026-03-30 第99轮追加 ===
+
+# ========== P0 路由注册（一行代码激活完整系统）============
+
+[P0-B-99-1] server.js 注册 gacha.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/gacha', require('./backend/routes/gacha'))
+  - 效果: 抽奖系统立即生效（GachaPanel 需同步修复路径）
+  - 截止: 2026-04-05
+
+[P0-B-99-2] server.js 注册 vip.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/vip', require('./backend/routes/vip'))
+  - 效果: VIP系统、月卡立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-3] server.js 注册 activity.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/activity', require('./backend/routes/activity'))
+  - 效果: 活动系统（签到/等级冲刺/首充）立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-4] server.js 注册 quest.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/quest', require('./backend/routes/quest'))
+  - 效果: 主线/支线/成就任务立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-5] server.js 注册 fashion.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/fashion', require('./backend/routes/fashion'))
+  - 效果: 时装系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-6] server.js 注册 art.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/art', require('./backend/routes/art'))
+  - 效果: 琴棋书画系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-7] server.js 注册 paradise.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/paradise', require('./backend/routes/paradise'))
+  - 效果: 福地洞天系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-8] server.js 注册 mount.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/mount', require('./backend/routes/mount'))
+  - 效果: 坐骑系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-9] server.js 注册 wing.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/wing', require('./backend/routes/wing'))
+  - 效果: 翅膀系统立即生效
+  - 截止: 2026-04-05
+
+[P0-B-99-10] server.js 注册 gongfa.js
+  - 文件: server/server.js
+  - 添加: app.use('/api/gongfa', require('./backend/routes/gongfa'))
+  - 效果: 功法系统立即生效
+  - 截止: 2026-04-05
+
+# ========== P1 ==========
+
+[P1-B-99-1] fashion.js 端点扩展
+  - 文件: server/backend/routes/fashion.js
+  - 添加: POST /api/fashion/buy, GET /api/fashion/sets, GET /api/fashion/catalog
+  - 截止: 2026-04-07
+
+[P1-B-99-2] vip.js 端点扩展
+  - 文件: server/backend/routes/vip.js
+  - 添加: POST /api/vip/claim-daily, POST /api/vip/benefits
+  - 截止: 2026-04-07
+
+[P1-B-99-3] gacha.js 端点对齐（重命名 draw → spin）
+  - 文件: server/backend/routes/gacha.js
+  - 方案A: 保持 /api/gacha/draw，将 client lotteryApi 路径改为 /gacha
+  - 方案B: gacha.js 添加 /api/gacha/lottery/* 别名路由（兼容旧路径）
+  - 截止: 2026-04-07
+
+# ========== P2 ==========
+
+[P2-B-99-1] title.js 新建
+  - 文件: server/backend/routes/title.js（新建）
+  - 功能: 从 quest/arena/rank 聚合称号数据
+  - 端点: GET /api/title/list, POST /api/title/equip, GET /api/title/player/:playerId
+  - 截止: 2026-04-20
