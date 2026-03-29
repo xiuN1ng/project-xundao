@@ -3453,7 +3453,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-31
 
 # ========== 2026-03-29 第65轮新增 P1/B 任务 ==========
-[P1-B-65-1] 副本battle结果服务器端计算（安全漏洞）
+[P1-B-65-1] 副本battle结果服务器端计算（安全漏洞） # 完成 | 2026-03-29 9a0236f2
   - 文件: server/backend/routes/dungeon.js battle端点
   - 问题: won参数来自客户端body，服务器无验证
   - 修复: 战斗结果由服务器根据玩家/怪物属性自动计算
@@ -3494,4 +3494,55 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P1-B-65-8] VIP月卡系统完善
   - 文件: server/backend/routes/vip.js
   - 修复: monthlyCard返回详细数据 + 月卡购买/每日领取API
+  - 截止: 2026-03-31
+
+# ========== 2026-03-29 第88轮新增任务 ==========
+[P0-B-88-1] Gacha系统货币统一
+  - 文件: server/game/gacha_system.js
+  - 修复: 所有"元宝"改为"灵石"，gacha API返回costType和costAmount
+  - 截止: 2026-03-31
+
+[P1-B-88-1] 灵兽共鸣API
+  - 文件: server/game/beast_system.js
+  - 功能: 添加GET /api/beast/resonance端点，定义player_bonds表
+  - 截止: 2026-04-02
+
+[P1-B-88-2] 技能点产出机制
+  - 文件: server/game/skill_system.js
+  - 功能: 突破奖励realmLevel个技能点，每日登录2点，每周任务5点
+  - 截止: 2026-04-02
+
+[P1-B-88-3] 宗门俸禄重复领取检查
+  - 文件: server/game/sect_api.js
+  - 修复: 添加同一自然日不可重复领取检查，更新lastSalaryClaim
+  - 截止: 2026-04-01
+
+[P2-B-88-1] 坐骑系统后端
+  - 文件: server/game/mount_system.js + server/routes/mount.js
+  - 功能: 创建/api/mount/list和/api/mount/activate端点，定义坐骑数据
+  - 截止: 2026-04-03
+
+[P2-B-88-2] 章节剧情文本
+  - 文件: server/game/story_chapters.js
+  - 功能: 为每个章节添加标题、NPC对话、战斗后结局文本
+  - 截止: 2026-04-05
+
+[P2-B-88-3] 竞技场真实对手
+  - 文件: server/game/arena_system.js
+  - 修复: 对手池改为SELECT * FROM players WHERE id != ? ORDER BY RANDOM() LIMIT 10
+  - 截止: 2026-04-05
+
+[P1-B-88-4] 灵石消费返利后端
+  - 文件: server/game/welfare_storage.js
+  - 功能: player_consumption表 + consumption-rebate API + 档位逻辑
+  - 截止: 2026-04-02
+
+[B-88-5] 修仙图鉴收集后端
+  - 文件: server/game/collection_system.js
+  - 功能: player_collections表 + 图鉴解锁/查询API
+  - 截止: 2026-04-05
+
+[P0-B-88-PERSIST] 每日任务进度事件总线（紧急）
+  - 文件: server/game/event_bus.js
+  - 功能: 定义CULTIVATE_COMPLETE/BATTLE_COMPLETE/CHAPTER_COMPLETE事件，daily_quest订阅
   - 截止: 2026-03-31
