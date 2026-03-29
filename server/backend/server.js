@@ -161,6 +161,7 @@ app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));
 app.use('/api/marriage', require('./routes/marriage'));
+app.use('/api/couple', require('./routes/couple'));
 app.use('/api/master', require('./routes/master'));
 app.use('/api/tower', require('./routes/tower'));
 app.use('/api/heartDemon', require('./routes/heart_demon'));
@@ -219,5 +220,9 @@ try {
 
 // 注入DB引用到 player.js（解决 #P0-B-NEW3: player.js数据库持久化）
 try { if (playerModule.setDb) playerModule.setDb(db); } catch(e) { console.log('[player setDb]', e.message); }
+
+// 注入DB引用到 couple.js
+const coupleModule = require('./routes/couple');
+try { if (coupleModule.setDb) coupleModule.setDb(db); } catch(e) { console.log('[couple setDb]', e.message); }
 
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));

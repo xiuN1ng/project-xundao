@@ -3239,3 +3239,38 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 2. shop.js 添加 `GET /items` 端点（从shop_items表查询）
 3. deity.js 添加 `GET /` 端点（返回仙神列表）
 4. forge.js 添加 `GET /daily-claim` 端点（复用/daily-claim/status逻辑）
+
+## 2026-03-29 下午任务
+
+### [P0-B-29-PM-1] spirit-root /select 路由 + /my 端点（2026-03-29提案）
+- 文件: server/backend/routes/spirit-root.js
+- 实现:
+  1. POST /select: 接收 {player_id, rootId}，更新 Users.spiritRoot
+  2. GET /my: 返回当前玩家已选灵根及属性加成
+  3. 验证 rootId 合法性（金/木/水/火/土/风/雷/冰/暗/光）
+- 截止: 2026-03-30
+
+### [P1-B-29-PM-1] Lundao correctRate 上限修正（2026-03-29提案）
+- 文件: game/lundao.js 或 server/backend/routes/lundao.js
+- 问题: correctRate=200 超限，应 Math.min(100, ...)
+- 截止: 2026-03-31
+
+### [P1-B-29-PM-2] Sect 成员数数据不一致（2026-03-29提案）
+- 文件: server/backend/routes/sect.js
+- 问题: sect/my 返回 members=2，但实际有3人；memberCount=0
+- 修复: 统一使用 SectMembers COUNT 查询结果作为 memberCount
+- 截止: 2026-03-31
+
+### [P1-B-R] Achievement 进度触发系统（持续多轮未完成）
+- 创建 achievement_trigger.js 服务
+- cultivation/battle/equipment/friend 各关键操作后触发成就检查
+- 截止: 2026-04-01
+
+### [P2-B-29-PM-1] Gacha 保底重置逻辑（2026-03-29提案）
+- 文件: game/gacha.js
+- 问题: 抽到SSR后 pityCount 未清零
+- 截止: 2026-04-02
+
+### [P2-B-29-PM-2] 锻造材料商店上架（2026-03-29提案）
+- shop 添加: iron_ingot(20灵石,限购99), steel_ingot(50灵石), jade_fragment(100灵石)
+- 截止: 2026-04-02
