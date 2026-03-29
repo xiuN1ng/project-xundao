@@ -3972,3 +3972,59 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 修复3: DATETIME DEFAULT CURRENT_TIMESTAMP → TEXT DEFAULT (datetime('now'))
   - 验证: tail /tmp/server.log 无 "灵石日志表" 错误
   - 截止: 2026-03-30
+
+# === 2026-03-30 凌晨紧急修复 (第104轮) ===
+[B-P0-30-N104-1] 宗门系统 sect_api.js 数据库崩溃  # 紧急 | 2026-03-31
+  - 文件: server/game/sect_api.js 第49行
+  - 问题: "Cannot open database because the directory does not exist" - Database() 路径对应目录缺失
+  - 修复1: 检查 new Database() 的路径参数，确保目录存在（fs.mkdirSync）
+  - 修复2: sect_storage.js 中 db.exec() 调用检查（better-sqlite3 db 实例是否正确）
+  - 修复3: 参照 welfare_storage.js 的 SQLite 兼容写法
+  - 验证: curl http://localhost:3001/api/sect/player/1 返回正常JSON（非500错误）
+  - 截止: 2026-03-31
+
+[B-P0-30-N104-2] 经脉系统 meridian_system.js 从未挂载 API 路由  # 紧急 | 2026-03-31
+  - 文件: server/game/meridian_system.js + server/server.js
+  - 问题1: meridianSystem require 后从未 app.use('/api/meridian', ...) 挂载
+  - 问题2: DB初始化失败: "Cannot open database because the directory does not exist"
+  - 修复1: 修复 meridian_system.js DB 初始化（参照 sect_api 修复模式）
+  - 修复2: 创建 services/meridian_api.js 或在 server.js 中添加 app.use('/api/meridian', ...)
+  - 修复3: 确保所有路由在 DB 初始化后才注册
+  - 验证: curl http://localhost:3001/api/meridian/status?player_id=1 返回正常JSON
+  - 截止: 2026-03-31
+
+[B-P0-30-N104-3] 天梯系统 ladder.js 运行时崩溃  # 紧急 | 2026-03-31
+  - 文件: server/game/ladder.js
+  - 问题: "Cannot read properties of undefined (reading 'getPlayerLadderData')"
+  - 修复1: 检查 ladderStorage/ladderSystem 的 getPlayerLadderData 方法定义
+  - 修复2: 确认依赖注入时机（模块加载顺序）
+  - 验证: curl http://localhost:3001/api/ladder/info?player_id=1 返回正常JSON
+  - 截止: 2026-03-31
+
+[B-P1-30-N104-1] 渡劫系统 TRIBULATION_TYPES 未定义导致配置失败  # 高优 | 2026-04-02
+  - 文件: server/server.js 第3562-3570行
+  - 问题: tribulationApi.configure({ TRIBULATION_TYPES, DIFFICULTY_CONFIG, ... }) - 这些变量在 server.js 中不存在
+  - 修复1: 从 game/tribulation_system.js 导出 TRIBULATION_TYPES 并在 server.js 中 require
+  - 修复2: 定义 DIFFICULTY_CONFIG、PROTECTION_ITEMS、REALMS 配置
+  - 修复3: 确认 tribulationApi.configure() 正确调用
+  - 验证: curl http://localhost:3001/api/tribulation/types?player_id=1 返回正常JSON
+  - 截止: 2026-04-02
+
+[B-P1-30-N104-2] 炼器装备查询 Unknown column 'pe.obtained_at'  # 高优 | 2026-04-02
+  - 文件: server/services/forge_api.js
+  - 问题: SQL 查询引用 pe.obtained_at 列但表 schema 中不存在
+  - 修复1: 检查 player_equipment 表实际 schema
+  - 修复2: 移除 SQL 中对 obtained_at 的引用，或 ALTER TABLE 添加该列
+  - 修复3: 统一 MySQL/SQLite schema 定义
+  - 验证: curl http://localhost:3001/api/forge/player/equipment?player_id=1 返回装备列表
+  - 截止: 2026-04-02
+
+[B-NF-30-N104-1] 位面之子 Buff 系统（离线回归奖励）  # 新功能 | 2026-04-07
+  - 文件: server/services/buff_api.js (新建) + DB表 player_buffs
+  - 逻辑: 玩家离线>30分钟 → 登录时发放"位面之子"Buff
+  - Buff效果: 攻击+20%~100%, 经验+50%~200%, 持续15~120分钟（按离线时长）
+  - DB表: player_buffs(player_id, buff_key, buff_name, started_at, ends_at, claimed)
+  - API: GET /api/buff/status, POST /api/buff/claim
+  - 验证: 离线30分钟后登录，检查顶部状态栏显示Buff图标
+  - 截止: 2026-04-07
+

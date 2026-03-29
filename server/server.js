@@ -4748,14 +4748,16 @@ app.post('/api/bonus/claim', (req, res) => {
   res.json({ success: true, message: `签到成功！连续签到${streak}天`, data: { reward, streak } });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`功法系统 API 服务器运行在 http://localhost:${PORT}`);
-  console.log(`📦 商店 API: http://localhost:${PORT}/api/shop/list`);
-  console.log(`🏆 排行榜 API: http://localhost:${PORT}/api/ranking/:type`);
-  console.log(`📧 邮件 API: http://localhost:${PORT}/api/mail/list`);
-  console.log(`🎁 每日奖励 API: http://localhost:${PORT}/api/bonus/daily`);
-});
+// 启动服务器（仅在直接运行时启动，避免 require 时端口冲突）
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`功法系统 API 服务器运行在 http://localhost:${PORT}`);
+    console.log(`📦 商店 API: http://localhost:${PORT}/api/shop/list`);
+    console.log(`🏆 排行榜 API: http://localhost:${PORT}/api/ranking/:type`);
+    console.log(`📧 邮件 API: http://localhost:${PORT}/api/mail/list`);
+    console.log(`🎁 每日奖励 API: http://localhost:${PORT}/api/bonus/daily`);
+  });
+}
 
 // ============ 邮件系统 API ============
 

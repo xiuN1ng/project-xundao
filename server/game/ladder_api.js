@@ -10,7 +10,8 @@ let ladderStorage;
 function loadDependencies() {
   if (!ladderStorage) {
     try {
-      ladderStorage = require('./ladder_storage');
+      const mod = require('./ladder_storage');
+      ladderStorage = mod.ladderStorage;
     } catch (e) {
       console.error('加载ladder_storage失败:', e.message);
     }
