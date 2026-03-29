@@ -3076,3 +3076,38 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 套装配置: paradise套(2件:HP+1000, 4件:防御+200攻击+100)/心魔套(2件:攻击+150, 4件:暴击+5爆伤+20)/仙风道骨套(2件:修炼速度+20%, 4件:突破加成)
   - 实现: 套装模板数据 + 穿装备时检查套装激活 + 套装效果叠加到 player stats
   - 截止: 2026-04-02
+
+# ========== 2026-03-30 第三次新增 P0/B ==========
+[P0-B-30-3rd-1] Arena每日次数超限 - counter increment无原子性保护
+  - 文件: server/backend/routes/arena.js
+  - 修复: checkAndResetDailyChallenges 用 DATE() 比较替代字符串比较
+  - 添加双重保护: challenge路由战斗后再次验证不超过上限
+  - 截止: 2026-03-30
+
+[P0-B-30-3rd-2] 心魔幻境reqLevel被忽略 - unlocked判断用错字段
+  - 文件: server/backend/routes/heart_demon.js
+  - 修复: unlocked 判断从 maxFloor 改为 level >= reqLevel
+  - 截止: 2026-03-30
+
+# ========== 2026-03-30 第三次新增 P1/B ==========
+[P1-B-30-3rd-1] Sect info API "no such column: sectId" - 数据库文件混乱
+  - 文件: server/backend/routes/sect.js + backend/server.js
+  - 修复: 统一表名大小写，确认DB路径，打印调试信息
+  - 截止: 2026-03-31
+
+[P1-B-30-3rd-2] 章节战斗材料掉落未进背包
+  - 文件: server/backend/routes/chapter.js
+  - 修复: battle handler 中将 materialDrops 写入 player_items 表
+  - 截止: 2026-03-31
+
+# ========== 2026-03-30 第三次新增 P2/B ==========
+[P2-B-30-3rd-1] 离线收益API完全缺失
+  - 文件: server/backend/routes/offline.js (新建)
+  - 实现: GET /api/offline-income/preview + POST /api/offline-income/claim
+  - 截止: 2026-04-01
+
+# ========== 2026-03-30 第三次新增 NF ==========
+[NF-B-30-3rd-1] 宗门职位权限系统
+  - 文件: server/backend/routes/sect.js (新增职位逻辑)
+  - 实现: 掌门/长老/成员三级权限 + 俸禄系统
+  - 截止: 2026-04-03

@@ -105,6 +105,7 @@ app.use('/api/material-exchange', require('./routes/material_exchange'));
 app.use('/api/beast', require('../game/beast_api'));
 app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/spirit-artifact', require('../game/spirit_artifact_api'));
+app.use('/api/spirit', require('../game/spirit_artifact_api')); // 前端 /api/spirit 别名
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/lundao', require('./routes/lundao'));

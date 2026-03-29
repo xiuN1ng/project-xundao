@@ -19,6 +19,32 @@ function loadDependencies() {
   return spiritArtifactStorage;
 }
 
+// 器灵根路由 - 兼容前端 /api/spirit 调用（转发到 /list 逻辑）
+router.get('/', (req, res) => {
+  try {
+    const { player_id } = req.query;
+    
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+    
+    const storage = loadDependencies();
+    const unlocked = storage.getUnlockedArtifacts(parseInt(player_id));
+    const owned = storage.getPlayerArtifacts(parseInt(player_id));
+    const ownedIds = owned.map(o => o.artifact_id);
+    
+    const artifacts = unlocked.map(a => ({
+      ...a,
+      is_owned: ownedIds.includes(a.id),
+      rarity_config: storage.RARITY_CONFIG[a.rarity]
+    }));
+    
+    res.json({ success: true, data: artifacts });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 获取所有器灵配置
 router.get('/list', (req, res) => {
   try {
