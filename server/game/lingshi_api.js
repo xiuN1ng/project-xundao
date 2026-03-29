@@ -48,6 +48,12 @@ function loadDependencies() {
 
 // 初始化灵石消耗日志表
 function initLingshiLogTable() {
+  // Ensure db is initialized before using it
+  loadDependencies();
+  if (!db) {
+    console.log('ℹ️ 灵石日志表初始化跳过: db未就绪');
+    return;
+  }
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS player_lingshi_logs (
@@ -58,10 +64,15 @@ function initLingshiLogTable() {
         balance_before INTEGER NOT NULL,
         balance_after INTEGER NOT NULL,
         details TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_player_lingshi_logs (player_id, created_at)
+        created_at TEXT DEFAULT (datetime('now'))
       )
     `);
+    // Create index separately (SQLite doesn't support INDEX inside CREATE TABLE)
+    try {
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_player_lingshi_logs ON player_lingshi_logs(player_id, created_at)`);
+    } catch (idxErr) {
+      // Index may already exist
+    }
     console.log('✅ 灵石消耗日志表初始化完成');
   } catch (e) {
     console.log('ℹ️ 灵石日志表可能已存在:', e.message);

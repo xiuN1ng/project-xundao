@@ -72,18 +72,19 @@ function initSignInTable() {
   if (!database) return false;
   
   try {
+    // Use SQLite-compatible syntax (AUTOINCREMENT, no VARCHAR/DATETIME/JSON/UNIQUE KEY)
     database.exec(`
       CREATE TABLE IF NOT EXISTS welfare_sign_in (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        player_id VARCHAR(50) NOT NULL,
-        current_streak INT DEFAULT 0,
-        total_sign_days INT DEFAULT 0,
-        last_sign_date DATE,
-        sign_history JSON DEFAULT '[]',
-        repair_cards INT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_player_id (player_id)
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id TEXT NOT NULL,
+        current_streak INTEGER DEFAULT 0,
+        total_sign_days INTEGER DEFAULT 0,
+        last_sign_date TEXT,
+        sign_history TEXT DEFAULT '[]',
+        repair_cards INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(player_id)
       )
     `);
     console.log('✅ 签到表初始化完成');
@@ -169,19 +170,37 @@ const welfareStorage = {
     const database = getDb();
     if (!database) return { success: false, error: '数据库不可用' };
     
-    const status = this.getSignInStatus(playerId);
+    const record = this.getOrCreateSignInRecord(playerId);
+    if (!record) return { success: false, error: '记录不可用' };
     
-    if (status.signedToday) {
+    const today = new Date().toISOString().split('T')[0];
+    if (record.last_sign_date === today) {
       return { success: false, error: '今天已经签到过了' };
     }
     
     // 计算新的连续签到天数
-    let newStreak = status.currentStreak + 1;
-    const today = new Date().toISOString().split('T')[0];
+    let currentStreak = record.current_streak;
+    if (record.last_sign_date) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      if (record.last_sign_date !== yesterdayStr && record.last_sign_date !== today) {
+        currentStreak = 0;
+      }
+    }
+    let newStreak = currentStreak + 1;
     
     // 获取奖励
     const dayIndex = (newStreak - 1) % 7;
     const reward = SIGN_IN_REWARDS[dayIndex];
+    
+    // SQLite-compatible: build new history entry as JSON string
+    const newEntry = JSON.stringify({ date: today, day: newStreak, reward: reward });
+    const existingHistory = record.sign_history || '[]';
+    // Remove trailing ] if present, then append new entry
+    const cleanHistory = existingHistory.endsWith(']') 
+      ? existingHistory.slice(0, -1) : existingHistory;
+    const newHistory = cleanHistory + (cleanHistory === '[' ? '' : ',') + newEntry + ']';
     
     // 更新数据库
     database.prepare(`
@@ -189,13 +208,9 @@ const welfareStorage = {
       SET current_streak = ?,
           total_sign_days = total_sign_days + 1,
           last_sign_date = ?,
-          sign_history = JSON_INSERT(
-            COALESCE(sign_history, '[]'),
-            '$[' || JSON_LENGTH(COALESCE(sign_history, '[]')) || ']',
-            JSON_OBJECT('date', ?, 'day', ?, 'reward', ?)
-          )
+          sign_history = ?
       WHERE player_id = ?
-    `).run(newStreak, today, today, newStreak, JSON.stringify(reward), playerId);
+    `).run(newStreak, today, newHistory, playerId);
     
     return {
       success: true,
