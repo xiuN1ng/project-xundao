@@ -2931,13 +2931,13 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [持续] Welfare: 统一使用 Asia/Shanghai 时区处理日期
 
 # ========== 2026-03-29 新增 P0/B 任务 ==========
-[P0-B-77-1] 论道台 API 端点修复
+[P0-B-77-1] 论道台 API 端点修复  # 完成 | 2026-03-29 d1ef28ef
   文件: server/backend/routes/lundao.js
   修复1: 添加 router.get('/status') 作为 router.get('/') 的别名
   修复2: 添加 router.post('/fight') 作为 router.post('/challenge') 的别名
   截止: 2026-03-30
 
-[P0-B-77-2] 充值系统全面修复
+[P0-B-77-2] 充值系统全面修复  # 完成 | 2026-03-29 d1ef28ef
   文件: server/backend/routes/payment.js
   修复1: /callback 端点必须 UPDATE Users SET diamonds = diamonds + ? WHERE id = ?
   修复2: 添加 GET /my-packages 端点
