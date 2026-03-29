@@ -5,10 +5,33 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const Database = require('better-sqlite3');
 const { HeartDemonStorage } = require('../heart_demon_storage');
 const { playerStorage } = require('../../game/storage');
 
 const storage = new HeartDemonStorage();
+
+// 使用共享 game.db 获取玩家等级
+const GAME_DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
+let _gameDb = null;
+function getGameDb() {
+  if (!_gameDb) {
+    _gameDb = new Database(GAME_DB_PATH);
+    _gameDb.pragma('busy_timeout=5000');
+  }
+  return _gameDb;
+}
+
+// 获取玩家等级（从 Users 表）
+function getPlayerLevel(userId) {
+  try {
+    const row = getGameDb().prepare('SELECT level FROM Users WHERE id = ?').get(userId);
+    return row ? (row.level || 1) : 1;
+  } catch {
+    return 1;
+  }
+}
 
 // =====================
 // 心魔幻境层配置
@@ -170,6 +193,7 @@ router.get('/', async (req, res) => {
   const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
+    const playerLevel = getPlayerLevel(userId);
     setCachedPlayer(userId, player);
     res.json({
       success: true,
@@ -184,10 +208,11 @@ router.get('/', async (req, res) => {
       weeklyRewardClaimed: player.weeklyRewardClaimed,
       heartDemonEnergy: player.heartDemonEnergy,
       materials: player.materials,
+      playerLevel,
       floors: FLOOR_CONFIG.map(f => ({
         floor: f.floor, name: f.name, reqLevel: f.reqLevel,
         energy: f.energy, difficulty: f.difficulty,
-        unlocked: f.floor <= player.maxFloor,
+        unlocked: f.floor <= player.maxFloor && playerLevel >= f.reqLevel,
         soulCrystals: f.soulCrystals
       }))
     });
@@ -202,6 +227,7 @@ router.get('/config', async (req, res) => {
   const userId = extractUserId(req);
   try {
     const player = await storage.getOrCreatePlayer(userId);
+    const playerLevel = getPlayerLevel(userId);
     setCachedPlayer(userId, player);
     const difficultyLabels = { normal: '普通', hard: '困难', nightmare: '噩梦', abyss: '深渊' };
     const dungeons = FLOOR_CONFIG.map(f => ({
@@ -214,7 +240,8 @@ router.get('/config', async (req, res) => {
       maxProgress: player.maxFloor >= f.floor,
       currentProgress: player.currentFloor >= f.floor,
       bossName: DEMON_BESTIARY[f.boss]?.name || f.boss,
-      bossIcon: DEMON_BESTIARY[f.boss]?.icon || '😈'
+      bossIcon: DEMON_BESTIARY[f.boss]?.icon || '😈',
+      unlocked: player.maxFloor >= f.floor && playerLevel >= f.reqLevel
     }));
     res.json({
       success: true, dungeons,
@@ -234,10 +261,12 @@ router.get('/list', async (req, res) => {
   const userId = extractUserId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
+    const playerLevel = getPlayerLevel(userId);
     const dungeons = FLOOR_CONFIG.map(f => ({
       id: `heart_demon_floor_${f.floor}`, name: f.name, floor: f.floor,
       difficulty: f.difficulty, reqLevel: f.reqLevel, energy: f.energy,
-      unlocked: f.floor <= player.maxFloor, soulCrystals: f.soulCrystals
+      unlocked: f.floor <= player.maxFloor && playerLevel >= f.reqLevel,
+      soulCrystals: f.soulCrystals
     }));
     res.json({ success: true, dungeons });
   } catch (err) {
@@ -276,10 +305,11 @@ router.get('/floors', async (req, res) => {
   const userId = extractUserId(req);
   try {
     const player = getCachedPlayer(userId) || await storage.getOrCreatePlayer(userId);
+    const playerLevel = getPlayerLevel(userId);
     const floors = FLOOR_CONFIG.map(f => ({
       floor: f.floor, name: f.name, reqLevel: f.reqLevel, energy: f.energy,
       soulCrystals: f.soulCrystals, difficulty: f.difficulty,
-      unlocked: f.floor <= player.maxFloor,
+      unlocked: f.floor <= player.maxFloor && playerLevel >= f.reqLevel,
       swept: (player.sweptFloorsToday || []).includes(f.floor),
       bossName: DEMON_BESTIARY[f.boss]?.name,
       bossIcon: DEMON_BESTIARY[f.boss]?.icon
