@@ -205,7 +205,18 @@ router.get('/history', (req, res) => {
 
 // POST /draw - 单抽
 router.post('/draw', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+  const drawType = req.body.type || 'single';
+
+  // 如果是十连，自动转发到 /drawTen 逻辑
+  if (drawType === 'ten') {
+    const tenHandler = require('./lottery')._drawTenHandler;
+    if (tenHandler) {
+      return tenHandler(req, res);
+    }
+    // 否则内联十连逻辑
+    return handleDrawTen(req, res, userId);
+  }
 
   try {
     const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
@@ -240,6 +251,57 @@ router.post('/draw', (req, res) => {
     res.json({ success: false, message: err.message });
   }
 });
+
+// 十连抽处理函数（供 /draw type=ten 调用）
+function handleDrawTen(req, res, userId) {
+  try {
+    const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!user || parseInt(user.lingshi) < TEN_COST) {
+      return res.json({ success: false, message: '灵石不足（十连需要900灵石）' });
+    }
+
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(TEN_COST, userId);
+
+    const items = [];
+    const bagResults = [];
+
+    for (let i = 0; i < 10; i++) {
+      const item = drawItem(userId);
+      const bagResult = addToBag(userId, item);
+      items.push(item);
+      bagResults.push(bagResult);
+
+      try {
+        db.prepare(
+          'INSERT INTO lottery_history (user_id, item_name, quality, created_at) VALUES (?, ?, ?, ?)'
+        ).run(userId, item.name, item.quality, new Date().toISOString());
+      } catch (e) { /* 历史表可能不存在 */ }
+    }
+
+    // 保证至少一件精良或以上
+    const hasHighQuality = items.some(i => ['uncommon', 'rare', 'legendary'].includes(i.quality));
+    if (!hasHighQuality) {
+      const replacement = drawItem(userId);
+      items[9] = replacement;
+      bagResults[9] = addToBag(userId, replacement);
+    }
+
+    const gi = getGuaranteeInfo(userId);
+    res.json({
+      success: true,
+      items,
+      bagResults,
+      guaranteeProgress: `${gi.count}/${GUARANTEE_COUNT}`,
+      lingshiCost: TEN_COST
+    });
+  } catch (err) {
+    Logger.error('POST /draw (ten) error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+}
+
+// 导出给 /draw type=ten 复用
+module.exports._drawTenHandler = handleDrawTen;
 
 // POST /drawTen - 十连抽
 router.post('/drawTen', (req, res) => {
