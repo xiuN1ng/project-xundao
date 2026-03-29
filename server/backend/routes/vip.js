@@ -182,7 +182,7 @@ router.get('/', (req, res) => {
 
 // 购买VIP等级
 router.post('/buy', (req, res) => {
-  const userId = parseInt(req.body.userId) || 1;
+  const userId = parseInt(req.body.userId || req.body.player_id) || 1;
   const { level } = req.body;
 
   if (!level || !VIP_LEVELS[level]) {
@@ -190,29 +190,52 @@ router.post('/buy', (req, res) => {
   }
 
   try {
-    // 使用内存中的玩家数据
     const playerData = getPlayerData(userId);
-    if (!playerData) return res.json({ success: false, error: '玩家不存在' });
-
     const targetLevel = VIP_LEVELS[level];
-    const currentLevel = playerData.vipLevel || playerData.vip_level || 0;
 
+    // DB优先验证（使用DB中的真实数据）
+    if (db) {
+      const user = db.prepare('SELECT diamonds, vipLevel, nickname FROM Users WHERE id = ?').get(userId);
+      if (!user) return res.json({ success: false, error: '玩家不存在' });
+      if (user.vipLevel >= level) {
+        return res.json({ success: false, error: '当前VIP等级已更高' });
+      }
+      if (user.diamonds < targetLevel.cost) {
+        return res.json({ success: false, error: '钻石不足' });
+      }
+      // 执行DB扣减并持久化VIP状态
+      const stmt = db.prepare('UPDATE Users SET diamonds = diamonds - ?, vipLevel = ?, vip_points = vip_points + ? WHERE id = ?');
+      const result = stmt.run(targetLevel.cost, level, targetLevel.cost * 10, userId);
+      if (result.changes === 0) {
+        return res.json({ success: false, error: '数据库更新失败' });
+      }
+      // 同步内存数据
+      if (playerData) {
+        playerData.diamonds = (playerData.diamonds || 0) - targetLevel.cost;
+        playerData.vipLevel = level;
+        playerData.vipPoints = (playerData.vipPoints || 0) + targetLevel.cost * 10;
+        playerData.vip_level = level;
+        playerData.vip_points = playerData.vipPoints;
+      }
+      return res.json({ success: true, level, vipName: targetLevel.nameCn, message: `恭喜成为${targetLevel.nameCn}！` });
+    }
+
+    // 无DB时使用内存校验（后备）
+    const currentLevel = (playerData ? (playerData.vipLevel || playerData.vip_level || 0) : 0);
     if (level <= currentLevel) {
       return res.json({ success: false, error: '当前VIP等级已更高' });
     }
-
-    if ((playerData.diamonds || 0) < targetLevel.cost) {
+    if ((playerData ? (playerData.diamonds || 0) : 0) < targetLevel.cost) {
       return res.json({ success: false, error: '钻石不足' });
     }
-
-    // 更新内存中的玩家数据
-    playerData.diamonds = (playerData.diamonds || 0) - targetLevel.cost;
-    playerData.vipLevel = level;
-    playerData.vipPoints = (playerData.vipPoints || playerData.vip_points || 0) + targetLevel.cost * 10;
-    // 同步 vip_level 字段
-    playerData.vip_level = level;
-    playerData.vip_points = playerData.vipPoints;
-
+    // 更新内存
+    if (playerData) {
+      playerData.diamonds = (playerData.diamonds || 0) - targetLevel.cost;
+      playerData.vipLevel = level;
+      playerData.vipPoints = (playerData.vipPoints || 0) + targetLevel.cost * 10;
+      playerData.vip_level = level;
+      playerData.vip_points = playerData.vipPoints;
+    }
     res.json({ success: true, level, vipName: targetLevel.nameCn, message: `恭喜成为${targetLevel.nameCn}！` });
   } catch (err) {
     res.json({ success: false, error: err.message });
