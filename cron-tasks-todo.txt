@@ -2334,7 +2334,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - server/backend/routes/beast.js: 新增 POST /api/beast/attack 端点（同名实现）
   - /learn-skill 已存在（kebab-case），/upgrade 已存在；确认无需额外修复
 [P0] [B] 灵兽装备路由重建 - 新建 server/src/beast_equipment.js，完整实现 getList/info/equip/unequip/enhance/synthesize/recipes，在 server.js 正确注册并加 Logger 确认输出
-[P0] [B] 时装系统 API 补全 - 新增 GET /catalog, GET /sets, POST /buy, POST /unequip；时装商品数据≥10件；套装效果2件/4件加成
+[P0] [B] 时装系统 API 补全 - 新增 GET /catalog, GET /sets, POST /buy, POST /unequip；时装商品数据≥10件；套装效果2件/4件加成  # 完成 | 2026-03-29 db014d90
 [P1] [B] 仙盟 guild 路由补全 - 新增 /guild/kick, /guild/transfer-leader, /guild/members GET, /guild/member/position POST
 [P1] [B] 灵兽好感度系统 - 好感度属性/喂食/出战/阈值触发（信任60+/默契80+/羁绊100）
 [P2] [B] 宗门动态推送系统 - 成员突破/获得灵兽/上榜实时推送；宗门活动日历；宗主@all
@@ -3274,3 +3274,59 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 ### [P2-B-29-PM-2] 锻造材料商店上架（2026-03-29提案）
 - shop 添加: iron_ingot(20灵石,限购99), steel_ingot(50灵石), jade_fragment(100灵石)
 - 截止: 2026-04-02
+
+### [P0-B-29-PM-1] 章节进度持久化到 DB（2026-03-29提案）
+- 文件: server/backend/routes/chapter.js
+- 问题: userProgress[userId] 仅存于内存，服务器重启后章节进度全部丢失
+- 修复:
+  1. 创建 chapter_progress 表: (user_id, chapter_id, stars, total_kills, first_clear_at, updated_at)
+  2. /chapter/battle 成功后同时写 DB
+  3. /chapter/list 加载时优先从 DB 读取
+  4. 新玩家首次初始化 chapter 1 = unlocked
+- 截止: 2026-03-31
+
+### [P1-B-29-PM-2] 排行榜战力数据同步（2026-03-29提案）
+- 文件: server/backend/routes/rank.js, game/balance.js
+- 问题: player 表缺失或数据陈旧，真人玩家战力不进入排行榜
+- 修复:
+  1. 在用户关键操作（强化/学习功法/境界突破）时同步更新 player 表的 HP/ATK/DEF
+  2. 或修改 rank/combat 直接从 Users 表读取属性
+  3. 战力公式: (attack+gongfa_atk)*10 + (defense+gongfa_def)*5 + (hp+gongfa_hp)/10 + realm*500
+  4. 确保 Users.id=1 的记录在 player 表中存在
+- 截止: 2026-03-31
+
+### [P1-B-29-PM-3] 成就进度缓存重启后丢失（2026-03-29提案）
+- 文件: server/backend/routes/achievement.js
+- 问题: userAchievements[userId] 重启后为空，API 返回全部 progress=0
+- 修复:
+  1. 在 /achievement/:userId GET 中检查 userAchievements[userId] 是否存在
+  2. 如为空则从 achievement_progress 表重新加载
+  3. 注意: achievement_progress.achievement_id 有 numeric 和 string 两种格式，需统一映射
+- 截止: 2026-03-31
+
+### [P1-B-29-PM-4] 福利签到表未初始化（2026-03-29提案）
+- 文件: server/backend/routes/welfare.js
+- 问题: 玩家1 welfare_sign_in 全为 null，老玩家无法签到
+- 修复:
+  1. 在 /welfare/sign 路由中，如无记录则自动 INSERT 初始化
+  2. 或运行 DB 回填: INSERT OR IGNORE INTO welfare_sign_in (player_id, current_streak, total_sign_days, sign_history) VALUES ('1', 0, 0, '[]')
+  3. 确保签到后灵石和经验正确发放
+- 截止: 2026-04-02
+
+### [P1-B-29-PM-5] 装备分解系统（2026-03-29新功能提案）
+- 新文件: server/backend/routes/equipment_dismantle.js
+- 功能:
+  1. 白色装备 → iron_ingot×1
+  2. 蓝色装备 → iron_ingot×2 + jade×1(武器) / jade×2(防具)
+  3. 紫色装备 → refined_iron×2 + 对应宝石×1 + jade×2
+  4. API: POST /equipment/dismantle {player_id, item_ids[]}
+- 截止: 2026-04-05
+
+### [P1-B-29-PM-6] 材料副本 API（矿洞探险）（2026-03-29新功能提案）
+- 新文件: server/backend/routes/material_dungeon.js
+- 功能:
+  1. 3种副本: 矿洞(普通)/晶石洞(精英)/玉石山(困难)
+  2. 每种副本有 entered_count / max_enter (每天3次)
+  3. 消耗体力挑战，返回材料掉落
+  4. 体力系统: 每5分钟恢复1点，上限100点
+- 截止: 2026-04-05
