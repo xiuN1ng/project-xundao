@@ -3974,12 +3974,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-30
 
 # === 2026-03-30 凌晨紧急修复 (第104轮) ===
-[B-P0-30-N104-1] 宗门系统 sect_api.js 数据库崩溃  # 紧急 | 2026-03-31
+[B-P0-30-N104-1] 宗门系统 sect_api.js 数据库崩溃  # 完成 | 2026-03-30 717ab4d1 | 紧急 | 2026-03-31
   - 文件: server/game/sect_api.js 第49行
   - 问题: "Cannot open database because the directory does not exist" - Database() 路径对应目录缺失
-  - 修复1: 检查 new Database() 的路径参数，确保目录存在（fs.mkdirSync）
-  - 修复2: sect_storage.js 中 db.exec() 调用检查（better-sqlite3 db 实例是否正确）
-  - 修复3: 参照 welfare_storage.js 的 SQLite 兼容写法
+  - 修复: path.join(__dirname, '..', '..', 'data', 'game.db') → path.join(__dirname, '..', 'data', 'game.db') (ROOT/data → server/data)
   - 验证: curl http://localhost:3001/api/sect/player/1 返回正常JSON（非500错误）
   - 截止: 2026-03-31
 
@@ -3993,11 +3991,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 验证: curl http://localhost:3001/api/meridian/status?player_id=1 返回正常JSON
   - 截止: 2026-03-31
 
-[B-P0-30-N104-3] 天梯系统 ladder.js 运行时崩溃  # 紧急 | 2026-03-31
-  - 文件: server/game/ladder.js
+[B-P0-30-N104-3] 天梯系统 ladder.js 运行时崩溃  # 完成 | 2026-03-30 717ab4d1 | 紧急 | 2026-03-31
+  - 文件: server/game/ladder_api.js
   - 问题: "Cannot read properties of undefined (reading 'getPlayerLadderData')"
-  - 修复1: 检查 ladderStorage/ladderSystem 的 getPlayerLadderData 方法定义
-  - 修复2: 确认依赖注入时机（模块加载顺序）
+  - 修复: ladderStorage = require('./ladder_storage') → ladderStorage = require('./ladder_storage').ladderStorage (解构named export)
   - 验证: curl http://localhost:3001/api/ladder/info?player_id=1 返回正常JSON
   - 截止: 2026-03-31
 
