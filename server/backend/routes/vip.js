@@ -22,8 +22,16 @@ try {
   db = null;
 }
 
-// 获取玩家内存数据
+// 获取玩家数据（优先从 SQLite DB 读取，保持数据一致性）
 function getPlayerData(userId) {
+  // 优先从 DB 读取真实数据
+  if (db) {
+    try {
+      const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+      if (user) return user;
+    } catch (e) {}
+  }
+  // 后备：使用内存中的玩家数据
   if (playerModule._player && playerModule._player.id === userId) {
     return playerModule._player;
   }
@@ -272,8 +280,12 @@ router.post('/buy-month-card', (req, res) => {
       saveMonthlyCard(userId, { cardType, purchaseTime: now, lastClaimTime: null, expireTime });
     }
 
-    // 更新内存数据
-    playerData.diamonds = (playerData.diamonds || 0) - card.cost;
+    // 同步更新 DB 中的玩家数据
+    const newDiamonds = (playerData.diamonds || 0) - card.cost;
+    if (db) {
+      db.prepare('UPDATE Users SET diamonds = ? WHERE id = ?').run(newDiamonds, userId);
+    }
+    playerData.diamonds = newDiamonds;
 
     res.json({ success: true, cardType, expireTime, message: `购买成功！月卡有效期至${new Date(expireTime).toLocaleDateString()}` });
   } catch (err) {
@@ -302,7 +314,7 @@ router.get('/info', (req, res) => {
       nextClaimTime: hasActiveCard ? (card.lastClaimTime ? card.lastClaimTime + 86400000 : now) : null,
     },
     monthlyCard: hasActiveCard ? { type: card.cardType, expireTime: card.expireTime } : null,
-    spiritStones: playerData?.spirit_stones || 0,
+    spiritStones: playerData?.lingshi || playerData?.spirit_stones || 0,
   });
 });
 
@@ -391,14 +403,27 @@ router.post('/claim-daily', (req, res) => {
     const card = MONTHLY_CARDS[cardState.cardType];
     const reward = card.dailyReward;
 
-    // 更新内存中的玩家数据
+    // 同步更新 DB 中的玩家数据
     const playerData = getPlayerData(userId);
     if (playerData) {
       if (reward.type === 'spirit_stones') {
-        playerData.spirit_stones = (playerData.spirit_stones || 0) + reward.amount;
-        playerData.lingshi = playerData.spirit_stones; // 同步
+        const newAmount = (Number(playerData.spirit_stones) || 0) + reward.amount;
+        if (db) {
+          db.prepare('UPDATE Users SET lingshi = ? WHERE id = ?').run(newAmount, userId);
+          playerData.spirit_stones = newAmount;
+          playerData.lingshi = newAmount;
+        } else {
+          playerData.spirit_stones = newAmount;
+          playerData.lingshi = newAmount;
+        }
       } else if (reward.type === 'diamonds') {
-        playerData.diamonds = (playerData.diamonds || 0) + reward.amount;
+        const newDiamonds = (playerData.diamonds || 0) + reward.amount;
+        if (db) {
+          db.prepare('UPDATE Users SET diamonds = ? WHERE id = ?').run(newDiamonds, userId);
+          playerData.diamonds = newDiamonds;
+        } else {
+          playerData.diamonds = newDiamonds;
+        }
       }
     }
 
