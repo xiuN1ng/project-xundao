@@ -2699,3 +2699,154 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/lundao.js
   - 创建lundao_questions表，添加/api/lundao/question端点
   - 截止: 2026-04-05
+
+# ========== 2026-03-29 新增 P0/B 任务（紧急修复）==========
+[P0-B-29-1] Achievement /list 路由路径解析错误修复
+  - 文件: server/backend/routes/achievement.js
+  - 问题: GET /achievement/list 被 /:userId 路由捕获，'list'→NaN，永远读 userAchievements[NaN]
+  - 修复1: 添加 router.get('/list', ...) 端点，正确解析 player_id 查询参数
+  - 修复2: 对 player_id=1 的 achievement_progress 数据做一次补偿写入（DB已存在但API读不到）
+  - 验证: curl /api/achievement/list?player_id=1 → id=3(金丹) progress应=4, completed应=true
+  - 截止: 2026-03-29
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-29-1] Tribulation advance SESSION_STATUS 未定义
+  - 文件: server/backend/routes/tribulation.js
+  - 问题: POST /tribulation/advance → "SESSION_STATUS is not defined"
+  - 修复1: 定义 const SESSION_STATUS = { ACTIVE:'active', COMPLETED:'completed', FAILED:'failed', EXPIRED:'expired' }
+  - 修复2: 替换所有引用
+  - 修复3: 补充 phase 推进逻辑
+  - 截止: 2026-03-30
+
+[P1-B-29-2] Offline income 系统实现
+  - 文件: server/backend/routes/offline.js
+  - 问题: /api/offline/income 返回空对象 {}
+  - 修复1: 确认 server.js 路由注册
+  - 修复2: 实现 GET /offline/income (离线时间、收益计算)
+  - 修复3: 实现 POST /offline/claim (收益发放)
+  - 截止: 2026-03-30
+
+[P1-B-29-3] Immortal Art API 数据返回
+  - 文件: server/backend/routes/immortal_art_api.js
+  - 问题: /api/immortalArt/list 返回空对象
+  - 修复: 检查 storage→api→route 数据流，确保25+仙术模板被正确返回
+  - 截止: 2026-03-30
+
+[P1-B-29-4] 排行榜战力实时计算
+  - 文件: server/backend/routes/rank.js
+  - 问题: userId=2~26 全部 combatPower=1350（硬编码初始值）
+  - 修复: 从 player 表实时计算 combatPower = attack*hp/100 + bonuses
+  - 截止: 2026-03-30
+
+# ========== 2026-03-29 新增 P2/B 任务 ==========
+[P2-B-29-1] Lingdao currentLingshi 读取错误
+  - 文件: server/backend/routes/lingdao.js
+  - 问题: 返回 currentLingshi:0，但玩家实际 lingshi=5903
+  - 修复: 从 player.lingshi 正确读取
+  - 截止: 2026-04-01
+
+[P2-B-29-2] 成就七日冲刺活动后端
+  - 文件: server/backend/routes/achievement.js 或新文件
+  - 内容: achievement_sprint API (获取冲刺任务/领取奖励/进度追踪)
+  - 截止: 2026-03-31
+
+# ========== 2026-03-30 新增 P0/B 任务（紧急）==========
+[P0-B-30-1] Arena 每日挑战次数超限修复
+  - 文件: server/backend/routes/arena.js
+  - 问题: challengesUsed=8 > maxChallenges=5，超限后仍可挑战
+  - 修复: 挑战前检查 remainingChallenges>=1，不满足则直接返回错误
+  - 截止: 2026-03-30
+
+[P0-B-30-2] 心魔幻境解锁判断逻辑修复
+  - 文件: server/backend/routes/heart_demon.js
+  - 问题: level=16 的玩家，reqLevel=5 的 floor 2 仍显示 unlocked=false
+  - 修复: 确认 unlock 判断使用 player.level 而非 player.realm
+  - 截止: 2026-03-30
+
+[P0-B-30-3] 竞技场挑战接口实现
+  - 文件: server/backend/routes/arena.js
+  - 问题: /arena/challenge 返回 404
+  - 修复1: 添加 POST /challenge 端点（检查挑战次数+战斗逻辑+结果更新）
+  - 修复2: 添加 GET /arena/rivals 返回可挑战对手列表
+  - 截止: 2026-03-30
+
+# ========== 2026-03-30 新增 P1/B 任务 ==========
+[P1-B-30-1] 聊天系统全面修复
+  - 文件: server/backend/routes/chat.js
+  - 问题: 三频道 totalCount=0, lastMessage=null
+  - 修复1: 检查消息存储机制，迁移到 DB（如是内存存储）
+  - 修复2: 实现 POST /api/chat/send 存储消息
+  - 修复3: 修复 GET /api/chat/list 返回最近50条消息
+  - 截止: 2026-03-31
+
+[P1-B-30-2] 灵田福地占用详情
+  - 文件: server/backend/routes/paradise.js
+  - 问题: occupied=true 但无占用者信息
+  - 修复: 增加 occupiedBy.name/endTime/remainingSeconds
+  - 截止: 2026-03-31
+
+[P1-B-30-3] 功法装配 API 实现
+  - 文件: server/backend/routes/gongfa.js
+  - 问题: learned=true, equipped=false 时战斗不加成
+  - 修复: 实现 POST /api/gongfa/equip，确保装配后加成生效
+  - 截止: 2026-03-31
+
+[P1-B-30-4] 灵兽遭遇+捕获 API
+  - 文件: server/backend/routes/beast.js
+  - 修复1: POST /api/beast/encounter (随机遭遇)
+  - 修复2: POST /api/beast/capture (使用灵兽圈捕获)
+  - 截止: 2026-04-01
+
+# ========== 2026-03-30 新增 P2/B 任务 ==========
+[P2-B-30-1] 装备打孔/镶嵌 API
+  - 文件: server/backend/routes/equipment.js
+  - 修复1: POST /equipment/socket/upgrade (打孔)
+  - 修复2: POST /equipment/gem/set (镶嵌宝石)
+  - 截止: 2026-04-02
+
+[P2-B-30-2] 竞技场赛季奖励后端
+  - 文件: server/backend/routes/arena.js (新增 season_rewards 部分)
+  - 内容: 赛季奖励配置表 + 奖励计算逻辑
+  - 截止: 2026-04-02
+
+# ========== 2026-03-30 新增 P1/B 新功能 ==========
+[NF-B-30-1] 宗门副本系统后端
+  - 文件: server/backend/routes/sect_dungeon.js (新建)
+  - 内容: 宗门副本配置/开启/进入/奖励发放
+  - 截止: 2026-04-03
+
+# ========== 2026-03-29 新增 P0/B 任务（第4次！Beast列名错配）==========
+[P0-B-59-1] Beast player_beasts 列名错配修复（长期未修复！）
+  - 文件: server/backend/routes/beast.js
+  - 问题: SQL用user_id，DB列名是player_id，导致所有灵兽查询返回0行
+  - DB实测: player_beasts表列名是player_id，但代码用user_id
+  - 修复: 所有player_beasts表的WHERE user_id → WHERE player_id
+  - 同时检查 beast_pity_counter 表的列名一致性
+  - 验证: curl /api/beast/my?userId=1 应返回6条记录
+  - 截止: 2026-03-30
+
+[P0-B-59-2] Gongfa equip 参数名统一
+  - 文件: server/backend/routes/gongfa.js
+  - 问题: /gongfa/equip 只接受userId，不接受player_id（与其他端点不一致）
+  - 修复: 同时接受player_id和userId作为别名
+  - 同时: 确认player_info的attack计算仅含equipped=true的功法
+  - 截止: 2026-03-30
+
+# ========== 2026-03-29 新增 P1/B 任务 ==========
+[P1-B-59-1] Arena rivals 端点别名
+  - 文件: server/backend/routes/arena.js
+  - 问题: 前端调用/api/arena/rivals返回404，实际端点为/api/arena/opponents/:userId
+  - 修复: 添加router.get('/rivals/:userId', ...)作为opponents的别名路由
+  - 截止: 2026-03-31
+
+[P1-B-59-2] HeartDemon enter 500错误修复
+  - 文件: server/backend/routes/heart_demon.js
+  - 问题: POST /heartDemon/enter → "服务器错误" (500)
+  - 修复: 添加try-catch定位根因，检查heart_demon_instances表schema是否匹配
+  - 截止: 2026-03-31
+
+# ========== 2026-03-29 新增 P1/B 新功能 ==========
+[P1-B-NF-59-1] 装备套装效果系统后端
+  - 文件: server/backend/game/equipment_set_storage.js (新建)
+  - 内容: 套装配置数据(青云/玄武/朱雀)+套装激活检测逻辑+属性加成计算
+  - 截止: 2026-04-03
