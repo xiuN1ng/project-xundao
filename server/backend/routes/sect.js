@@ -922,6 +922,45 @@ router.get('/applications/:sectId', (req, res) => {
   }
 });
 
+// GET /my-applications - 查看当前玩家提交的入宗申请记录
+router.get('/my-applications', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || parseInt(req.query.userId) || 1;
+
+  if (!db) {
+    return res.status(500).json({ success: false, message: '数据库不可用' });
+  }
+
+  try {
+    // 获取当前玩家已提交的申请记录
+    const applications = db.prepare(`
+      SELECT sa.*, s.name as sect_name, s.icon as sect_icon, s.level as sect_level
+      FROM sect_applications sa
+      LEFT JOIN sects s ON s.id = sa.sect_id
+      WHERE sa.player_id = ?
+      ORDER BY sa.created_at DESC
+      LIMIT 20
+    `).all(playerId);
+
+    return res.json({
+      success: true,
+      applications: applications.map(a => ({
+        id: a.id,
+        sectId: a.sect_id,
+        sectName: a.sect_name || '宗门' + a.sect_id,
+        sectIcon: a.sect_icon || '🏛️',
+        sectLevel: a.sect_level || 1,
+        message: a.message || '',
+        status: a.status, // pending / approved / rejected
+        createdAt: a.created_at,
+        reviewedAt: a.reviewed_at
+      }))
+    });
+  } catch (error) {
+    console.error('[sect] /my-applications 错误:', error.message);
+    return res.status(500).json({ success: false, message: '查询失败: ' + error.message });
+  }
+});
+
 // POST /approve - 审批申请（approve=true通过，approve=false拒绝）
 router.post('/approve', (req, res) => {
   const approver_id = parseInt(req.body.approver_id) || parseInt(req.body.userId) || 1;
