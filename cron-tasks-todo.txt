@@ -3936,3 +3936,17 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/gongfa.js
   - 确认: GET /gongfa/:playerId, POST /gongfa/learn, POST /gongfa/equip, POST /gongfa/upgrade
   - 截止: 2026-04-10
+
+# === 2026-03-30 紧急修复 ===
+[B-P0-CRASH-1] server.js 服务器无法启动修复  # 完成 | 2026-03-30 04:10 | 68b2fa4d
+  - 文件: server/server.js
+  - 问题: 26个 require('./src/xxx') 路径断链，server/src/ 目录不存在
+  - 修复:
+    1. require('./src/database') → require('./services/database') (3处，seed函数+migrations)
+    2. require('./src/core/rank_system') → require('./game/rank_system')
+    3. require('./src/core/lingshi_api') → require('./game/lingshi_api')
+    4. require('./src/core/realm_dungeon_system') → require('./game/realm_dungeon_system')
+    5. require('./src/core/meridian_system') → require('./game/meridian_system')
+    6. 其余21个 require('./src/xxx') → require('./game/xxx')
+  - 验证: curl http://localhost:3001/api/player/info?player_id=1 返回 {"level":23,"realm":8,"lingshi":6074}
+  - 截止: 2026-03-30
