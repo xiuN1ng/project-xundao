@@ -4489,9 +4489,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - POST /api/collection/unlock — 解锁新物品
 - 相关战斗系统触发collection.unlock
 
-## [P1-115-2] 创建 backend/routes/seven_day.js — 2026-04-05
+## [P1-115-2] 创建 backend/routes/seven_day.js — 完成 | 2026-03-31 8dd41e76
 - GET /api/seven-day/status — 获取玩家当前天数和已完成任务
 - POST /api/seven-day/claim/:taskId — 后端验证后发放奖励（防刷）
+- server.js 注册 /api/seven-day 路由，七日任务配置(7天×3任务)+DB持久化
+- 验证: curl /api/seven-day/?player_id=1 → current_day=1 ✓; POST /trigger → progress=1 ✓
 
 ## [P1-115-3] 创建 backend/routes/season_pass.js — 2026-04-05
 - GET /api/season-pass/status — 获取赛季ID/等级/经验（服务端控制）
