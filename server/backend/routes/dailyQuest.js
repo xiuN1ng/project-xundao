@@ -173,36 +173,36 @@ function saveQuestToDB(userId, questId, progress, completed, claimed) {
   }
 }
 
-// 每日任务配置（奖励×10）
-// 全部完成额外奖励：每日宝箱(神圣精华×1 + 灵石×10000)
-const COMPLETE_ALL_BONUS = { lingshi: 10000, item: { id: 'mystic_chest', name: '神秘宝箱', count: 1 } };
+// 每日任务配置（奖励合理化：d1=100-500, d2=500-1500, d3=1000-3000）
+// 全部完成额外奖励：每日宝箱(神圣精华×1 + 灵石×500)
+const COMPLETE_ALL_BONUS = { lingshi: 500, item: { id: 'mystic_chest', name: '神秘宝箱', count: 1 } };
 
 const questTemplates = [
   // 修炼类（target改为次数，delta=1对应1次修炼）
-  { id: 1, type: 'cultivate', name: '修炼时长', desc: '完成1次修炼', target: 1, unit: '次', reward: { lingshi: 5000, exp: 2000 }, difficulty: 1 },
-  { id: 2, type: 'cultivate', name: '专注修炼', desc: '完成3次修炼', target: 3, unit: '次', reward: { lingshi: 15000, exp: 6000 }, difficulty: 2 },
-  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '完成6次修炼', target: 6, unit: '次', reward: { lingshi: 30000, exp: 12000 }, difficulty: 3 },
+  { id: 1, type: 'cultivate', name: '修炼时长', desc: '完成1次修炼', target: 1, unit: '次', reward: { lingshi: 200, exp: 80 }, difficulty: 1 },
+  { id: 2, type: 'cultivate', name: '专注修炼', desc: '完成3次修炼', target: 3, unit: '次', reward: { lingshi: 500, exp: 200 }, difficulty: 2 },
+  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '完成6次修炼', target: 6, unit: '次', reward: { lingshi: 1000, exp: 400 }, difficulty: 3 },
 
   // 战斗类
-  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 2000, exp: 1000 }, difficulty: 1 },
-  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 20000, exp: 8000 }, difficulty: 2 },
-  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 60000, exp: 24000 }, difficulty: 3 },
+  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 300, exp: 150 }, difficulty: 1 },
+  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 800, exp: 320 }, difficulty: 2 },
+  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 1500, exp: 600 }, difficulty: 3 },
 
   // 副本类
-  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 5000, exp: 3000 }, difficulty: 1 },
-  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 25000, exp: 15000 }, difficulty: 2 },
-  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 50000, exp: 30000 }, difficulty: 3 },
+  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 300, exp: 150 }, difficulty: 1 },
+  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 1000, exp: 500 }, difficulty: 2 },
+  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 2000, exp: 1000 }, difficulty: 3 },
 
   // 消费类
-  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 300 }, difficulty: 1 },
-  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 1500 }, difficulty: 2 },
+  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 20 }, difficulty: 1 },
+  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 100 }, difficulty: 2 },
 
   // 社交类
-  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 2000 }, difficulty: 1 },
+  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 200 }, difficulty: 1 },
 
   // 装备类
-  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 3000, exp: 1500 }, difficulty: 1 },
-  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 15000, exp: 7500 }, difficulty: 2 }
+  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 300, exp: 150 }, difficulty: 1 },
+  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 800, exp: 400 }, difficulty: 2 }
 ];
 
 // 用户任务进度（内存）- 已移至文件顶部避免 TDZ
