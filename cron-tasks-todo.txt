@@ -4072,7 +4072,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - loadChapterStarsFromDB(userId): GET / 和 GET /list 时从DB加载星星合并到内存
   - saveChapterStarsToDB(userId, chapterId, stars, kills): POST /complete 和 POST /battle 时 UPSERT 星星到DB
   - 服务器重启后章节星星不丢失
-[B-05] 添加 /api/beast/summon 路由：在 beast_api.js 添加 router.post('/summon')，复用已有的保底和消耗逻辑。
+[B-05] 添加 /api/beast/summon 路由：在 beast_api.js 添加 router.post('/summon')，复用已有的保底和消耗逻辑。  # 完成 | 2026-03-30 11:52 | 48e3d776
 [B-06] 填充真实排行榜数据：rank/combat 当前全是假玩家，改用 Users 表真实数据，增加分服/全服排行。
 [B-07] 修复竞技场对手池：注册时自动加入 arena_players，填充 NPC 对手池（不同境界/战力 AI）。
 [B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。
