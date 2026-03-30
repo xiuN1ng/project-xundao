@@ -4394,7 +4394,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-N112-3] 创建 server/backend/routes/fashion.js（时装系统：get + equip）
 
 === N113 后端任务 (2026-03-30) ===
-[P0] Artifact API 路径修复：core/api.js 的 artifactAPI 调用的路径是 /api/artifacts/*，但后端注册的是 /api/spirit-artifact/*。需要在后端添加 /api/artifacts/* 别名路由，或将前端改为调用 /api/spirit-artifact/*
+[P0] Artifact API 路径修复：core/api.js 的 artifactAPI 调用的路径是 /api/artifacts/*，但后端注册的是 /api/spirit-artifact/*。需要在后端添加 /api/artifacts/* 别名路由，或将前端改为调用 /api/spirit-artifact/*  # 完成 | 2026-03-31 d99f2998
 [P0] 每日任务奖励数值膨胀 10~50 倍：dailyQuest.js 中每日任务灵石奖励 5000/2000/5000 需调整为 100~500，每周任务从 15000~60000 调整为 1000~3000，经验奖励同步降低  # 完成 | 2026-03-30 21:13 | 679aa685
 [P1] 成就系统 progress 实时计算：/api/achievement/:userId GET 时重新查询玩家当前 realm 和 combat_power 实时更新 achievements 表的 progress 字段
 [P1] 渡劫挑战系统 2.0：分蓄力→雷劫(QTE)→吸收三阶段，成功率受装备/灵根/境界影响，失败保护（连续3次失败必成），全服广播
