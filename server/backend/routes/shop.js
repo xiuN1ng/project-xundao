@@ -721,4 +721,184 @@ function getShanghaiWeekStr() {
   return monday.toISOString().slice(0, 10);
 }
 
+// ============================================================
+// 灵石直购礼包系统
+// ============================================================
+
+// 礼包模板配置
+const DIRECT_PACKAGES = [
+  {
+    id: 'daily_100',
+    name: '灵气福袋',
+    icon: '💰',
+    price: 100,
+    description: '内含经验丹×3、灵石×100、强化石×1',
+    items: [
+      { name: '经验丹', icon: '⭐', count: 3 },
+      { name: '灵石', icon: '💎', count: 100, isCurrency: true },
+      { name: '强化石', icon: '🔨', count: 1 }
+    ]
+  },
+  {
+    id: 'daily_500',
+    name: '修炼福袋',
+    icon: '🎁',
+    price: 500,
+    description: '内含洗练石×1、灵石×500、强化石×2、铁锭×2',
+    items: [
+      { name: '洗练石', icon: '💧', count: 1 },
+      { name: '灵石', icon: '💎', count: 500, isCurrency: true },
+      { name: '强化石', icon: '🔨', count: 2 },
+      { name: '铁锭', icon: '🔩', count: 2 }
+    ]
+  },
+  {
+    id: 'daily_2000',
+    name: '天元宝匣',
+    icon: '👑',
+    price: 2000,
+    description: '内含天元丹×1、灵石×2000、洗练石×5、玉石×1',
+    items: [
+      { name: '天元丹', icon: '🌟', count: 1 },
+      { name: '灵石', icon: '💎', count: 2000, isCurrency: true },
+      { name: '洗练石', icon: '💧', count: 5 },
+      { name: '玉石', icon: '💠', count: 1 }
+    ]
+  }
+];
+
+// 获取3个每日随机礼包（每天固定，同日期同礼包）
+function getDailyPackages(userId) {
+  const db = sharedDb;
+  if (!db) return DIRECT_PACKAGES;
+
+  const today = getShanghaiDateStr();
+  // 伪随机：根据日期+userId 确定包顺序
+  const seed = parseInt(today.replace(/-/g, '')) * 1000 + (userId % 100);
+  const sorted = [...DIRECT_PACKAGES].sort((a, b) => {
+    const sa = (seed * (a.id.charCodeAt(5) || 1)) % 100;
+    const sb = (seed * (b.id.charCodeAt(5) || 1)) % 100;
+    return sb - sa;
+  });
+
+  // 检查玩家今日是否已购买
+  const purchased = new Set();
+  try {
+    const rows = db.prepare(
+      "SELECT package_id FROM daily_direct_purchases WHERE user_id = ? AND purchase_date = ?"
+    ).all(userId, today);
+    rows.forEach(r => purchased.add(r.package_id));
+  } catch (e) {
+    // 表可能不存在，忽略
+  }
+
+  return sorted.slice(0, 3).map(pkg => ({
+    packageId: pkg.id,
+    name: pkg.name,
+    icon: pkg.icon,
+    price: pkg.price,
+    description: pkg.description,
+    items: pkg.items,
+    purchased: purchased.has(pkg.id)
+  }));
+}
+
+// GET /api/shop/daily-packages — 返回3个每日礼包
+router.get('/daily-packages', (req, res) => {
+  const userId = req.userId || req.query.userId || req.query.player_id || 1;
+  const packages = getDailyPackages(userId);
+  res.json({ success: true, packages, date: getShanghaiDateStr() });
+});
+
+// POST /api/shop/direct-buy — 购买直购礼包
+router.post('/direct-buy', (req, res) => {
+  const userId = req.userId || req.body.userId || req.body.player_id || 1;
+  const packageId = req.body.packageId;
+  const db = getDb(req) || sharedDb;
+
+  if (!db) {
+    return res.status(500).json({ success: false, error: '数据库未连接' });
+  }
+
+  // 找到礼包配置
+  const pkg = DIRECT_PACKAGES.find(p => p.id === packageId);
+  if (!pkg) {
+    return res.status(400).json({ success: false, error: '不存在的礼包' });
+  }
+
+  // 检查今日是否已购买
+  const today = getShanghaiDateStr();
+  try {
+    const existing = db.prepare(
+      "SELECT id FROM daily_direct_purchases WHERE user_id = ? AND package_id = ? AND purchase_date = ?"
+    ).get(userId, packageId, today);
+    if (existing) {
+      return res.status(400).json({ success: false, error: '今日已购买此礼包，请明日再来' });
+    }
+  } catch (e) {
+    // 表可能不存在，继续执行
+  }
+
+  // 检查灵石是否足够
+  const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+  if (!player || player.lingshi < pkg.price) {
+    return res.status(400).json({
+      success: false,
+      error: `灵石不足，需要${pkg.price}灵石，当前${player ? player.lingshi : 0}灵石`
+    });
+  }
+
+  // 扣灵石
+  const updateUser = db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?');
+  const result = updateUser.run(pkg.price, userId);
+  if (result.changes === 0) {
+    return res.status(500).json({ success: false, error: '扣款失败' });
+  }
+
+  // 写入购买记录
+  try {
+    db.prepare(
+      "INSERT OR IGNORE INTO daily_direct_purchases (user_id, package_id, purchase_date, created_at) VALUES (?, ?, ?, datetime('now'))"
+    ).run(userId, packageId, today);
+  } catch (e) {
+    // 如果表不存在则跳过，不影响物品发放
+  }
+
+  // 发放物品到背包
+  const insertedItems = [];
+  const itemInsert = db.prepare(
+    "INSERT INTO player_items (user_id, item_id, item_name, item_type, count, icon, source) VALUES (?, 0, ?, 'material', ?, '📦', 'daily_package')"
+  );
+  const currencyUpdate = db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?');
+
+  for (const item of pkg.items) {
+    if (item.isCurrency) {
+      // 灵石直接加到用户账户（已扣减 pkg.price，所以这里加的是礼包内的灵石）
+      currencyUpdate.run(item.count, userId);
+      insertedItems.push({ name: item.name, icon: item.icon, count: item.count });
+    } else {
+      // 查找或创建物品记录（UPSERT）
+      const existing = db.prepare(
+        "SELECT id, count FROM player_items WHERE user_id = ? AND item_name = ? AND item_type = 'material'"
+      ).get(userId, item.name);
+      if (existing) {
+        db.prepare(
+          "UPDATE player_items SET count = count + ? WHERE id = ?"
+        ).run(item.count, existing.id);
+      } else {
+        itemInsert.run(userId, item.name, item.count);
+      }
+      insertedItems.push({ name: item.name, icon: item.icon, count: item.count });
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `购买成功！花费${pkg.price}灵石`,
+    package: { packageId: pkg.id, name: pkg.name, icon: pkg.icon, price: pkg.price },
+    items: insertedItems,
+    remainingLingshi: (player.lingshi - pkg.price) + pkg.items.filter(i => i.isCurrency).reduce((s, i) => s + i.count, 0)
+  });
+});
+
 module.exports = router;
