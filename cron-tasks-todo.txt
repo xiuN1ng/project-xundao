@@ -4282,3 +4282,42 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 首充双倍逻辑: 首次充值额外赠送 100%
   - 文件: server/backend/routes/payment.js
   - 截止: 2026-04-05
+
+## P0 宗门活动后端 (来源: 2026-03-30-evening)
+[B-P0-0319-1] 新增 routes/sect-activity.js
+  - GET /api/sect-activity/tasks?player_id=X — 玩家今日活跃任务状态
+  - POST /api/sect-activity/claim — 领取任务奖励
+  - 活跃积分字段: player.sect_points (每日重置)
+  - 文件: server/backend/routes/sect-activity.js
+  - 截止: 2026-04-03
+
+## P1 每日试炼后端 (来源: 2026-03-30-evening)
+[B-P1-0319-1] 新增 routes/daily-trial.js
+  - GET /api/daily-trial?player_id=X — 当日试炼状态(后端按时间戳重置)
+  - POST /api/daily-trial/claim — 领取试炼奖励
+  - 任务: 修炼/副本/竞技/闯塔/宗门，对应实际动作
+  - 文件: server/backend/routes/daily-trial.js
+  - 截止: 2026-04-05
+
+## P1 灵兽保底数据库持久化 (来源: 2026-03-30-evening)
+[B-P1-0319-2] beast.js 保底记录写入数据库
+  - 表: beast_summon_records (player_id, summon_count, pity_count, last_summon_time)
+  - GET /api/beast/pity?player_id=X 返回当前保底进度
+  - 替换内存 summonPityRecords 为 DB 查询
+  - 文件: server/backend/routes/beast.js
+  - 截止: 2026-04-04
+
+## P0 首充支付回调 (来源: 2026-03-30-evening)
+[B-P0-0319-2] payment.js 完整订单流程
+  - create-order → 模拟支付成功 → callback → 灵石到账
+  - 首充双倍: 首次充值额外赠送 100%
+  - 文件: server/backend/routes/payment.js
+  - 截止: 2026-04-03
+
+## P1 节日系统后端 (来源: 2026-03-30-evening)
+[B-P1-0319-3] 新增 routes/festival.js
+  - GET /api/festival — 返回当前节日活动数据
+  - POST /api/festival/join — 参加节日活动
+  - 支持预热期/进行期/结束期三阶段
+  - 文件: server/backend/routes/festival.js
+  - 截止: 2026-04-06

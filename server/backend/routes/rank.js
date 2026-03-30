@@ -13,16 +13,46 @@ try {
   console.error('[rank] DB连接失败:', e.message);
 }
 
+// 高战力AI池（用于填充空白名次）
+const FAKE_AI_PLAYERS = [
+  { userId: -1, name: '天机阁主', level: 95, realm: 9, combatPower: 158000 },
+  { userId: -2, name: '青云剑仙', level: 88, realm: 9, combatPower: 142000 },
+  { userId: -3, name: '混元魔尊', level: 82, realm: 8, combatPower: 128000 },
+  { userId: -4, name: '万妖女帝', level: 75, realm: 8, combatPower: 105000 },
+  { userId: -5, name: '太虚真人', level: 68, realm: 7, combatPower: 88000 },
+];
+
 // 计算战斗力的公式（与 arena.js 保持一致）
 function calcCombatPower(p) {
   if (!p) return 0;
-  // 基于等级/境界/属性综合计算
   const level = p.level || 1;
   const realm = p.realm || 1;
   const atk = p.attack || 100;
   const def = p.defense || 50;
   const hp = p.hp || 1000;
   return Math.floor(atk * 10 + def * 5 + hp / 10 + level * 500 + realm * 2000);
+}
+
+// 获取玩家在战力榜的当前排名
+function getPlayerCombatRank(uid) {
+  if (!db) return null;
+  try {
+    const player = db.prepare(`
+      SELECT FLOOR(attack * 10 + defense * 5 + hp / 10 + level * 50 + realm * 500) as combatPower
+      FROM Users WHERE id = ? AND id > 0
+    `).get(uid);
+    if (!player) return null;
+    const power = player.combatPower;
+    const rank = db.prepare(`
+      SELECT COUNT(*) + 1 as myRank
+      FROM Users
+      WHERE id > 0 AND FLOOR(attack * 10 + defense * 5 + hp / 10 + level * 50 + realm * 500) > ?
+    `).get(power);
+    return { myRank: rank.myRank, combatPower: power };
+  } catch (e) {
+    console.error('[rank] myRank查询失败:', e.message);
+    return null;
+  }
 }
 
 // 获取战力榜（从 Users 表实时查询，排除 fake AI，真实计算 combatPower）
@@ -43,14 +73,31 @@ function getCombatRank(limit = 50) {
       ORDER BY combatPower DESC
       LIMIT ?
     `).all(limit);
-    return rows.map((r, i) => ({
+    const realPlayers = rows.map((r, i) => ({
       rank: i + 1,
       userId: r.userId,
       name: r.name,
       level: r.level,
       realm: r.realm,
-      combatPower: Math.floor(r.combatPower)
+      combatPower: Math.floor(r.combatPower),
+      isAI: false
     }));
+
+    // 真实玩家数量少于5时，补充AI填充前5名
+    if (realPlayers.length < 5) {
+      const needed = 5 - realPlayers.length;
+      const topAI = FAKE_AI_PLAYERS.slice(0, needed).map((ai, i) => ({
+        rank: realPlayers.length + i + 1,
+        userId: ai.userId,
+        name: ai.name,
+        level: ai.level,
+        realm: ai.realm,
+        combatPower: ai.combatPower,
+        isAI: true
+      }));
+      return [...realPlayers, ...topAI];
+    }
+    return realPlayers;
   } catch (e) {
     console.error('[rank] combat查询失败:', e.message);
     return [];
@@ -95,6 +142,7 @@ function getWealthRank(limit = 50) {
              lingshi as spiritStones,
              diamonds
       FROM Users
+      WHERE id > 0
       ORDER BY lingshi DESC
       LIMIT ?
     `).all(limit);
@@ -141,6 +189,24 @@ function getChapterRank(limit = 50) {
   }
 }
 
+// 获取玩家境界榜排名
+function getPlayerRealmRank(uid) {
+  if (!db) return null;
+  try {
+    const player = db.prepare(`SELECT realm, level FROM Users WHERE id = ? AND id > 0`).get(uid);
+    if (!player) return null;
+    const rank = db.prepare(`
+      SELECT COUNT(*) + 1 as myRank
+      FROM Users
+      WHERE id > 0 AND (realm > ? OR (realm = ? AND level > ?))
+    `).get(player.realm, player.realm, player.level);
+    return { myRank: rank.myRank, realm: player.realm, level: player.level };
+  } catch (e) {
+    console.error('[rank] realmRank查询失败:', e.message);
+    return null;
+  }
+}
+
 // 获取所有排行榜概览（根路径）
 router.get('/', (req, res) => {
   try {
@@ -160,11 +226,12 @@ router.get('/', (req, res) => {
   }
 });
 
-// 获取各类排行榜
+// 获取各类排行榜（支持 ?player_id=X 查询当前玩家排名）
 router.get('/:type', (req, res) => {
   const { type } = req.params;
-  const { limit } = req.query;
+  const { limit, player_id } = req.query;
   const n = Math.min(parseInt(limit) || 50, 100);
+  const uid = parseInt(player_id) || 0;
 
   let result;
   switch (type) {
@@ -174,6 +241,25 @@ router.get('/:type', (req, res) => {
     case 'chapter': result = getChapterRank(n); break;
     default:
       return res.json({ error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+  }
+
+  // 附加当前玩家排名
+  if (uid > 0) {
+    let myRankInfo = null;
+    if (type === 'combat') myRankInfo = getPlayerCombatRank(uid);
+    if (type === 'level') {
+      try {
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND (level > (SELECT level FROM Users WHERE id = ?) OR (level = (SELECT level FROM Users WHERE id = ?) AND realm > (SELECT realm FROM Users WHERE id = ?)))`).get(uid, uid, uid);
+        myRankInfo = { myRank: rank.r };
+      } catch (e) {}
+    }
+    if (type === 'wealth') {
+      try {
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND lingshi > (SELECT lingshi FROM Users WHERE id = ?)`).get(uid);
+        myRankInfo = { myRank: rank.r };
+      } catch (e) {}
+    }
+    return res.json({ list: result, myRank: myRankInfo });
   }
 
   res.json(result);
