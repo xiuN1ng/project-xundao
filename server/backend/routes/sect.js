@@ -370,47 +370,139 @@ router.get('/bonus', (req, res) => {
   res.json({ success: true, bonuses: sectBonuses });
 });
 
-// /members - 宗门成员列表
+// 从数据库加载成员列表
+function loadMembersFromDb(sectId) {
+  if (!db) return members; // 降级到内存
+  try {
+    return db.prepare(`
+      SELECT u.id, u.nickname as name, sm.role, sm.contribution, sm.joinedAt
+      FROM SectMembers sm
+      JOIN Users u ON u.id = sm.userId
+      WHERE sm.sectId = ?
+      ORDER BY sm.role = '掌门' DESC, sm.contribution DESC, sm.joinedAt ASC
+    `).all(sectId);
+  } catch (e) {
+    console.error('[sect] loadMembersFromDb error:', e.message);
+    return members;
+  }
+}
+
+// /members - 宗门成员列表（从DB加载）
 router.get('/members', (req, res) => {
-  res.json({ success: true, members });
+  const playerId = parseInt(req.query.player_id) || 1;
+  if (!db) return res.json({ success: true, members });
+
+  try {
+    const user = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!user || !user.sectId) {
+      return res.json({ success: false, message: '未加入宗门' });
+    }
+    const memberList = loadMembersFromDb(user.sectId);
+    res.json({ success: true, members: memberList });
+  } catch (e) {
+    console.error('[sect] GET /members error:', e.message);
+    res.json({ success: true, members });
+  }
 });
 
-// /member/kick - 踢出成员
+// 权限检查辅助函数
+function requireLeader(db, playerId, callback) {
+  if (!db) return callback({ success: false, message: '数据库不可用' }, null);
+  try {
+    const user = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!user || !user.sectId) return callback({ success: false, message: '未加入宗门' }, null);
+    const member = db.prepare('SELECT role FROM SectMembers WHERE userId = ? AND sectId = ?').get(playerId, user.sectId);
+    if (!member || member.role !== '掌门') return callback({ success: false, message: '只有掌门可以执行此操作' }, null);
+    callback(null, { user, member });
+  } catch (e) {
+    callback({ success: false, message: e.message }, null);
+  }
+}
+
+// /member/kick - 踢出成员（掌门权限 + DB持久化）
 router.post('/member/kick', (req, res) => {
   const { player_id, target_id } = req.body;
-  const idx = members.findIndex(m => m.id === target_id);
-  if (idx !== -1) {
-    members.splice(idx, 1);
-    res.json({ success: true, message: '成员已移除' });
-  } else {
-    res.json({ success: false, message: '成员不存在' });
-  }
+  if (!player_id || !target_id) return res.json({ success: false, message: '参数不足' });
+
+  requireLeader(db, parseInt(player_id), (err, ctx) => {
+    if (err) return res.json(err);
+
+    // 不能踢自己
+    if (parseInt(target_id) === parseInt(player_id)) {
+      return res.json({ success: false, message: '不能踢出自己' });
+    }
+
+    // 不能踢掌门
+    const target = db.prepare('SELECT role FROM SectMembers WHERE userId = ? AND sectId = ?').get(parseInt(target_id), ctx.user.sectId);
+    if (!target) return res.json({ success: false, message: '成员不存在' });
+    if (target.role === '掌门') return res.json({ success: false, message: '不能踢出掌门' });
+
+    try {
+      db.prepare('DELETE FROM SectMembers WHERE userId = ? AND sectId = ?').run(parseInt(target_id), ctx.user.sectId);
+      db.prepare("UPDATE Sects SET members = MAX(0, members - 1), updatedAt = datetime('now') WHERE id = ?").run(ctx.user.sectId);
+      res.json({ success: true, message: '成员已移除' });
+    } catch (e) {
+      res.json({ success: false, message: '操作失败: ' + e.message });
+    }
+  });
 });
 
-// /member/promote - 晋升成员
+// /member/promote - 晋升/任命成员（掌门权限 + DB持久化）
 router.post('/member/promote', (req, res) => {
   const { player_id, target_id, new_role } = req.body;
-  const member = members.find(m => m.id === target_id);
-  if (member) {
-    member.role = new_role || '长老';
-    res.json({ success: true, member });
-  } else {
-    res.json({ success: false, message: '成员不存在' });
-  }
+  if (!player_id || !target_id) return res.json({ success: false, message: '参数不足' });
+
+  const validRoles = ['掌门', '长老', '成员'];
+  const role = new_role || '长老';
+  if (!validRoles.includes(role)) return res.json({ success: false, message: '无效的职位' });
+
+  requireLeader(db, parseInt(player_id), (err, ctx) => {
+    if (err) return res.json(err);
+
+    // 不能操作自己
+    if (parseInt(target_id) === parseInt(player_id)) {
+      return res.json({ success: false, message: '不能修改自己的职位' });
+    }
+
+    try {
+      const result = db.prepare("UPDATE SectMembers SET role = ? WHERE userId = ? AND sectId = ? AND role != '掌门'").run(role, parseInt(target_id), ctx.user.sectId);
+      if (result.changes === 0) {
+        return res.json({ success: false, message: '成员不存在或无法修改掌门职位' });
+      }
+      const updated = db.prepare('SELECT u.id, u.nickname as name, sm.role, sm.contribution FROM SectMembers sm JOIN Users u ON u.id = sm.userId WHERE sm.userId = ?').get(parseInt(target_id));
+      res.json({ success: true, member: updated, message: `已任命为${role}` });
+    } catch (e) {
+      res.json({ success: false, message: '操作失败: ' + e.message });
+    }
+  });
 });
 
-// /member/transfer - 转让掌门
+// /member/transfer - 转让掌门（掌门权限 + DB持久化）
 router.post('/member/transfer', (req, res) => {
   const { player_id, target_id } = req.body;
-  const oldLeader = members.find(m => m.role === '掌门');
-  const newLeader = members.find(m => m.id === target_id);
-  if (oldLeader && newLeader) {
-    oldLeader.role = '成员';
-    newLeader.role = '掌门';
-    res.json({ success: true, message: '掌门已转让' });
-  } else {
-    res.json({ success: false, message: '转让失败' });
-  }
+  if (!player_id || !target_id) return res.json({ success: false, message: '参数不足' });
+  if (parseInt(target_id) === parseInt(player_id)) return res.json({ success: false, message: '不能转让给自己' });
+
+  requireLeader(db, parseInt(player_id), (err, ctx) => {
+    if (err) return res.json(err);
+
+    try {
+      // 检查目标成员是否存在且是宗门成员
+      const target = db.prepare('SELECT role FROM SectMembers WHERE userId = ? AND sectId = ?').get(parseInt(target_id), ctx.user.sectId);
+      if (!target) return res.json({ success: false, message: '目标成员不存在' });
+
+      const transaction = db.transaction(() => {
+        // 原掌门降为成员
+        db.prepare("UPDATE SectMembers SET role = '成员' WHERE userId = ? AND sectId = ?").run(parseInt(player_id), ctx.user.sectId);
+        // 新掌门上任
+        db.prepare("UPDATE SectMembers SET role = '掌门' WHERE userId = ? AND sectId = ?").run(parseInt(target_id), ctx.user.sectId);
+      });
+      transaction();
+      res.json({ success: true, message: '掌门已转让' });
+    } catch (e) {
+      res.json({ success: false, message: '转让失败: ' + e.message });
+    }
+  });
 });
 
 // /skills - 宗门技能列表
