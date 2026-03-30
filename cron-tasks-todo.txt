@@ -4467,7 +4467,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 参考: /docs/PROPOSALS/2026-03-31-N114.md
 - 优先级: P1
 
-## [P0-115-1] cultivation.js 修炼成本公式修复 — 2026-04-03
+## [P0-115-1] cultivation.js 修炼成本公式修复 — 完成 | 2026-03-30 dd2fce7b
 - 修改 getCultivationCost: 封顶从105提升到500，每1000点+3灵石更平缓
 - 降低中期突破成本: 金丹→元婴 40000→15000; 元婴→化神 50000→20000
 - 文件: server/backend/routes/cultivation.js
