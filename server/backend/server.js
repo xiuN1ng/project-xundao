@@ -171,7 +171,7 @@ app.use('/api/fishing', require('./routes/fishing'));
 app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));
-app.use('/api/marriage', require('./routes/marriage'));
+app.use('/api/marriage', require('./routes/marriage').router);
 app.use('/api/couple', require('./routes/couple').router);
 app.use('/api/master', require('./routes/master'));
 app.use('/api/tower', require('./routes/tower'));

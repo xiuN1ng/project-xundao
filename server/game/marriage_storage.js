@@ -4,16 +4,14 @@
 
 let db;
 try {
-  // 尝试从 server/server.js 导入 db 实例
-  const server = require('../server');
-  db = server.db || server;
-  if (!db || typeof db.exec !== 'function') throw new Error('invalid db');
-} catch {
-  // 使用独立的数据库连接
+  // 延迟导入 ../server 以避免循环依赖
+  // （server.js → routes/marriage → marriage_storage → ../server 会导致 ../server 未初始化）
   const Database = require('better-sqlite3');
   const path = require('path');
   const dbPath = path.join(__dirname, '..', 'data', 'game.db');
   db = new Database(dbPath);
+} catch {
+  // 降级备用
 }
 
 // 允许外部注入 db 实例（解决循环依赖时 db 未初始化的问题）
