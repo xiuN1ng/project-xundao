@@ -39,37 +39,37 @@ const DIFFICULTY_LEVELS = {
 // 每日副本次数限制
 const MAX_DAILY_CHALLENGES = 3;
 
-const OPEN_HOURS = [
-  { start: 12, end: 14 },
-  { start: 18, end: 22 }
-];
+// 晚间加成时段（18:00-24:00，掉落×1.5）
+// 副本全天开放，此配置仅用于显示加成提示
+const BONUS_HOURS = { start: 18, end: 24 };
 
 function getCurrentPeriodInfo() {
   const now = new Date();
   const hour = now.getHours();
-  
-  for (let i = 0; i < OPEN_HOURS.length; i++) {
-    const period = OPEN_HOURS[i];
-    if (hour >= period.start && hour < period.end) {
-      const endTime = new Date(now);
-      endTime.setHours(period.end, 0, 0, 0);
-      const remainingMs = endTime - now;
-      return { isOpen: true, periodIndex: i, periodName: i === 0 ? '午间时段' : '晚间时段', endHour: period.end, remainingSeconds: Math.floor(remainingMs / 1000) };
-    }
+
+  // Check if currently in bonus hours (18:00-24:00)
+  const BONUS_START = 18;
+  const BONUS_END = 24;
+  const hasBonus = hour >= BONUS_START && hour < BONUS_END;
+
+  // Find next bonus period info
+  let nextBonusTime = new Date(now);
+  if (hour < BONUS_START) {
+    nextBonusTime.setHours(BONUS_START, 0, 0, 0);
+  } else {
+    nextBonusTime.setDate(nextBonusTime.getDate() + 1);
+    nextBonusTime.setHours(BONUS_START, 0, 0, 0);
   }
-  
-  let nextPeriod = OPEN_HOURS[0];
-  let nextIndex = 0;
-  for (let i = 0; i < OPEN_HOURS.length; i++) {
-    if (OPEN_HOURS[i].start > hour) { nextPeriod = OPEN_HOURS[i]; nextIndex = i; break; }
-  }
-  
-  const nextTime = new Date(now);
-  nextTime.setHours(nextPeriod.start, 0, 0, 0);
-  if (hour >= nextPeriod.start) nextTime.setDate(nextTime.getDate() + 1);
-  
-  const waitMs = nextTime - now;
-  return { isOpen: false, periodName: nextIndex === 0 ? '午间时段' : '晚间时段', startHour: nextPeriod.start, waitSeconds: Math.floor(waitMs / 1000) };
+  const waitMs = nextBonusTime - now;
+
+  // isOpen is always true — dungeons are accessible 24/7
+  return {
+    isOpen: true,
+    hasBonus,
+    bonusMultiplier: hasBonus ? 1.5 : 1.0,
+    nextBonusHour: BONUS_START,
+    waitSeconds: Math.floor(waitMs / 1000)
+  };
 }
 
 function getTodayDateString() {
@@ -111,7 +111,9 @@ router.get('/list', async (req, res) => {
     res.json({
       success: true,
       data: {
-        is_open: periodInfo.isOpen,
+        is_open: true, // Always open 24/7
+        has_bonus: periodInfo.hasBonus,
+        bonus_multiplier: periodInfo.bonusMultiplier,
         period_info: periodInfo,
         max_daily_challenges: MAX_DAILY_CHALLENGES,
         dungeons: availableDungeons.map(d => ({
@@ -120,7 +122,8 @@ router.get('/list', async (req, res) => {
           description: d.description, icon: d.icon, realm_req: d.realm_req, time_limit: d.time_limit,
           reward_preview: d.reward_preview, is_available: d.realm_req <= playerRealm,
           today_challenge_count: todayChallengeCounts[d.id] || 0,
-          remaining_challenges: Math.max(0, MAX_DAILY_CHALLENGES - (todayChallengeCounts[d.id] || 0))
+          remaining_challenges: Math.max(0, MAX_DAILY_CHALLENGES - (todayChallengeCounts[d.id] || 0)),
+          bonus_note: periodInfo.hasBonus ? '⏰ 晚间加成中，掉落×1.5！' : null
         }))
       }
     });
@@ -149,10 +152,14 @@ router.get('/info/:id', async (req, res) => {
     res.json({
       success: true,
       data: { ...dungeon, type_info: DUNGEON_TYPES[dungeon.type], difficulty_info: DIFFICULTY_LEVELS[dungeon.difficulty],
-        is_open: periodInfo.isOpen, period_info: periodInfo, challenge_status: challengeStatus,
+        is_open: true, // Always open 24/7
+        has_bonus: periodInfo.hasBonus,
+        bonus_multiplier: periodInfo.bonusMultiplier,
+        period_info: periodInfo, challenge_status: challengeStatus,
         today_completed: todayStatus?.completed || false, best_time: todayStatus?.best_time || null,
         today_challenge_count: todayChallengeCount, max_daily_challenges: MAX_DAILY_CHALLENGES,
-        remaining_challenges: Math.max(0, MAX_DAILY_CHALLENGES - todayChallengeCount) }
+        remaining_challenges: Math.max(0, MAX_DAILY_CHALLENGES - todayChallengeCount),
+        bonus_note: periodInfo.hasBonus ? '⏰ 晚间加成中，掉落×1.5！' : null }
     });
   } catch (error) {
     console.error('获取每日副本详情失败:', error);
@@ -166,7 +173,7 @@ router.post('/enter', async (req, res) => {
     if (!player_id || !dungeon_id) return res.status(400).json({ success: false, error: '缺少必要参数' });
     
     const periodInfo = getCurrentPeriodInfo();
-    if (!periodInfo.isOpen) return res.status(400).json({ success: false, error: '副本未开放', period_info: periodInfo });
+    // Dungeons are always open 24/7; bonus multiplier shown for informational purposes
     
     const dailyStorage = getDailyStorage();
     const pStorage = getPlayerStorage();
@@ -350,7 +357,7 @@ router.get('/status', async (req, res) => {
     
     res.json({
       success: true,
-      data: { date: getTodayDateString(), is_open: periodInfo.isOpen, period_info: periodInfo,
+      data: { date: getTodayDateString(), is_open: true, has_bonus: periodInfo.hasBonus, bonus_multiplier: periodInfo.bonusMultiplier, period_info: periodInfo,
         summary: { total: totalCount, completed: completedCount, remaining: totalCount - completedCount },
         dungeons: dungeonStatuses }
     });
