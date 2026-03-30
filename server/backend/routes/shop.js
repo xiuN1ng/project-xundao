@@ -131,6 +131,11 @@ router.get('/list', (req, res) => {
   const items = getShopItems(getDb(req));
   res.json({ success: true, items });
 });
+// /items 别名 - 兼容旧版客户端
+router.get('/items', (req, res) => {
+  const items = getShopItems(getDb(req));
+  res.json({ success: true, items });
+});
 
 router.post('/buy', (req, res) => {
   const userId = req.body.userId ?? req.body.player_id ?? 1;
