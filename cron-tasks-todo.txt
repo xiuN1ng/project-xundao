@@ -4054,7 +4054,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 
 # === P1-106 (2026-03-30 第106轮) ===
-[B-106-1] 注册 spirit_root 路由：server.js 添加 app.use('/api/spirit-root', require('./backend/routes/spirit_root'))，并统一前端 /api/game/switch-spirit-root → /api/spirit-root/switch
-[B-106-2] 注册 talent.js 路由（16665字节完整实现，当前未挂载）
-[B-106-3] 修复 arena daily_reward_claimed 列缺失：ALTER TABLE arena ADD COLUMN daily_reward_claimed INTEGER DEFAULT 0
-[B-106-4] 诊断 abyss 路由 404 谜题：server.js 第3291行已注册，日志显示加载成功，但所有端点返回404
+[B-106-1] 注册 spirit_root 路由：server.js 添加 app.use('/api/spirit-root', require('./backend/routes/spirit_root'))，并统一前端 /api/game/switch-spirit-root → /api/spirit-root/switch  # 完成 | 2026-03-30 确认已注册(api works)
+[B-106-2] 注册 talent.js 路由（16665字节完整实现，当前未挂载）  # 完成 | 2026-03-30 确认已注册(api works)
+[B-106-3] 修复 arena daily_reward_claimed 列缺失：ALTER TABLE arena ADD COLUMN daily_reward_claimed INTEGER DEFAULT 0  # 完成 | 2026-03-30 5b08aa71
+[B-106-4] 诊断 abyss 路由 404 谜题：server.js 第3291行已注册，日志显示加载成功，但所有端点返回404  # 完成 | 2026-03-30 /list和/info均正常返回
