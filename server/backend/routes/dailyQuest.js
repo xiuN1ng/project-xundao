@@ -331,6 +331,11 @@ router.get('/progress', (req, res) => {
   });
 });
 
+// 统一用户ID提取函数
+function extractUserId(req) {
+  return parseInt(req.query.userId) || parseInt(req.query.player_id) || parseInt(req.params.userId) || 1;
+}
+
 // 获取每日任务概览（根路径）
 router.get('/', (req, res) => {
   const quests = questTemplates;
@@ -353,9 +358,40 @@ router.get('/', (req, res) => {
   });
 });
 
-// 获取每日任务列表
+// 获取每日任务列表（/daily/:userId 或 /daily?userId=X）
+router.get('/daily/:userId?', (req, res) => {
+  const userId = extractUserId(req);
+  const data = initDailyQuests(userId);
+  const daily = questTemplates.filter(q => q.difficulty === 1).map(quest => {
+    const userQuest = data.quests[quest.id] || { progress: 0, completed: false, claimed: false };
+    return { ...quest, progress: userQuest.progress, completed: userQuest.completed, claimed: userQuest.claimed };
+  });
+  res.json({ date: data.date, daily });
+});
+
+router.get('/weekly/:userId?', (req, res) => {
+  const userId = extractUserId(req);
+  const data = initDailyQuests(userId);
+  const weekly = questTemplates.filter(q => q.difficulty === 2).map(quest => {
+    const userQuest = data.quests[quest.id] || { progress: 0, completed: false, claimed: false };
+    return { ...quest, progress: userQuest.progress, completed: userQuest.completed, claimed: userQuest.claimed };
+  });
+  res.json({ date: data.date, weekly });
+});
+
+router.get('/challenge/:userId?', (req, res) => {
+  const userId = extractUserId(req);
+  const data = initDailyQuests(userId);
+  const challenge = questTemplates.filter(q => q.difficulty === 3).map(quest => {
+    const userQuest = data.quests[quest.id] || { progress: 0, completed: false, claimed: false };
+    return { ...quest, progress: userQuest.progress, completed: userQuest.completed, claimed: userQuest.claimed };
+  });
+  res.json({ date: data.date, challenge });
+});
+
+// 获取每日任务列表（向后兼容 /:userId）
 router.get('/:userId', (req, res) => {
-  const userId = parseInt(req.params.userId);
+  const userId = extractUserId(req);
   const data = initDailyQuests(userId);
   
   const quests = questTemplates.map(quest => {
