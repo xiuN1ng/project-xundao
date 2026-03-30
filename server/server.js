@@ -3249,11 +3249,12 @@ try {
   Logger.info('竞技场API不可用:', e.message);
 }
 
-// 仙盟系统 API
+// 仙盟系统 API (SQLite持久化版本)
 try {
-  const guildApi = require('./services/guild_api');
-  app.use('/api/guild', guildApi);
-  Logger.info('✅ 仙盟系统 API 已加载');
+  const guildRoute = require('./backend/routes/guild');
+  if (db) guildRoute.setDb(db);
+  app.use('/api/guild', guildRoute);
+  Logger.info('✅ 仙盟系统 API 已加载 (SQLite)');
 } catch (e) {
   Logger.info('仙盟API不可用:', e.message);
 }
