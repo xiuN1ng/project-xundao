@@ -248,8 +248,25 @@ const welfareStorage = {
     const today = getShanghaiDate();
     const lastSignDate = record.last_sign_date;
 
-    // 检查今天是否已签到
-    const signedToday = lastSignDate === today;
+    // 检查今天是否已签到（同时检查 welfare_sign_in 和 forge_daily_claims 两个表）
+    // 统一用上海时区日期字符串判断，解决 canClaim 与 signedToday 矛盾问题
+    let signedToday = lastSignDate === today;
+
+    // 如果 welfare_sign_in 未签到，但 forge_daily_claims 有今日领取记录，
+    // 也认为今天已"登录"（解决了每日登录礼与签到系统状态不一致的问题）
+    if (!signedToday) {
+      const database = getDb();
+      if (database) {
+        try {
+          const dailyClaimed = database.prepare(
+            'SELECT id FROM forge_daily_claims WHERE player_id = ? AND last_claim_date = ?'
+          ).get(playerId, today);
+          if (dailyClaimed) {
+            signedToday = true;
+          }
+        } catch (_) {}
+      }
+    }
 
     // 计算连续签到（如果昨天签到了，则连续；否则重置）
     let currentStreak = record.current_streak;
