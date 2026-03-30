@@ -75,6 +75,21 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /items - /list 的别名
+router.get('/items', (req, res) => {
+  const userId = extractUserId(req);
+  const database = getDb();
+  try {
+    const items = database.prepare(
+      'SELECT id, item_id as itemId, item_name as name, item_type as type, count, icon, source FROM player_items WHERE user_id = ? ORDER BY item_type, id'
+    ).all(userId);
+    res.json({ success: true, items, total: items.length });
+  } catch (e) {
+    console.error('[bag] GET /items error:', e.message);
+    res.json({ success: false, items: [], total: 0, message: e.message });
+  }
+});
+
 // GET /list - 返回玩家所有物品（含来源）
 router.get('/list', (req, res) => {
   const userId = extractUserId(req);

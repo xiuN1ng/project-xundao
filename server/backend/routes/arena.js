@@ -13,6 +13,17 @@ const Logger = {
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
+// 赛季结束时间（每周一 00:00 UTC = 周一 08:00 北京时间）
+function getSeasonEndTime() {
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay(); // 0=周日,1=周一...
+  const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+  const nextMonday = new Date(now);
+  nextMonday.setUTCDate(nextMonday.getUTCDate() + daysUntilMonday);
+  nextMonday.setUTCHours(0, 0, 0, 0);
+  return nextMonday.toISOString();
+}
+
 // ArenaSystem 单例（声明在前，避免 initAIBots() 中 TDZ）
 let ArenaSystem = null;
 
@@ -483,19 +494,23 @@ router.get('/rivals/:userId', (req, res) => {
     const baseAtk = playerData ? playerData.attack : (usersData ? usersData.attack : 100);
     const baseDef = playerData ? playerData.defense : (usersData ? usersData.defense : 50);
     const baseHP = playerData ? playerData.hp : (usersData ? usersData.hp : 1000);
-    // 功法加成
-    const gongfaRows = db.prepare(`
-      SELECT gi.*, gt.atkBonus, gt.defBonus, gt.hpBonus, gt.atkPercent, gt.defPercent, gt.hpPercent
-      FROM player_equipped_gongfa peg
-      JOIN gongfa_templates gt ON gt.id = peg.gongfa_id
-      JOIN player_gongfa pg ON pg.gongfa_id = peg.gongfa_id AND pg.user_id = peg.user_id
-      WHERE peg.user_id = ?
-    `).all(userId);
+    // 功法加成（player_equipped_gongfa 表可能不存在，降级处理）
     let totalGongfaAtk = 0, totalGongfaDef = 0, totalGongfaHp = 0;
-    for (const row of (gongfaRows || [])) {
-      totalGongfaAtk += (row.atkBonus || 0) + Math.floor((baseAtk * (row.atkPercent || 0)) / 100);
-      totalGongfaDef += (row.defBonus || 0) + Math.floor((baseDef * (row.defPercent || 0)) / 100);
-      totalGongfaHp += (row.hpBonus || 0) + Math.floor((baseHP * (row.hpPercent || 0)) / 100);
+    try {
+      const gongfaRows = db.prepare(`
+        SELECT gi.*, gt.atkBonus, gt.defBonus, gt.hpBonus, gt.atkPercent, gt.defPercent, gt.hpPercent
+        FROM player_equipped_gongfa peg
+        JOIN gongfa_templates gt ON gt.id = peg.gongfa_id
+        JOIN player_gongfa pg ON pg.gongfa_id = peg.gongfa_id AND pg.user_id = peg.user_id
+        WHERE peg.user_id = ?
+      `).all(userId);
+      for (const row of (gongfaRows || [])) {
+        totalGongfaAtk += (row.atkBonus || 0) + Math.floor((baseAtk * (row.atkPercent || 0)) / 100);
+        totalGongfaDef += (row.defBonus || 0) + Math.floor((baseDef * (row.defPercent || 0)) / 100);
+        totalGongfaHp += (row.hpBonus || 0) + Math.floor((baseHP * (row.hpPercent || 0)) / 100);
+      }
+    } catch (e) {
+      // player_equipped_gongfa 表不存在，跳过功法加成
     }
     const finalAtk = baseAtk + totalGongfaAtk;
     const finalDef = baseDef + totalGongfaDef;
