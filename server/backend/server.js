@@ -55,6 +55,17 @@ const app = express();
 app.locals.db = db; // 共享主数据库实例给所有路由，防止多实例写锁冲突
 const PORT = 3001;
 
+// 追踪已注册的 API 路径（供路由自动注册中心使用）
+const registeredApiPaths = new Set();
+// 替换 app.use 以自动追踪注册的路径
+const _originalUse = app.use.bind(app);
+app.use = function(path, ...args) {
+  if (typeof path === 'string' && path.startsWith('/api/')) {
+    registeredApiPaths.add(path);
+  }
+  return _originalUse(path, ...args);
+};
+
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -244,6 +255,23 @@ try {
   console.log('✅ 会员月卡系统 API 已加载');
 } catch (e) {
   console.log('会员API不可用:', e.message);
+}
+
+// ============ 路由自动注册中心 (N114) ============
+// 自动扫描 backend/routes/ 目录，注册尚未在 server.js 中手动注册的路由
+// 目的：防止新增路由文件时忘记在 server.js 中注册
+// 注意：仅注册尚未手动注册的路由，避免重复
+try {
+  const loadRoutes = require('../routes');
+  const logger = {
+    info: (msg) => console.log(msg),
+    warn: (msg) => console.log('[WARN]', msg),
+    error: (msg) => console.log('[ERROR]', msg),
+  };
+  // skipPaths: 传入 server.js 已注册的路径集合，避免重复注册
+  loadRoutes(app, db, null, logger, { skipPaths: registeredApiPaths });
+} catch(e) {
+  console.log('[AutoRoute]', e.message);
 }
 
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
