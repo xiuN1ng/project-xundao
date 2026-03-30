@@ -545,6 +545,303 @@ router.get('/', (req, res) => {
   }
 });
 
+// ─── GET /api/adventure/status ────────────────────────────────────────────────
+router.get('/status', (req, res) => {
+  try {
+    const db = getDb();
+    initAdventureTables(db);
+    const userId = extractUserId(req);
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // Get player stats
+    let stats = null;
+    try {
+      stats = db.prepare('SELECT * FROM adventure_player_stats WHERE user_id = ?').get(userId);
+    } catch (e) {}
+
+    // Get player realm
+    let realm = 1;
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+
+    const todayStr = getShanghaiDateStr();
+    const todayCount = (stats && stats.last_date === todayStr) ? stats.today_count : 0;
+    const remainingToday = Math.max(0, 10 - todayCount);
+
+    // Get cooldowns
+    const cooldowns = {};
+    try {
+      const cdRows = db.prepare('SELECT adventure_id, last_trigger FROM adventure_cooldowns WHERE user_id = ?').all(userId);
+      for (const row of cdRows) {
+        const remaining = Math.max(0, row.last_trigger - nowSec);
+        cooldowns[row.adventure_id] = {
+          onCooldown: remaining > 0,
+          remainingSeconds: remaining,
+          nextAvailable: remaining > 0 ? new Date((row.last_trigger) * 1000).toISOString() : null
+        };
+      }
+    } catch (e) {}
+
+    // Get active buffs
+    const buffs = [];
+    try {
+      const buffRows = db.prepare('SELECT * FROM adventure_buffs WHERE user_id = ? AND expires_at > ? ORDER BY id DESC').all(userId, nowSec);
+      for (const b of buffRows) {
+        buffs.push({
+          id: b.id,
+          name: b.name,
+          stat: b.stat,
+          value: b.value,
+          expiresAt: b.expires_at * 1000,
+          remainingMs: Math.max(0, b.expires_at * 1000 - Date.now())
+        });
+      }
+    } catch (e) {}
+
+    // Get pending claims
+    const pendingClaims = [];
+    try {
+      const pending = db.prepare('SELECT * FROM adventure_claims WHERE user_id = ? AND claimed = 0 ORDER BY created_at DESC').all(userId);
+      for (const p of pending) {
+        let rewards = [];
+        try { rewards = JSON.parse(p.rewards || '[]'); } catch (e) {}
+        pendingClaims.push({
+          id: p.id,
+          adventureId: p.adventure_id,
+          adventureName: p.adventure_name,
+          icon: p.icon,
+          rewards,
+          canClaim: true,
+          createdAt: p.created_at * 1000
+        });
+      }
+    } catch (e) {}
+
+    // Get recent history
+    const recentHistory = [];
+    try {
+      const rows = db.prepare('SELECT * FROM adventure_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 5').all(userId);
+      for (const r of rows) {
+        let rewards = [];
+        try { rewards = JSON.parse(r.rewards || '[]'); } catch (e) {}
+        recentHistory.push({
+          id: r.id,
+          icon: r.icon,
+          name: r.adventure_name,
+          result: r.result,
+          rewards,
+          date: new Date((r.created_at - 8 * 3600) * 1000).toISOString().replace('T', ' ').substring(0, 16)
+        });
+      }
+    } catch (e) {}
+
+    // Build available events for this realm
+    const availableEvents = Object.values(ADVENTURE_TYPES).filter(t =>
+      t.unlockedByDefault || realm >= t.minRealm
+    ).map(t => ({
+      id: t.id,
+      icon: t.icon,
+      name: t.name,
+      description: t.description,
+      difficulty: t.difficulty,
+      minRealm: t.minRealm,
+      cooldownSeconds: t.cooldownSeconds,
+      cooldown: cooldowns[t.id] || { onCooldown: false, remainingSeconds: 0, nextAvailable: null },
+      unlocked: t.unlockedByDefault || realm >= t.minRealm
+    }));
+
+    res.json({
+      success: true,
+      playerRealm: realm,
+      todayCount,
+      remainingToday,
+      maxDailyAdventures: 10,
+      totalCount: stats ? stats.total_count : 0,
+      successCount: stats ? stats.success_count : 0,
+      failCount: stats ? stats.fail_count : 0,
+      buffs,
+      pendingClaims,
+      recentHistory,
+      availableEvents,
+      cooldowns
+    });
+    db.close();
+  } catch (err) {
+    console.error('[Adventure /status error]', err.message);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
+// ─── GET /api/adventure/events ───────────────────────────────────────────────
+router.get('/events', (req, res) => {
+  try {
+    const db = getDb();
+    initAdventureTables(db);
+    const userId = extractUserId(req);
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // Get player realm
+    let realm = 1;
+    try {
+      const user = db.prepare('SELECT realm FROM Users WHERE id = ?').get(userId);
+      if (user) realm = user.realm || 1;
+    } catch (e) {}
+
+    // Get cooldowns
+    const cdMap = {};
+    try {
+      const cdRows = db.prepare('SELECT adventure_id, last_trigger FROM adventure_cooldowns WHERE user_id = ?').all(userId);
+      for (const row of cdRows) {
+        const remaining = Math.max(0, row.last_trigger - nowSec);
+        cdMap[row.adventure_id] = remaining;
+      }
+    } catch (e) {}
+
+    // Get today's count
+    let stats = null;
+    try {
+      stats = db.prepare('SELECT * FROM adventure_player_stats WHERE user_id = ?').get(userId);
+    } catch (e) {}
+    const todayStr = getShanghaiDateStr();
+    const todayCount = (stats && stats.last_date === todayStr) ? stats.today_count : 0;
+
+    // Get pending claims
+    let pendingCount = 0;
+    try {
+      const pending = db.prepare('SELECT COUNT(*) as cnt FROM adventure_claims WHERE user_id = ? AND claimed = 0').get(userId);
+      pendingCount = pending ? pending.cnt : 0;
+    } catch (e) {}
+
+    const events = Object.values(ADVENTURE_TYPES).map(t => {
+      const unlocked = t.unlockedByDefault || realm >= t.minRealm;
+      const cooldownRem = cdMap[t.id] || 0;
+      return {
+        id: t.id,
+        icon: t.icon,
+        name: t.name,
+        description: t.description,
+        difficulty: t.difficulty,
+        rewardPreview: t.rewardPreview,
+        color: t.color,
+        minRealm: t.minRealm,
+        unlocked,
+        lockedReason: unlocked ? null : `需要境界达到 ${t.minRealm}`,
+        onCooldown: cooldownRem > 0,
+        cooldownRemaining: cooldownRem,
+        cooldownFormatted: cooldownRem > 0 ? `${Math.floor(cooldownRem / 60)}分钟` : '可用',
+        cooldownSeconds: t.cooldownSeconds
+      };
+    });
+
+    res.json({
+      success: true,
+      playerRealm: realm,
+      todayCount,
+      remainingToday: Math.max(0, 10 - todayCount),
+      maxDailyAdventures: 10,
+      pendingClaimsCount: pendingCount,
+      events
+    });
+    db.close();
+  } catch (err) {
+    console.error('[Adventure /events error]', err.message);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
+// ─── POST /api/adventure/claim/:eventId ─────────────────────────────────────
+router.post('/claim/:eventId', (req, res) => {
+  try {
+    const db = getDb();
+    initAdventureTables(db);
+    initClaimTable(db);
+    const userId = extractUserId(req);
+    const { eventId } = req.params;
+
+    // Find the pending claim
+    let claim = null;
+    try {
+      claim = db.prepare('SELECT * FROM adventure_claims WHERE user_id = ? AND adventure_id = ? AND claimed = 0').get(userId, eventId);
+    } catch (e) {}
+
+    if (!claim) {
+      return res.json({ success: false, message: '没有可领取的奖励' });
+    }
+
+    // Parse and apply rewards
+    let rewards = [];
+    try { rewards = JSON.parse(claim.rewards || '[]'); } catch (e) {}
+
+    let totalSp = 0;
+    let totalExp = 0;
+    const appliedRewards = [];
+
+    for (const r of rewards) {
+      if (r.type === 'spiritStones' || r.type === 'lingshi') {
+        totalSp += r.value;
+        appliedRewards.push({ type: 'spiritStones', value: r.value });
+      } else if (r.type === 'exp') {
+        totalExp += r.value;
+        appliedRewards.push({ type: 'exp', value: r.value });
+      } else if (r.type === 'item') {
+        appliedRewards.push({ type: 'item', name: r.name, count: r.count });
+      } else if (r.type === 'cultivation') {
+        appliedRewards.push({ type: 'cultivation', value: r.value });
+      }
+    }
+
+    // Apply to player
+    if (totalSp > 0) {
+      try {
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(totalSp, userId);
+      } catch (e) {}
+    }
+    if (totalExp > 0) {
+      try {
+        db.prepare('UPDATE Users SET exp = exp + ? WHERE id = ?').run(totalExp, userId);
+      } catch (e) {}
+    }
+
+    // Mark as claimed
+    try {
+      db.prepare('UPDATE adventure_claims SET claimed = 1, claimed_at = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), claim.id);
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: '奖励领取成功',
+      rewards: appliedRewards,
+      spiritStonesGained: totalSp,
+      expGained: totalExp
+    });
+    db.close();
+  } catch (err) {
+    console.error('[Adventure /claim error]', err.message);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
+// ─── Helper: init claim table ────────────────────────────────────────────────
+function initClaimTable(db) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS adventure_claims (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER,
+        adventure_id  TEXT,
+        adventure_name TEXT,
+        icon          TEXT,
+        rewards       TEXT,
+        claimed       INTEGER DEFAULT 0,
+        created_at    INTEGER DEFAULT (strftime('%s','now')),
+        claimed_at    INTEGER DEFAULT NULL
+      );
+    `);
+  } catch (e) {}
+}
+
 // ─── Helper: upsert player stats ─────────────────────────────────────────────
 function upsertPlayerStats(db, userId, fields) {
   const existing = db.prepare('SELECT 1 FROM adventure_player_stats WHERE user_id = ?').get(userId);
