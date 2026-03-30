@@ -4047,6 +4047,8 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 验证: curl http://localhost:3001/api/couple?player_id=1 返回JSON
   - 截止: 2026-04-03
 
-[B-P1-105-4] 批量注册第二批路由（friend/sect-missions/quest/commission/fashion/mount/wing）
+[B-P1-105-4] 批量注册第二批路由（friend/sect-missions/quest/commission/fashion/mount/wing）  # 完成 | 2026-03-30 c5c3c04e
+  - server.js 添加7个路由注册: friend/quest/commission/fashion/mount/wing/sect-missions
+  - 验证: curl /api/friend, /api/quest, /api/commission/list, /api/fashion, /api/mount, /api/wing, /api/sect-missions/daily 均正常返回JSON
   - 截止: 2026-04-17
 
