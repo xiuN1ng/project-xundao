@@ -3570,9 +3570,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 功能: Math.min(100, Math.round(correct/total*100))
   - 截止: 2026-04-01
 
-[B-89-4] 每日任务根路由merge DB进度
+[B-89-4] 每日任务根路由merge DB进度  # 完成 | 2026-03-31 43f7becb
   - 文件: server/backend/routes/dailyQuest.js
   - 功能: router.get('/') 合并DB progress/completed/claimed
+  - 修复: initDailyQuests forEach不再覆盖DB已加载数据
+  - 验证: GET /api/dailyQuest/?userId=1 返回 progress/completed/claimed 字段
   - 截止: 2026-04-03
 
 [P1-B-89-5] 论道赛季制+段位奖励后端
