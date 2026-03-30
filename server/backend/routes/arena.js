@@ -109,6 +109,32 @@ function initArenaTables() {
   } catch (err) {
     Logger.warn('arena_player表初始化失败:', err.message);
   }
+
+  // 初始化 arena_battles 表（战斗记录）
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS arena_battles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        season TEXT,
+        attacker_id INTEGER NOT NULL,
+        defender_id INTEGER NOT NULL,
+        attacker_points_before INTEGER DEFAULT 0,
+        attacker_points_after INTEGER DEFAULT 0,
+        defender_points_before INTEGER DEFAULT 0,
+        defender_points_after INTEGER DEFAULT 0,
+        attacker_rank_before INTEGER DEFAULT 0,
+        attacker_rank_after INTEGER DEFAULT 0,
+        defender_rank_before INTEGER DEFAULT 0,
+        defender_rank_after INTEGER DEFAULT 0,
+        result TEXT,
+        winner_id INTEGER,
+        battle_time TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    Logger.info('arena_battles表初始化完成');
+  } catch (err) {
+    Logger.warn('arena_battles表初始化失败:', err.message);
+  }
 }
 
 initArenaTables();
