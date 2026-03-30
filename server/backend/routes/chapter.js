@@ -356,7 +356,8 @@ router.post('/enter', (req, res) => {
 
 // 章节战斗完成
 router.post('/complete', (req, res) => {
-  const { userId, chapterId, kills = 0, time } = req.body;
+  const { chapterId, kills = 0, time } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
   const useDb = req.db || db; // 优先使用 req.app.locals.db（共享主实例）
 
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
@@ -506,7 +507,8 @@ router.get('/story/:id', (req, res) => {
 // 章节战斗 (兼容前端 /chapter/battle 路由)
 router.post('/battle', (req, res) => {
   // 直接映射到 /complete 的逻辑
-  const { userId, chapterId, kills = 0, time } = req.body;
+  const { chapterId, kills = 0, time } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
   const useDb = req.db || db; // 优先使用 req.app.locals.db（共享主实例）
 
   userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };

@@ -422,7 +422,8 @@ router.get('/summary/:userId', (req, res) => {
 
 // 手动触发成就检测（供其他后端服务调用）
 router.post('/trigger', (req, res) => {
-  const { userId, trigger, value, extra } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
+  const { trigger, value, extra } = req.body;
   
   if (!achievementTrigger) {
     return res.json({ success: false, message: '成就触发服务不可用' });
@@ -444,7 +445,8 @@ router.post('/trigger', (req, res) => {
 
 // 领取奖励（新版，支持后端触发服务）
 router.post('/claim', (req, res) => {
-  const { userId, achievementId } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
+  const { achievementId } = req.body;
   
   // 优先使用后端触发服务
   if (achievementTrigger) {

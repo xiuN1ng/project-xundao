@@ -123,7 +123,8 @@ router.get('/info/:id', (req, res) => {
 
 // 进入副本
 router.post('/enter', (req, res) => {
-  const { userId, dungeonId } = req.body;
+  const { dungeonId } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
   
   const dungeon = dungeons.find(d => d.id === dungeonId);
   if (!dungeon) {
@@ -252,7 +253,8 @@ function simulateBattle(playerAtk, playerDef, playerHp, monsterAtk, monsterDef, 
 router.post('/battle/:battleId', (req, res) => {
   const { battleId } = req.params;
   // won 由客户端传入，但服务器会重新计算，不依赖客户端
-  const { userId, dungeonId, won: clientWon, time } = req.body;
+  const { dungeonId, won: clientWon, time } = req.body;
+  const userId = req.userId || parseInt(req.body.userId) || 1;
   
   const dungeon = dungeons.find(d => d.id === dungeonId);
   if (!dungeon) {

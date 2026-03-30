@@ -4165,3 +4165,36 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/tianrank.js (新建)
   - 文件: server/game/tianrank_season.js (新建)
   - 截止: 2026-04-15 | 优先级: P2
+
+# === P1-109 (2026-03-30) ===
+# [P1-N1] 世界BOSS刷新调度器 — worldBoss.js添加spawnBoss()和定时器
+# [P1-N2] sect-missions接入事件总线 — 监听cultivation:start/claim等事件更新进度
+# [P1-N3] 宗门战赛季自动重置 — 状态机endTime过期后重置为新赛季
+# [P2-N1] 月卡每日自动领取 — login时检查canClaimToday并自动发放
+# [P2-N2] 装备强化事件emit — 确认equipment/enhance emit forge:strengthen
+# [NEW] 仙友邀请后端API — 注册流程+邀请码+奖励查询
+
+# === P1-109 (2026-03-30) ===
+# [P1-N1] 世界BOSS刷新调度器 — worldBoss.js添加spawnBoss()和定时器
+# [P1-N2] sect-missions接入事件总线 — 监听cultivation:start/claim等事件更新进度
+# [P1-N3] 宗门战赛季自动重置 — 状态机endTime过期后重置为新赛季
+# [P2-N1] 月卡每日自动领取 — login时检查canClaimToday并自动发放
+# [P2-N2] 装备强化事件emit — 确认equipment/enhance emit forge:strengthen
+# [NEW-F] 仙友邀请后端API — 注册流程+邀请码+奖励查询
+
+# === 2026-03-30 第98轮追加 ===
+
+# [P1-B-98-1] 注册 pill.js 路由
+# 截止: 2026-04-10
+
+# [P1-B-98-2] 注册 giftcode.js 路由（改用数据库存储used）
+# 截止: 2026-04-10
+
+# [P1-B-98-3] 修复 worldBoss 路径注册（大写B）
+# 截止: 2026-04-08
+
+# [P1-B-98-4] 删除重复mail路由 + 注册routes/mail.js
+# 截止: 2026-04-10
+
+# [P1-B-98-5] 新建 dailyChallenge.js 后端
+# 截止: 2026-04-20
