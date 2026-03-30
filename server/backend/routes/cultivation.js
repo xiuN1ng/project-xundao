@@ -15,6 +15,14 @@ try {
   Logger.info('dailyQuest 路由未找到:', e.message);
 }
 
+// 任务系统进度更新
+let questRouter;
+try {
+  questRouter = require('./quest');
+} catch (e) {
+  Logger.info('quest 路由未找到:', e.message);
+}
+
 // 事件总线
 let eventBus;
 try {
@@ -412,6 +420,15 @@ router.post('/start', (req, res) => {
       }
     }
 
+    // ========== 任务系统进度更新：修炼 ==========
+    if (questRouter && questRouter.updateQuestProgressByType) {
+      try {
+        questRouter.updateQuestProgressByType(userId, 'cultivate', 1);
+      } catch (e) {
+        Logger.error('任务进度更新失败(cultivate):', e.message);
+      }
+    }
+
     // ========== 事件总线触发：修炼开始 ==========
     if (eventBus) {
       eventBus.emit('cultivation:start', { userId, gain });
@@ -486,6 +503,15 @@ router.post('/breakthrough', (req, res) => {
       }
     }
 
+    // ========== 任务系统进度更新：境界突破 ==========
+    if (questRouter && questRouter.updateQuestProgressByType) {
+      try {
+        questRouter.updateQuestProgressByType(userId, 'realm_breakthrough', 1);
+      } catch (e) {
+        Logger.error('任务进度更新失败(realm_breakthrough):', e.message);
+      }
+    }
+
     // ========== 事件总线触发：境界突破 ==========
     if (eventBus) {
       eventBus.emit('cultivation:breakthrough', { userId, newRealm: nextRealm });
@@ -547,6 +573,15 @@ router.post('/advance', (req, res) => {
         dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
       } catch (e) {
         Logger.error('每日任务更新失败:', e.message);
+      }
+    }
+
+    // ========== 任务系统进度更新：境界跃迁 ==========
+    if (questRouter && questRouter.updateQuestProgressByType) {
+      try {
+        questRouter.updateQuestProgressByType(userId, 'realm_breakthrough', 1);
+      } catch (e) {
+        Logger.error('任务进度更新失败(realm_breakthrough):', e.message);
       }
     }
 
@@ -707,6 +742,15 @@ router.post('/claim', (req, res) => {
         dailyQuestRouter.updateDailyQuestProgress(userId, 'cultivate', 1);
       } catch (e) {
         Logger.error('每日任务更新失败:', e.message);
+      }
+    }
+
+    // ========== 任务系统进度更新：领取修炼收益 ==========
+    if (questRouter && questRouter.updateQuestProgressByType) {
+      try {
+        questRouter.updateQuestProgressByType(userId, 'cultivate', 1);
+      } catch (e) {
+        Logger.error('任务进度更新失败(cultivate):', e.message);
       }
     }
 

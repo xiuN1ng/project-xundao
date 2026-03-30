@@ -36,6 +36,10 @@ const QUEST_TEMPLATES = [
   { id: 5, type: 'main', title: '筑基成功', desc: '突破到筑基境', target: 2, targetType: 'realm_breakthrough', reward: { lingshi: 1000, exp: 500 }, difficulty: 2 },
   { id: 6, type: 'main', title: '金丹成就', desc: '突破到金丹境', target: 3, targetType: 'realm_breakthrough', reward: { lingshi: 3000, exp: 2000 }, difficulty: 3 },
   { id: 7, type: 'main', title: '元婴大能', desc: '突破到元婴境', target: 4, targetType: 'realm_breakthrough', reward: { lingshi: 5000, exp: 5000 }, difficulty: 4 },
+  // 修炼任务
+  { id: 301, type: 'side', title: '初窥门径', desc: '完成10次修炼', target: 10, targetType: 'cultivate', reward: { lingshi: 200, exp: 150 }, difficulty: 1 },
+  { id: 302, type: 'side', title: '渐入佳境', desc: '完成50次修炼', target: 50, targetType: 'cultivate', reward: { lingshi: 500, exp: 400 }, difficulty: 2 },
+  { id: 303, type: 'side', title: '勤修不辍', desc: '完成200次修炼', target: 200, targetType: 'cultivate', reward: { lingshi: 1500, exp: 1000 }, difficulty: 3 },
   // 支线任务
   { id: 101, type: 'side', title: '初试身手', desc: '完成10次副本挑战', target: 10, targetType: 'dungeon_complete', reward: { lingshi: 300, exp: 200 }, difficulty: 1 },
   { id: 102, type: 'side', title: '竞技新星', desc: '参与5次竞技场挑战', target: 5, targetType: 'arena_battle', reward: { lingshi: 400, exp: 300 }, difficulty: 1 },
@@ -81,6 +85,58 @@ function getUserId(req) {
 
 function getQuestTemplate(questId) {
   return QUEST_TEMPLATES.find(q => q.id === questId) || null;
+}
+
+// ============ 任务进度更新（供其他模块调用）============
+function updateQuestProgressByType(userId, targetType, delta = 1) {
+  if (!db) {
+    Logger.warn('updateQuestProgressByType: 数据库未连接');
+    return { success: false, updated: 0 };
+  }
+  try {
+    // 查找匹配的任务（仅未完成的任务）
+    const matchingQuests = db.prepare(`
+      SELECT pq.quest_id, pq.progress
+      FROM player_quests pq
+      JOIN (
+        SELECT 1 as id, ? as targetType UNION ALL
+        SELECT 2, ? UNION ALL SELECT 3, ? UNION ALL SELECT 4, ? UNION ALL
+        SELECT 5, ? UNION ALL SELECT 6, ? UNION ALL SELECT 7, ? UNION ALL
+        SELECT 101, ? UNION ALL SELECT 102, ? UNION ALL SELECT 103, ? UNION ALL
+        SELECT 104, ? UNION ALL SELECT 105, ? UNION ALL SELECT 106, ? UNION ALL
+        SELECT 107, ? UNION ALL SELECT 108, ? UNION ALL SELECT 301, ? UNION ALL SELECT 302, ? UNION ALL SELECT 303, ?
+      ) q ON pq.quest_id = q.id
+      WHERE pq.player_id = ? AND pq.completed = 0
+    `).all(
+      targetType, targetType, targetType, targetType,
+      targetType, targetType, targetType,
+      targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType,
+      userId
+    );
+
+    if (matchingQuests.length === 0) {
+      return { success: true, updated: 0 };
+    }
+
+    let updated = 0;
+    for (const mq of matchingQuests) {
+      const template = getQuestTemplate(mq.quest_id);
+      if (!template) continue;
+      // 仅更新 targetType 匹配的任务
+      if (template.targetType !== targetType) continue;
+      const newProgress = mq.progress + delta;
+      const completed = newProgress >= template.target ? 1 : 0;
+      db.prepare(`
+        UPDATE player_quests SET progress = ?, completed = ?, updated_at = datetime('now')
+        WHERE player_id = ? AND quest_id = ?
+      `).run(Math.min(newProgress, template.target), completed, userId, mq.quest_id);
+      updated++;
+    }
+    return { success: true, updated };
+  } catch (err) {
+    Logger.error('updateQuestProgressByType 失败:', err.message);
+    return { success: false, error: err.message };
+  }
 }
 
 // ============ 路由 ============
@@ -280,7 +336,7 @@ router.post('/update-progress', (req, res) => {
 
     // 查找匹配的任务
     const matchingQuests = db.prepare(`
-      SELECT pq.quest_id, pq.progress, q.target, q.targetType
+      SELECT pq.quest_id, pq.progress
       FROM player_quests pq
       JOIN (
         SELECT 1 as id, ? as targetType UNION ALL
@@ -288,13 +344,13 @@ router.post('/update-progress', (req, res) => {
         SELECT 5, ? UNION ALL SELECT 6, ? UNION ALL SELECT 7, ? UNION ALL
         SELECT 101, ? UNION ALL SELECT 102, ? UNION ALL SELECT 103, ? UNION ALL
         SELECT 104, ? UNION ALL SELECT 105, ? UNION ALL SELECT 106, ? UNION ALL
-        SELECT 107, ? UNION ALL SELECT 108, ?
+        SELECT 107, ? UNION ALL SELECT 108, ? UNION ALL SELECT 301, ? UNION ALL SELECT 302, ? UNION ALL SELECT 303, ?
       ) q ON pq.quest_id = q.id
       WHERE pq.player_id = ? AND pq.completed = 0
     `).all(
       targetType, targetType, targetType, targetType,
       targetType, targetType, targetType,
-      targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType,
+      targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType, targetType,
       userId
     );
 
@@ -306,6 +362,8 @@ router.post('/update-progress', (req, res) => {
     for (const mq of matchingQuests) {
       const template = getQuestTemplate(mq.quest_id);
       if (!template) continue;
+      // 仅更新 targetType 匹配的任务
+      if (template.targetType !== targetType) continue;
 
       const newProgress = mq.progress + delta;
       const completed = newProgress >= template.target ? 1 : 0;
@@ -401,4 +459,4 @@ router.get('/templates', (req, res) => {
 // 初始化
 initQuestTables();
 
-module.exports = router;
+module.exports = { router, updateQuestProgressByType };

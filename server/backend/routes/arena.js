@@ -112,6 +112,12 @@ try {
 }
 
 let dailyQuestRouter = null;
+let questRouter = null;
+try {
+  questRouter = require('./quest');
+} catch (e) {
+  Logger.warn('[arena] quest路由加载失败:', e.message);
+}
 try {
   dailyQuestRouter = require('./dailyQuest');
   Logger.info('每日任务路由加载成功');
@@ -1074,6 +1080,15 @@ router.post('/challenge', (req, res) => {
       try {
         dailyQuestRouter.updateDailyQuestProgress(player_id, 'battle', 1);
       } catch (e) {
+
+    // 触发任务系统：竞技场战斗
+    if (questRouter && questRouter.updateQuestProgressByType) {
+      try {
+        questRouter.updateQuestProgressByType(player_id, 'arena_battle', 1);
+      } catch (e) {
+        Logger.warn('[arena] 任务进度更新失败(arena_battle):', e.message);
+      }
+    }
         Logger.warn('[arena] 每日任务更新失败:', e.message);
       }
     }

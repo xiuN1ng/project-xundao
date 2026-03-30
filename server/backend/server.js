@@ -149,7 +149,7 @@ app.use('/api/worldboss', require('./routes/worldBoss'));
 app.use('/api/rank', require('./routes/rank'));
 
 // 其他
-app.use('/api/quest', require('./routes/quest'));
+app.use('/api/quest', require('./routes/quest').router);
 app.use('/api/mail', require('./routes/mail'));
 app.use('/api/activity', require('./routes/activity'));
 app.use('/api/lottery', require('./routes/lottery'));

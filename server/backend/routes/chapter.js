@@ -110,6 +110,13 @@ try {
 }
 
 // 事件总线
+let questRouter;
+try {
+  questRouter = require('./quest');
+} catch (e) {
+  console.log('[chapter] quest路由未找到:', e.message);
+}
+
 let eventBus;
 try {
   eventBus = require('../../game/eventBus');
@@ -441,6 +448,15 @@ router.post('/complete', (req, res) => {
       dailyQuestRouter.updateDailyQuestProgress(userId, 'chapter', 1);
     } catch (e) {
       console.error('[chapter] 每日任务更新失败:', e.message);
+    }
+  }
+
+  // ========== 任务系统进度更新：章节通关 ==========
+  if (questRouter && questRouter.updateQuestProgressByType) {
+    try {
+      questRouter.updateQuestProgressByType(userId, 'chapter_complete', 1);
+    } catch (e) {
+      console.error('[chapter] 任务进度更新失败(chapter_complete):', e.message);
     }
   }
 

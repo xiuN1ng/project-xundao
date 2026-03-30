@@ -4125,3 +4125,43 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P2-F-98-4] 仙盟战系统前端
   - 文件: client/src/components/GuildWarPanel.vue (新建)
   - 截止: 2026-04-25
+
+# === P1-108 (2026-03-31 第108轮) ===
+
+[B-108-1] 【第6次】注册 spirit_root 路由
+  - 文件: server/server.js
+  - 添加: app.use('/api/spirit-root', require('./backend/routes/spirit_root'))
+  - 验证: curl http://localhost:3001/api/spirit-root/roots?player_id=1 → 应返回JSON数组
+  - 截止: 2026-04-01 | 优先级: P1-紧急
+
+[B-108-2] 【第6次】注册 talent 路由
+  - 文件: server/server.js
+  - 添加: app.use('/api/talent', require('./backend/routes/talent'))
+  - 验证: curl http://localhost:3001/api/talent/list?player_id=1 → 应返回天赋树JSON
+  - 截止: 2026-04-01 | 优先级: P1-紧急
+
+[B-108-3] 注册 gacha 路由（514行实现，从未接入）
+  - 文件: server/server.js
+  - 添加: app.use('/api/gacha', require('./backend/routes/gacha'))
+  - 验证: curl http://localhost:3001/api/gacha/list?player_id=1 → 应返回奖池数据
+  - 截止: 2026-04-02 | 优先级: P1
+
+[B-108-4] 修复主线/支线任务进度不更新
+  - cultivation.js: 添加 questRouter.updateQuestProgress(userId, 'chapter_complete', 1)
+  - battle.js: 添加 questRouter.updateQuestProgress(userId, 'arena_battle', 1)
+  - chapter.js: 添加章节通关触发
+  - 截止: 2026-04-03 | 优先级: P1
+
+[B-108-5] 诊断 arena battle 类型 dailyQuest 不更新
+  - arena.js: dailyQuestRouter.updateDailyQuestProgress('battle', 1) 排查
+  - 截止: 2026-04-07 | 优先级: P2
+
+[B-108-6] 确认/新建 celestial_war.js（v9.0天界战争）
+  - 方案A: 新建 game/celestial_war.js + routes/celestial_war.js
+  - 方案B: 删除 docs/v9.0-celestial-war.md 避免虚假承诺
+  - 截止: 2026-04-05 | 优先级: P1
+
+[B-108-7] 天榜争夺战后端（赛季制排行榜）
+  - 文件: server/backend/routes/tianrank.js (新建)
+  - 文件: server/game/tianrank_season.js (新建)
+  - 截止: 2026-04-15 | 优先级: P2
