@@ -8644,6 +8644,64 @@ try {
   Logger.warn('⚠ 婚姻路由加载失败:', e.message);
 }
 
+// ==================== 第二批路由注册 ====================
+// friend/quest/commission/fashion/mount/wing/sect-missions
+try {
+  const friendRoute = require('./backend/routes/friend');
+  app.use('/api/friend', friendRoute);
+  Logger.info('✓ 好友系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 好友路由加载失败:', e.message);
+}
+
+try {
+  const questRoute = require('./backend/routes/quest');
+  app.use('/api/quest', questRoute);
+  Logger.info('✓ 任务系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 任务路由加载失败:', e.message);
+}
+
+try {
+  const commissionRoute = require('./backend/routes/commission');
+  app.use('/api/commission', commissionRoute);
+  Logger.info('✓ 委托系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 委托路由加载失败:', e.message);
+}
+
+try {
+  const fashionRoute = require('./backend/routes/fashion');
+  app.use('/api/fashion', fashionRoute);
+  Logger.info('✓ 时装系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 时装路由加载失败:', e.message);
+}
+
+try {
+  const mountRoute = require('./backend/routes/mount');
+  app.use('/api/mount', mountRoute);
+  Logger.info('✓ 坐骑系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 坐骑路由加载失败:', e.message);
+}
+
+try {
+  const wingRoute = require('./backend/routes/wing');
+  app.use('/api/wing', wingRoute);
+  Logger.info('✓ 翅膀系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 翅膀路由加载失败:', e.message);
+}
+
+try {
+  const sectMissionsRoute = require('./backend/routes/sect-missions');
+  app.use('/api/sect-missions', sectMissionsRoute);
+  Logger.info('✓ 宗门任务路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 宗门任务路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
