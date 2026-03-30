@@ -126,6 +126,7 @@ app.use('/api/beastEquipment', require('../game/beast_equipment'));
 app.use('/api/pet', require('./routes/pet'));
 app.use('/api/spirit-artifact', require('../game/spirit_artifact_api'));
 app.use('/api/spirit', require('../game/spirit_artifact_api')); // 前端 /api/spirit 别名
+app.use('/api/artifacts', require('../game/spirit_artifact_api')); // 前端 /api/artifacts 别名（器灵系统）
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/lundao', require('./routes/lundao'));
