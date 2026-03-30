@@ -111,6 +111,7 @@ app.use('/api/clan', require('./routes/clan'));
 app.use('/api/sect-missions', require('./routes/sect-missions'));
 app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));
+app.use('/api/seven-day', require('./routes/seven_day'));
 app.use('/api/festival', require('./routes/festival'));
 app.use('/api/commission', require('./routes/commission'));
 app.use('/api/trade', require('./routes/trade'));
