@@ -338,8 +338,8 @@ router.post('/complete', (req, res) => {
         dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
           .run(realmLevelUp, spiritStonesGain, session.playerId);
         
-        // 检查飞升成就
-        const isAscension = targetRealmName === '飞升';
+        // 检查飞升成就（渡劫/真仙突破代表飞升成就）
+        const isAscension = targetRealmName === '渡劫' || targetRealmName === '真仙';
         if (isAscension && rewards.broadcast) {
           // 全服广播
           try {
@@ -614,8 +614,8 @@ router.post('/attempt', (req, res) => {
         dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
           .run(realmLevelUp, spiritStonesGain, actualPlayerId);
         
-        // 飞升全服广播
-        const isAscension = currentRealm.next === '飞升';
+        // 渡劫/真仙突破时全服广播（代表真正的飞升成就）
+        const isAscension = currentRealm.next === '渡劫' || currentRealm.next === '真仙';
         if (isAscension && rewards.broadcast) {
           try {
             const broadcastApi = require('./broadcast');

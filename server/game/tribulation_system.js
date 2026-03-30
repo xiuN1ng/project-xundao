@@ -83,10 +83,46 @@ const TRIBULATION_TYPES = {
     baseSuccessRate: 0.3,
     difficulty: 'nightmare',
     suitableRealm: '炼虚→合体'
+  },
+  // 合体→大乘天劫
+  tribulation_dacheng: {
+    id: 'tribulation_dacheng',
+    name: '大乘雷劫',
+    element: '雷',
+    icon: '🔱',
+    color: '#FF6600',
+    description: '大乘期雷劫，需承受天地法则考验',
+    baseSuccessRate: 0.25,
+    difficulty: 'nightmare',
+    suitableRealm: '合体→大乘'
+  },
+  // 大乘→渡劫天劫（天魔劫）
+  tribulation_dujie: {
+    id: 'tribulation_dujie',
+    name: '天魔劫',
+    element: '心',
+    icon: '👹',
+    color: '#8B0000',
+    description: '天魔扰乱神魂，考验道心坚定',
+    baseSuccessRate: 0.15,
+    difficulty: 'legendary',
+    suitableRealm: '大乘→渡劫'
+  },
+  // 渡劫→真仙（九九天劫/混沌劫）
+  tribulation_zhenxian: {
+    id: 'tribulation_zhenxian',
+    name: '混沌天劫',
+    element: '混沌',
+    icon: '🌌',
+    color: '#9400D3',
+    description: '九十九道混沌神雷，渡此劫者飞升真仙',
+    baseSuccessRate: 0.08,
+    difficulty: 'legendary',
+    suitableRealm: '渡劫→真仙'
   }
 };
 
-// 境界数据
+// 境界数据（9个境界：练气→筑基→金丹→元婴→化神→炼虚→大乘→渡劫→真仙）
 const REALM_DATA = {
   '凡人': { order: 0, next: '炼气', spiritRequired: 0 },
   '炼气': { order: 1, next: '筑基', spiritRequired: 1000 },
@@ -96,8 +132,9 @@ const REALM_DATA = {
   '化神': { order: 5, next: '炼虚', spiritRequired: 800000 },
   '炼虚': { order: 6, next: '合体', spiritRequired: 3000000 },
   '合体': { order: 7, next: '大乘', spiritRequired: 10000000 },
-  '大乘': { order: 8, next: '飞升', spiritRequired: 50000000 },
-  '飞升': { order: 9, next: null, spiritRequired: 0 }
+  '大乘': { order: 8, next: '渡劫', spiritRequired: 50000000 },
+  '渡劫': { order: 9, next: '真仙', spiritRequired: 100000000 },
+  '真仙': { order: 10, next: null, spiritRequired: 0 }
 };
 
 // 渡劫奖励配置
@@ -109,7 +146,8 @@ const TRIBULATION_REWARDS = {
   '化神→炼虚': { spirit: 3000000, spiritStones: 200000, item: '炼虚丹', itemCount: 1 },
   '炼虚→合体': { spirit: 10000000, spiritStones: 1000000, item: '合体期功法碎片', itemCount: 1 },
   '合体→大乘': { spirit: 30000000, spiritStones: 3000000, item: '大乘期功法碎片', itemCount: 1 },
-  '大乘→飞升': { spirit: 50000000, spiritStones: 5000000, item: '仙品装备', itemCount: 1 }
+  '大乘→渡劫': { spirit: 50000000, spiritStones: 5000000, item: '仙品装备', itemCount: 1 },
+  '渡劫→真仙': { spirit: 100000000, spiritStones: 10000000, item: '真仙套装', itemCount: 1 }
 };
 
 // 获取渡劫类型列表
@@ -151,10 +189,12 @@ function calculateSuccessRate(playerRealm, bonuses = []) {
     5: 0.5,  // 化神→炼虚
     6: 0.4,  // 炼虚→合体
     7: 0.3,  // 合体→大乘
-    8: 0.2   // 大乘→飞升
+    8: 0.2,  // 大乘→渡劫
+    9: 0.10, // 渡劫→真仙（极其艰难）
+    10: 0.05 // 真仙→?（已无更高境界）
   };
   
-  let successRate = baseRates[realmOrder] || 0.5;
+  let successRate = (baseRates[realmOrder] !== undefined) ? baseRates[realmOrder] : 0.5;
   
   // 加上各种加成
   bonuses.forEach(bonus => {

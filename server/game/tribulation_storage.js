@@ -121,17 +121,30 @@ const TRIBULATION_ANIM_PHASES = {
   }
 };
 
-// 飞升特殊奖励配置
+// 飞升特殊奖励配置（渡劫→真仙为终极飞升成就）
 const ASCENSION_REWARDS = {
-  // 大乘→飞升的特殊奖励
-  '大乘→飞升': {
-    title: '飞升成就',
-    spirit: 100000000,
-    spiritStones: 20000000,
+  // 大乘→渡劫的特殊奖励
+  '大乘→渡劫': {
+    title: '渡劫成就',
+    spirit: 50000000,
+    spiritStones: 5000000,
     items: [
       { id: 'immortal_robe', name: '仙袍·天羽', count: 1 },
       { id: 'immortal_sword', name: '仙剑·太虚', count: 1 },
       { id: 'celestial_jade', name: '天元丹', count: 3 }
+    ],
+    title_reward: '渡劫真君',
+    aura: 'thunder_aura',
+  },
+  // 渡劫→真仙的终极飞升奖励
+  '渡劫→真仙': {
+    title: '飞升成就',
+    spirit: 100000000,
+    spiritStones: 20000000,
+    items: [
+      { id: 'immortal_robe', name: '真仙霓裳', count: 1 },
+      { id: 'immortal_sword', name: '大道之剑', count: 1 },
+      { id: 'celestial_jade', name: '天元丹', count: 10 }
     ],
     title_reward: '飞升仙人',
     aura: 'celestial_light',

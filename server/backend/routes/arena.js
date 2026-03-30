@@ -148,7 +148,8 @@ const AI_BOTS = [
   { username: '核心真传', level: 70, realm_level: 6, combat_power: 70000, tier: 2 },
   { username: '长老级',   level: 80, realm_level: 7, combat_power: 100000, tier: 2 },
   { username: '宗主级',   level: 88, realm_level: 8, combat_power: 150000, tier: 3 },
-  { username: '飞升大能', level: 95, realm_level: 9, combat_power: 200000, tier: 3 },
+  { username: '飞升大能', level: 95, realm_level: 9, combat_power: 200000, tier: 3 }, // 渡劫境
+  { username: '真仙下凡', level: 99, realm_level: 10, combat_power: 500000, tier: 3 }, // 真仙境
 ];
 
 function initAIBots() {

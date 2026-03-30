@@ -58,7 +58,7 @@ try {
   };
 }
 
-// 境界基础配置
+// 境界基础配置（9个境界：练气→筑基→金丹→元婴→化神→炼虚→大乘→渡劫→真仙）
 const REALM_BASE_CONFIG = {
   1: { name: '练气', icon: '🧘', realm_level: 1 },
   2: { name: '筑基', icon: '🔮', realm_level: 2 },
@@ -67,10 +67,11 @@ const REALM_BASE_CONFIG = {
   5: { name: '化神', icon: '✨', realm_level: 5 },
   6: { name: '炼虚', icon: '💫', realm_level: 6 },
   7: { name: '大乘', icon: '🔥', realm_level: 7 },
-  8: { name: '飞升', icon: '🌈', realm_level: 8 },
+  8: { name: '渡劫', icon: '⚡', realm_level: 8 },
+  9: { name: '真仙', icon: '🌟', realm_level: 9 },
 };
 
-// 境界突破消耗配置（境界1~3: 3000/8000/15000；境界4+: realm × 10000）
+// 境界突破消耗配置（境界1~3: 3000/8000/15000；境界4+: realm × 10000；渡劫/真仙更高）
 const realmConfig = {
   1: { name: '练气', icon: '🧘', realm_level: 1, cost: 3000 },
   2: { name: '筑基', icon: '🔮', realm_level: 2, cost: 8000 },
@@ -79,7 +80,8 @@ const realmConfig = {
   5: { name: '化神', icon: '✨', realm_level: 5, cost: 50000 },
   6: { name: '炼虚', icon: '💫', realm_level: 6, cost: 60000 },
   7: { name: '大乘', icon: '🔥', realm_level: 7, cost: 70000 },
-  8: { name: '飞升', icon: '🌈', realm_level: 8, cost: 80000 },
+  8: { name: '渡劫', icon: '⚡', realm_level: 8, cost: 90000 },
+  9: { name: '真仙', icon: '🌟', realm_level: 9, cost: 150000 },
 };
 
 // 境界消耗灵石（修炼一次，动态计算）

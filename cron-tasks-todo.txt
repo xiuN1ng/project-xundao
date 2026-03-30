@@ -4208,7 +4208,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-03-30
 
 # === 2026-03-30 晚间 第90轮追加 ===
-[P0-B-90-1] 境界突破cultivationPower彻底修复
+[P0-B-90-1] 境界突破cultivationPower彻底修复  # 完成 | 2026-03-30 17:48 | 1c118ef5
   - 文件: server/backend/routes/cultivation.js
   - 功能: ①每次cultivation/start累加accumulated_power②改造power公式引入历史积累③突破时保留accumulated_power
   - 截止: 2026-04-02
@@ -4227,3 +4227,58 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 文件: server/backend/routes/equipment.js + 新建套装逻辑
   - 功能: 套装表+set_id字段+效果计算+祝福值机制
   - 截止: 2026-04-07
+
+# ========== 2026-03-31 第110轮 策划提案分发 ==========
+# 分发时间: 2026-03-31 18:08
+
+## P0 路由注册紧急修复
+[B-P0-110-1] spirit_root/talent/gacha/pill 四个路由注册到 server.js
+  - spirit_root: app.use('/api/spirit-root', require('./routes/spirit_root'))
+  - talent: app.use('/api/talent', require('./routes/talent'))
+  - gacha: app.use('/api/gacha', require('./routes/gacha'))
+  - pill: app.use('/api/pill', require('./routes/pill'))
+  - 文件: server/backend/server.js
+  - 验证: curl http://localhost:3001/api/spirit-root/roots?player_id=1
+  - 截止: 2026-04-01
+
+[B-P0-110-2] payment.js 补充 /create-order 和 /callback 端点
+  - POST /create-order: {player_id, package_id} → 返回 order_id
+  - POST /callback: {order_id, status} → 发放灵石 + 写 payment_records
+  - GET /packages: 返回 6 档充值配置
+  - 文件: server/backend/routes/payment.js
+  - 截止: 2026-04-01
+
+[B-P0-110-3] pill.js 完整实现炼丹 API
+  - POST /refine: {player_id, recipe_id, furnace_type} → 扣灵石+材料，输出丹药
+  - GET /recipes: 返回丹方列表（普通/精良/稀有/史诗）
+  - GET /materials: 返回玩家当前材料库存
+  - 丹药效果: 生命丹/攻击丹/经验丹，接入玩家属性
+  - 文件: server/backend/routes/pill.js
+  - 截止: 2026-04-01
+
+## P1 系统完善
+[B-P1-110-1] rank.js 过滤 AI 假数据
+  - /combat 端点: WHERE id > 0 排除 AI 假账号
+  - 混入 3-5 个高战力 AI 填充空白名次
+  - 添加当前排名: SELECT COUNT(*) + 1 FROM Users WHERE combat_power > ?
+  - 文件: server/backend/routes/rank.js
+  - 截止: 2026-04-02
+
+[B-P1-110-2] adventure.js 添加挂机自动触发逻辑
+  - 每 5 分钟检查一次，1% 概率触发随机奇遇
+  - GET /hint: 根据玩家状态返回推荐奇遇类型
+  - 文件: server/backend/routes/adventure.js
+  - 截止: 2026-04-02
+
+[B-P1-110-3] market.js/trade.js 市场冷启动系统商品注入
+  - 市场初始化时自动生成 20 个系统挂单
+  - GET /popular: 返回最近 3 天成交量最高的商品
+  - 文件: server/backend/routes/market.js 或 routes/trade.js
+  - 截止: 2026-04-03
+
+## P2 新功能
+[B-P2-110-1] 灵石直冲支付回调模拟
+  - 完整订单流程: create-order → 模拟支付成功 → callback → 灵石到账
+  - 首充双倍逻辑: 首次充值额外赠送 100%
+  - 文件: server/backend/routes/payment.js
+  - 截止: 2026-04-05
