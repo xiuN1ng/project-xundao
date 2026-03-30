@@ -86,8 +86,8 @@ const realmConfig = {
   1: { name: '练气', icon: '🧘', realm_level: 1, cost: 3000 },
   2: { name: '筑基', icon: '🔮', realm_level: 2, cost: 8000 },
   3: { name: '金丹', icon: '🌟', realm_level: 3, cost: 15000 },
-  4: { name: '元婴', icon: '👼', realm_level: 4, cost: 40000 },
-  5: { name: '化神', icon: '✨', realm_level: 5, cost: 50000 },
+  4: { name: '元婴', icon: '👼', realm_level: 4, cost: 15000 },  // 原40000，修复金丹→元婴数值断崖
+  5: { name: '化神', icon: '✨', realm_level: 5, cost: 20000 },  // 原50000，修复元婴→化神数值断崖
   6: { name: '炼虚', icon: '💫', realm_level: 6, cost: 60000 },
   7: { name: '大乘', icon: '🔥', realm_level: 7, cost: 70000 },
   8: { name: '渡劫', icon: '⚡', realm_level: 8, cost: 90000 },
@@ -95,10 +95,11 @@ const realmConfig = {
 };
 
 // 境界消耗灵石（修炼一次，动态计算）
-// 基础10灵石，随cultivationPower增长，每500点+5灵石，上限105
+// 基础10灵石，随cultivationPower增长，每1000点+3灵石，上限500灵石（修复P0-115-1数值断崖）
 const getCultivationCost = (cultivationPower) => {
-  const extra = Math.floor(cultivationPower / 500) * 5;
-  return Math.min(10 + extra, 105);
+  const base = 10;
+  const extra = Math.floor(cultivationPower / 1000) * 3;
+  return Math.min(base + extra, 500);
 };
 
 // 辅助：获取上海时区日期字符串
