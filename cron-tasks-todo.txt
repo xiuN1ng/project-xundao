@@ -4432,9 +4432,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 ## N114 任务 (2026-03-31)
 
-### [P0] 创建 server/routes/index.js — 全路由自动注册中心
+### [P0] 创建 server/routes/index.js — 全路由自动注册中心  # 完成 | 2026-03-31 caf6803f
 - 实现 loadRoutes(app, db, authenticateToken, Logger) 自动扫描 backend/routes/
 - 确保 db 和 authenticateToken 在 loadRoutes 调用前已初始化
+- server/backend/server.js 注册自动注册中心，skipPaths避免重复注册
+- 发现 equipment-dismantle 路由缺失（已自动注册）
 - 参考: /docs/PROPOSALS/2026-03-31-N114.md
 - 优先级: P0
 
