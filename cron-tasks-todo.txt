@@ -4514,12 +4514,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 基于玩家活跃天数/充值历史动态调整灵石包价格
 - 大R(≥1000元) 8折; 免费玩家(≥30天) 5折; 活跃玩家(≥5天/周) 9折
 
-## [P0-116-1] 修复 dailyQuest 进度同步 — cultivation修炼未计入日常任务
-- 确认 server/backend/routes/dailyQuest.js 的 updateDailyQuestProgress 可被 cultivation.js require
-- 若加载失败，改用 eventBus 方式解耦
-- 修复后 curl /api/dailyQuest/list?player_id=1 验证 cultivate 任务 progress > 0
+## [P0-116-1] 修复 dailyQuest 进度同步 — cultivation修炼未计入日常任务 # 完成 | 2026-03-31 已验证
+- cultivation.js 已正确 require dailyQuest 并调用 updateDailyQuestProgress(userId, 'cultivate', 1)
+- 验证: curl /api/dailyQuest/progress?userId=1 → id=1 cultivate progress=1/1 completed=True ✓
 - 关联文件: server/backend/routes/cultivation.js, server/backend/routes/dailyQuest.js
-- 提案: /docs/PROPOSALS/2026-03-31-late-night.md | 截止: 2026-04-01
+- 截止: 2026-04-01
 
 ## [P1-116-1] 创建器灵后端路由 server/backend/routes/spirit_artifact.js  # 完成 | 2026-03-31 8f602d48
 - GET /api/spirit-artifact/list, POST /api/spirit-artifact/equip, POST /api/spirit-artifact/upgrade, GET /api/spirit-artifact/shop
