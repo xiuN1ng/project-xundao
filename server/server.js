@@ -3521,6 +3521,15 @@ try {
   Logger.info('福利API不可用:', e.message);
 }
 
+// ============ 会员/月卡系统 API ============
+try {
+  const membershipApi = require('./backend/routes/membership');
+  app.use('/api/membership', membershipApi);
+  Logger.info('✅ 会员月卡系统 API 已加载');
+} catch (e) {
+  Logger.info('会员API不可用:', e.message);
+}
+
 // ============ 首充双倍系统 API ============
 try {
   const firstRechargeApi = require('./services/first_recharge');

@@ -236,4 +236,13 @@ try { if (playerModule.setDb) playerModule.setDb(db); } catch(e) { console.log('
 const coupleModule = require('./routes/couple');
 try { if (coupleModule.setDb) coupleModule.setDb(db); } catch(e) { console.log('[couple setDb]', e.message); }
 
+// ============ 会员/月卡系统 API ============
+try {
+  const membershipApi = require('./routes/membership');
+  app.use('/api/membership', membershipApi);
+  console.log('✅ 会员月卡系统 API 已加载');
+} catch (e) {
+  console.log('会员API不可用:', e.message);
+}
+
 app.listen(PORT, () => console.log(`🚀 游戏服务运行在 http://localhost:${PORT}`));
