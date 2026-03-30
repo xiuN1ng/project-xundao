@@ -93,6 +93,7 @@ function initArenaTables() {
     try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank INTEGER DEFAULT 0"); } catch(e) {}
     try { db.exec("ALTER TABLE arena_player ADD COLUMN highest_rank_id INTEGER DEFAULT 0"); } catch(e) {}
     try { db.exec("ALTER TABLE arena_player ADD COLUMN extra_challenges_bought INTEGER DEFAULT 0"); } catch(e) {}
+    try { db.exec("ALTER TABLE arena_player ADD COLUMN daily_reward_claimed INTEGER DEFAULT 0"); } catch(e) {}
     Logger.info('arena_player表初始化完成');
   } catch (err) {
     Logger.warn('arena_player表初始化失败:', err.message);
