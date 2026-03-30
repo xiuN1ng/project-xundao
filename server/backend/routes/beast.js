@@ -155,7 +155,7 @@ router.post('/capture', (req, res) => {
   let capturedTemplate;
   if (guaranteedMyth) {
     capturedTemplate = beastTemplates.find(t => t.quality === 'legendary');
-    db.prepare("UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime('now') WHERE player_id = ?").run(userId);
+    db.prepare("UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = ? WHERE player_id = ?").run(new Date().toISOString(), userId);
   } else {
     // 普通抽取: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%
     const roll = Math.random() * 100;
@@ -173,7 +173,7 @@ router.post('/capture', (req, res) => {
     }
     capturedTemplate = templates[Math.floor(Math.random() * templates.length)] || beastTemplates[0];
 
-    db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, datetime('now'))").run(userId, newPityCount);
+    db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, ?)").run(userId, newPityCount, new Date().toISOString());
   }
 
   // 写入DB
@@ -286,7 +286,7 @@ router.post('/summon', (req, res) => {
   }
 
   // 更新保底计数器
-  db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, datetime('now'))").run(userId, currentPityCount);
+  db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, ?)").run(userId, currentPityCount, new Date().toISOString());
 
   res.json({
     success: true,

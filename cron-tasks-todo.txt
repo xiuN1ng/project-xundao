@@ -4078,3 +4078,9 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。
 [B-09] 添加 /api/shop/items alias：在 server.js 为 /api/shop/items 添加路由 alias 映射到 /api/shop/list。
 [B-10] 每日任务奖励 ×10：灵石奖励翻 10 倍，增加道具奖励选项，全部完成额外奖励稀有道具。
+
+# === P1-107 (2026-03-30 第107轮) ===
+[B-107-1] 注册 spirit_root 路由：server.js 添加 app.use('/api/spirit-root', require('./backend/routes/spirit_root'))，确认路径正确  # 紧急 | 截止 2026-04-02
+[B-107-2] 注册 talent 路由：server.js 添加 app.use('/api/talent', require('./backend/routes/talent'))  # 紧急 | 截止 2026-04-02
+[B-107-3] 实现月卡 API：在 welfare_api.js 添加 GET /monthly-card-status, POST /monthly-card-purchase, POST /monthly-card-claim，并在 welfare_storage.js 添加月卡数据表  # 紧急 | 截止 2026-04-03
+[B-107-4] 修复 beast.js datetime('now') SQL 错误：将 datetime('now') 改为 new Date().toISOString()，修复第158/176/289行  # 紧急 | 截止 2026-04-01
