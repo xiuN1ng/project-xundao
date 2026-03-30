@@ -168,7 +168,8 @@ const spiritArtifactStorage = {
   // 获取玩家可解锁的器灵
   getUnlockedArtifacts(playerId) {
     const database = getDb();
-    const player = database.prepare('SELECT level, realm FROM player WHERE id = ?').get(playerId);
+    // 从 Users 表读取玩家等级/境界（而非 player 表）
+    const player = database.prepare('SELECT level, realm FROM Users WHERE id = ?').get(playerId);
     
     if (!player) return [];
     

@@ -6,17 +6,18 @@ const express = require('express');
 const router = express.Router();
 
 // 加载依赖
-let spiritArtifactStorage;
+let spiritArtifactStorage, RARITY_CONFIG;
 function loadDependencies() {
   if (!spiritArtifactStorage) {
     try {
       const mod = require('./spirit_artifact_storage');
       spiritArtifactStorage = mod.spiritArtifactStorage;
+      RARITY_CONFIG = mod.RARITY_CONFIG;
     } catch (e) {
       console.error('加载spirit_artifact_storage失败:', e.message);
     }
   }
-  return spiritArtifactStorage;
+  return { storage: spiritArtifactStorage, RARITY_CONFIG };
 }
 
 // 器灵根路由 - 兼容前端 /api/spirit 调用（转发到 /list 逻辑）
@@ -28,15 +29,15 @@ router.get('/', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const storage = loadDependencies();
-    const unlocked = storage.getUnlockedArtifacts(parseInt(player_id));
-    const owned = storage.getPlayerArtifacts(parseInt(player_id));
+    const deps = loadDependencies();
+    const unlocked = deps.storage.getUnlockedArtifacts(parseInt(player_id));
+    const owned = deps.storage.getPlayerArtifacts(parseInt(player_id));
     const ownedIds = owned.map(o => o.artifact_id);
     
     const artifacts = unlocked.map(a => ({
       ...a,
       is_owned: ownedIds.includes(a.id),
-      rarity_config: storage.RARITY_CONFIG[a.rarity]
+      rarity_config: deps.RARITY_CONFIG[a.rarity]
     }));
     
     res.json({ success: true, data: artifacts });
@@ -54,16 +55,16 @@ router.get('/list', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const storage = loadDependencies();
-    const unlocked = storage.getUnlockedArtifacts(parseInt(player_id));
-    const owned = storage.getPlayerArtifacts(parseInt(player_id));
+    const deps = loadDependencies();
+    const unlocked = deps.storage.getUnlockedArtifacts(parseInt(player_id));
+    const owned = deps.storage.getPlayerArtifacts(parseInt(player_id));
     const ownedIds = owned.map(o => o.artifact_id);
     
     // 标记哪些已拥有
     const artifacts = unlocked.map(a => ({
       ...a,
       is_owned: ownedIds.includes(a.id),
-      rarity_config: storage.RARITY_CONFIG[a.rarity]
+      rarity_config: deps.RARITY_CONFIG[a.rarity]
     }));
     
     res.json({ success: true, data: artifacts });
@@ -81,10 +82,10 @@ router.get('/my', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const storage = loadDependencies();
-    const artifacts = storage.getPlayerArtifacts(parseInt(player_id));
-    const equipped = storage.getEquippedArtifacts(parseInt(player_id));
-    const totalBonus = storage.getTotalBonus(parseInt(player_id));
+    const deps = loadDependencies();
+    const artifacts = deps.storage.getPlayerArtifacts(parseInt(player_id));
+    const equipped = deps.storage.getEquippedArtifacts(parseInt(player_id));
+    const totalBonus = deps.storage.getTotalBonus(parseInt(player_id));
     
     res.json({ 
       success: true, 
@@ -108,9 +109,9 @@ router.get('/equipped', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const storage = loadDependencies();
-    const equipped = storage.getEquippedArtifacts(parseInt(player_id));
-    const totalBonus = storage.getTotalBonus(parseInt(player_id));
+    const deps = loadDependencies();
+    const equipped = deps.storage.getEquippedArtifacts(parseInt(player_id));
+    const totalBonus = deps.storage.getTotalBonus(parseInt(player_id));
     
     res.json({ 
       success: true, 
@@ -130,8 +131,8 @@ router.post('/acquire', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    const storage = loadDependencies();
-    const result = storage.acquireArtifact(parseInt(player_id), parseInt(artifact_id));
+    const deps = loadDependencies();
+    const result = deps.storage.acquireArtifact(parseInt(player_id), parseInt(artifact_id));
     
     res.json(result);
   } catch (error) {
@@ -148,8 +149,8 @@ router.post('/equip', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    const storage = loadDependencies();
-    const result = storage.equipArtifact(parseInt(player_id), parseInt(artifact_id), slot || 'weapon');
+    const deps = loadDependencies();
+    const result = deps.storage.equipArtifact(parseInt(player_id), parseInt(artifact_id), slot || 'weapon');
     
     res.json(result);
   } catch (error) {
@@ -166,8 +167,8 @@ router.post('/unequip', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    const storage = loadDependencies();
-    const result = storage.unequipArtifact(parseInt(player_id), parseInt(artifact_id));
+    const deps = loadDependencies();
+    const result = deps.storage.unequipArtifact(parseInt(player_id), parseInt(artifact_id));
     
     res.json(result);
   } catch (error) {
@@ -184,8 +185,8 @@ router.post('/upgrade', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
     
-    const storage = loadDependencies();
-    const result = storage.upgradeArtifact(parseInt(player_id), parseInt(artifact_id));
+    const deps = loadDependencies();
+    const result = deps.storage.upgradeArtifact(parseInt(player_id), parseInt(artifact_id));
     
     res.json(result);
   } catch (error) {
