@@ -233,6 +233,66 @@ router.post('/craft', (req, res) => {
   }
 });
 
+// POST /api/pill/refine - 炼丹（/refine 别名，支持 recipe_id/furnace_type 参数名）
+router.post('/refine', (req, res) => {
+  try {
+    const userId = parseInt(req.body.userId || req.body.player_id || req.body.userId || 1);
+    const recipeId = parseInt(req.body.recipeId || req.body.recipe_id || req.body.id || 0);
+    const furnaceType = req.body.furnace_type || req.body.furnaceType || 'ordinary';
+    const database = getDb(req);
+
+    const recipe = database.prepare('SELECT * FROM pill_recipes WHERE id = ?').get(recipeId);
+    if (!recipe) {
+      return res.json({ success: false, message: '丹方不存在' });
+    }
+
+    const materials = JSON.parse(recipe.materials);
+    const userMaterials = {};
+    for (const m of materials) {
+      const row = database.prepare(
+        'SELECT quantity FROM player_materials WHERE player_id = ? AND material_name = ?'
+      ).get(userId, m.name);
+      userMaterials[m.name] = row ? row.quantity : 0;
+    }
+
+    for (const m of materials) {
+      if (userMaterials[m.name] < m.count) {
+        return res.json({ success: false, message: `材料不足: ${m.name} (需要${m.count}, 拥有${userMaterials[m.name] || 0})` });
+      }
+    }
+
+    for (const m of materials) {
+      database.prepare(
+        `UPDATE player_materials SET quantity = quantity - ?, updated_at = datetime('now') WHERE player_id = ? AND material_name = ?`
+      ).run(m.count, userId, m.name);
+    }
+
+    const effect = JSON.parse(recipe.effect);
+    const quality = recipe.quality;
+    const pillName = recipe.name;
+
+    database.prepare(
+      'INSERT INTO player_pills (player_id, pill_id, pill_name, pill_type, effect, quality) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, recipeId, pillName, recipe.type, recipe.effect, quality);
+
+    res.json({
+      success: true,
+      pill: {
+        id: recipeId,
+        name: pillName,
+        type: recipe.type,
+        effect,
+        quality,
+        furnaceType
+      },
+      message: `炼制成功：${pillName}`
+    });
+  } catch (e) {
+    console.error('[pill/refine]', e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
 // 使用丹药
 router.post('/use', (req, res) => {
   try {

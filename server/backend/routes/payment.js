@@ -101,6 +101,27 @@ router.post('/create',(req,res)=>{
   }
 });
 
+// POST /api/payment/create-order - 创建订单（别名，支持 package_id 参数名）
+router.post('/create-order',(req,res)=>{
+  try {
+    const userId = req.user?.id || req.body.userId || req.body.player_id || req.body.userId || 1;
+    const {package_id} = req.body;
+    const pkg = packages.find(p => p.id === package_id);
+    if(!pkg) return res.json({success:false,message:'套餐不存在'});
+
+    const result = db.prepare(`
+      INSERT INTO payment_orders (user_id, package_id, package_name, amount, diamonds, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+    `).run(userId, pkg.id, pkg.name, pkg.price, pkg.diamonds);
+
+    Logger.info(`创建订单: userId=${userId}, package_id=${package_id}, orderId=${result.lastInsertRowid}`);
+    res.json({success:true,data:{orderId:result.lastInsertRowid,amount:pkg.price,diamonds:pkg.diamonds}});
+  } catch(err) {
+    Logger.error('POST /create-order 错误:', err.message);
+    res.status(500).json({success:false,error:err.message});
+  }
+});
+
 // 模拟支付回调 - 必须真实发放钻石
 router.post('/callback',(req,res)=>{
   try {
