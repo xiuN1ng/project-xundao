@@ -4546,13 +4546,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # ========== 从策划提案分发 — 2026-03-31 第117轮 ==========
 
-## [P1-117-2] guild.js 改为 SQLite 数据库持久化 — 2026-04-06
-- 参照 clan.js 实现模式，创建 guilds + guild_members 表
+## [P1-117-2] guild.js 改为 SQLite 数据库持久化 — 完成 | 2026-03-31 e99c023c
+- 参照 clan.js 实现模式，创建 guilds + guild_members + guild_skills 三表
 - /api/guild/create → INSERT INTO guilds
 - /api/guild/info → SELECT * FROM guilds WHERE id=?
 - /api/guild/join → INSERT INTO guild_members
-- /api/guild/upgrade → UPDATE guilds SET exp=exp+? WHERE id=?
+- 新增: /api/guild/transfer, /set-role, /kick, /members/:guildId, /skill/:guildId
 - 关联文件: server/backend/routes/guild.js, server/backend/data/game.db
+- server.js 路由指向 ./backend/routes/guild，setDb注入共享db
+- 验证: curl /api/guild/list ✅, /guild/1 ✅, POST /create ✅, POST /join ✅
 
 ## [P2-117-1-B] 创建成就冲刺后端 server/backend/routes/achievement_sprint.js — 2026-04-10
 - GET /api/achievement-sprint/status — 玩家7日冲刺进度
