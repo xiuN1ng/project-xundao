@@ -714,6 +714,57 @@ router.get('/opponents/:userId', (req, res) => {
     // 合并：优先真实玩家（战力接近），不足用AI补充
     const combined = [...realOpponents, ...botOpponents].slice(0, 5);
 
+    // 【P1-119-2-B】当候选对手<3时，无条件补充AI对手，战力分布：弱(-30%)/接近(±10%)/强(+30%)
+    if (combined.length < 3) {
+      const existingIds = new Set(combined.map(o => o.id));
+      // 计算三种战力的AI目标
+      const weakTarget = Math.floor(playerCombatPower * 0.7);    // -30%
+      const closeTarget = playerCombatPower;                     // ±10%
+      const strongTarget = Math.ceil(playerCombatPower * 1.3);   // +30%
+
+      // 查询接近目标战力的AI bots
+      const aiTiers = playerTier >= 3 ? [-10] : playerTier >= 2 ? [-7, -8, -9] : playerTier >= 1 ? [-4, -5, -6] : [-1, -2, -3];
+      if (aiTiers.length > 0) {
+        const placeholders = aiTiers.map(() => '?').join(',');
+        const aiBots = db.prepare(`
+          SELECT p.id,
+                 COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+                 p.level, p.realm as realm_level, p.attack, p.defense, p.hp,
+                 ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
+          FROM player p
+          JOIN arena_player ap ON p.user_id = ap.player_id
+          LEFT JOIN Users u ON u.id = ap.player_id
+          WHERE ap.player_id IN (${placeholders})
+        `).all(...aiTiers);
+
+        // 分类AI：弱/接近/强
+        const weakBots = aiBots.filter(b => {
+          const cp = (b.attack || 100) * 10 + (b.defense || 50) * 5 + Math.floor((b.hp || 1000) / 10);
+          return cp <= weakTarget;
+        });
+        const closeBots = aiBots.filter(b => {
+          const cp = (b.attack || 100) * 10 + (b.defense || 50) * 5 + Math.floor((b.hp || 1000) / 10);
+          return Math.abs(cp - closeTarget) / closeTarget <= 0.1;
+        });
+        const strongBots = aiBots.filter(b => {
+          const cp = (b.attack || 100) * 10 + (b.defense || 50) * 5 + Math.floor((b.hp || 1000) / 10);
+          return cp >= strongTarget;
+        });
+
+        const pickBot = (bots) => bots.sort(() => Math.random() - 0.5)[0];
+
+        // 优先填弱势AI，再接近AI，再强势AI
+        const slots = [pickBot(weakBots), pickBot(closeBots), pickBot(strongBots)].filter(Boolean);
+        for (const bot of slots) {
+          if (!existingIds.has(bot.id) && combined.length < 3) {
+            bot._isAI = true;
+            combined.push(bot);
+            existingIds.add(bot.id);
+          }
+        }
+      }
+    }
+
     // 若仍不足5人，补充高排名玩家（排除AI bots）
     if (combined.length < 5) {
       const existingIds = new Set(combined.map(o => o.id));
@@ -1376,26 +1427,66 @@ router.post('/match', (req, res) => {
 
     // 补充高排名玩家
     if (opponents.length < 3) {
-      const topOpponents = db.prepare(`
-        SELECT p.id,
-               COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
-               p.level, p.realm as realm_level,
-               ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
-        FROM player p
-        JOIN arena_player ap ON p.user_id = ap.player_id
-        LEFT JOIN Users u ON u.id = ap.player_id
-        WHERE ap.player_id != ?
-        ORDER BY ap.arena_points DESC
-        LIMIT ?
-      `).all(userId, 3 - opponents.length);
+      // 【P1-119-2-B】当候选对手<3时，优先补充AI对手（弱/接近/强三档）
+      const playerCombatPower = (player.attack || 100) * 10 + (player.defense || 50) * 5 + Math.floor((player.hp || 1000) / 10);
+      const playerLevel = player.level || 1;
+      const playerTier = playerLevel <= 20 ? 0 : playerLevel <= 45 ? 1 : playerLevel <= 70 ? 2 : 3;
+      const aiTiers = playerTier >= 3 ? [-10] : playerTier >= 2 ? [-7, -8, -9] : playerTier >= 1 ? [-4, -5, -6] : [-1, -2, -3];
+      const weakTarget = Math.floor(playerCombatPower * 0.7);
+      const closeTarget = playerCombatPower;
+      const strongTarget = Math.ceil(playerCombatPower * 1.3);
 
-      const existingIds = new Set(opponents.map(o => o.id));
-      for (const top of topOpponents) {
-        if (!existingIds.has(top.id)) {
-          opponents.push(top);
-          existingIds.add(top.id);
+      if (aiTiers.length > 0) {
+        const placeholders = aiTiers.map(() => '?').join(',');
+        const aiBots = db.prepare(`
+          SELECT p.id,
+                 COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+                 p.level, p.realm as realm_level,
+                 ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count,
+                 p.attack, p.defense, p.hp
+          FROM player p
+          JOIN arena_player ap ON p.user_id = ap.player_id
+          LEFT JOIN Users u ON u.id = ap.player_id
+          WHERE ap.player_id IN (${placeholders})
+        `).all(...aiTiers);
+
+        const existingIds = new Set(opponents.map(o => o.id));
+        const weakBots = aiBots.filter(b => { const cp = (b.attack||100)*10+(b.defense||50)*5+Math.floor((b.hp||1000)/10); return cp <= weakTarget; });
+        const closeBots = aiBots.filter(b => { const cp = (b.attack||100)*10+(b.defense||50)*5+Math.floor((b.hp||1000)/10); return Math.abs(cp - closeTarget) / closeTarget <= 0.1; });
+        const strongBots = aiBots.filter(b => { const cp = (b.attack||100)*10+(b.defense||50)*5+Math.floor((b.hp||1000)/10); return cp >= strongTarget; });
+        const pickBot = (bots) => bots.sort(() => Math.random() - 0.5)[0];
+        const slots = [pickBot(weakBots), pickBot(closeBots), pickBot(strongBots)].filter(Boolean);
+        for (const bot of slots) {
+          if (!existingIds.has(bot.id) && opponents.length < 3) {
+            opponents.push(bot);
+            existingIds.add(bot.id);
+          }
         }
-        if (opponents.length >= 3) break;
+      }
+
+      // 若AI仍不足，补充高排名玩家
+      if (opponents.length < 3) {
+        const existingIds = new Set(opponents.map(o => o.id));
+        const topOpponents = db.prepare(`
+          SELECT p.id,
+                 COALESCE(u.nickname, u.username, 'AI_' || ap.player_id) as username,
+                 p.level, p.realm as realm_level,
+                 ap.arena_points, ap.rank_id, ap.rank_name, ap.win_count, ap.lose_count
+          FROM player p
+          JOIN arena_player ap ON p.user_id = ap.player_id
+          LEFT JOIN Users u ON u.id = ap.player_id
+          WHERE ap.player_id != ?
+          ORDER BY ap.arena_points DESC
+          LIMIT ?
+        `).all(userId, 3 - opponents.length);
+
+        for (const top of topOpponents) {
+          if (!existingIds.has(top.id)) {
+            opponents.push(top);
+            existingIds.add(top.id);
+          }
+          if (opponents.length >= 3) break;
+        }
       }
     }
 

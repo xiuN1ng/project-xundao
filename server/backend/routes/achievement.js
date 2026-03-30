@@ -261,6 +261,48 @@ router.get('/list', (req, res) => {
     } catch (e) {
       console.warn('[achievement] DB同步失败:', e.message);
     }
+
+    // 实时查询玩家当前realm和combat_power，动态更新成就进度
+    try {
+      const player = db.prepare('SELECT realm, combat_power, level FROM Users WHERE id = ?').get(userId);
+      if (player) {
+        const playerRealm = player.realm || 1;
+        const playerCP = player.combat_power || 0;
+
+        // cultivate类: progress = min(realm, target), completed = (realm >= target)
+        // combat类: progress = min(combat_power, target), completed = (combat_power >= target)
+        achievementTemplates.forEach(ach => {
+          if (ach.category === 'cultivate') {
+            const realProgress = Math.min(playerRealm, ach.target);
+            const isCompleted = playerRealm >= ach.target;
+            if (!userAchievements[userId][ach.id]) {
+              userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
+            }
+            // 取最大值（DB进度 vs 实时计算）
+            if (realProgress > (userAchievements[userId][ach.id].progress || 0)) {
+              userAchievements[userId][ach.id].progress = realProgress;
+            }
+            if (isCompleted) {
+              userAchievements[userId][ach.id].completed = true;
+            }
+          } else if (ach.category === 'combat') {
+            const realProgress = Math.min(playerCP, ach.target);
+            const isCompleted = playerCP >= ach.target;
+            if (!userAchievements[userId][ach.id]) {
+              userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
+            }
+            if (realProgress > (userAchievements[userId][ach.id].progress || 0)) {
+              userAchievements[userId][ach.id].progress = realProgress;
+            }
+            if (isCompleted) {
+              userAchievements[userId][ach.id].completed = true;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[achievement] 实时realm/combat查询失败:', e.message);
+    }
   }
 
   const achievements = achievementTemplates.map(ach => {

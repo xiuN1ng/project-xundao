@@ -333,7 +333,7 @@ router.get('/progress', (req, res) => {
     daily,
     weekly,
     challenge,
-    totalProgress: quests.filter(q => q.completed).length,
+    totalProgress: Math.round(quests.filter(q => q.completed).length / quests.length * 100),
     totalQuests: quests.length
   });
 });
@@ -433,7 +433,7 @@ router.get('/:userId', (req, res) => {
     daily,
     weekly,
     challenge,
-    totalProgress: quests.filter(q => q.completed && q.claimed).length,
+    totalProgress: Math.round(quests.filter(q => q.completed).length / quests.length * 100),
     totalQuests: quests.length
   });
 });
