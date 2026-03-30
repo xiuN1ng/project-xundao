@@ -8736,6 +8736,22 @@ try {
   Logger.warn('⚠ 宗门任务路由加载失败:', e.message);
 }
 
+try {
+  const auctionRoute = require('./backend/routes/auction');
+  app.use('/api/auction', auctionRoute);
+  Logger.info('✓ 拍卖行路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 拍卖路由加载失败:', e.message);
+}
+
+try {
+  const paradiseRoute = require('./backend/routes/paradise');
+  app.use('/api/paradise', paradiseRoute);
+  Logger.info('✓ 福地路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 福地路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
