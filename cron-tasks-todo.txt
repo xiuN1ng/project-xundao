@@ -4515,10 +4515,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 关联文件: server/backend/routes/cultivation.js, server/backend/routes/dailyQuest.js
 - 提案: /docs/PROPOSALS/2026-03-31-late-night.md | 截止: 2026-04-01
 
-## [P1-116-1] 创建器灵后端路由 server/backend/routes/spirit_artifact.js
+## [P1-116-1] 创建器灵后端路由 server/backend/routes/spirit_artifact.js  # 完成 | 2026-03-31 8f602d48
 - GET /api/spirit-artifact/list, POST /api/spirit-artifact/equip, POST /api/spirit-artifact/upgrade, GET /api/spirit-artifact/shop
 - 创建 SQLite 表: spirit_artifacts
 - 关联文件: server/backend/routes/spirit_artifact.js | 截止: 2026-04-03
+- 修复: spirit_artifact_storage.js getUnlockedArtifacts 查询Users表替代不存在的player表; 修复spirit_artifact_api.js RARITY_CONFIG加载缺失问题
 
 ## [P2-116-1-B] 自动修炼灵石保护 + 效率递减机制
 - 灵石保留阈值：低于阈值自动停止；每日修炼>50次灵气-10%，>100次-30%
