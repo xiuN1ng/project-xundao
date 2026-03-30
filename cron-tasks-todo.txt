@@ -4498,7 +4498,17 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - server.js 注册 /api/seven-day 路由，七日任务配置(7天×3任务)+DB持久化
 - 验证: curl /api/seven-day/?player_id=1 → current_day=1 ✓; POST /trigger → progress=1 ✓
 
-## [P1-115-3] 创建 backend/routes/season_pass.js — 2026-04-05
+## [P1-115-3] 创建 backend/routes/season_pass.js — 完成 | 2026-03-31 05:45 | fd68fded
+  - 文件: server/backend/routes/season_pass.js (16598字节，完整战令系统)
+  - GET /api/season-pass/status: 获取赛季/等级/经验/奖励列表/领取状态
+  - POST /api/season-pass/purchase: 300钻石购买战令，扣钻石+更新购买状态
+  - POST /api/season-pass/claim/:level: 领取指定等级奖励，支持免费+专属双档
+  - POST /api/season-pass/add-exp: 增加经验，自动计算等级提升
+  - SQLite表: season_pass + season_pass_claims + season_pass_seasons
+  - server/backend/server.js 注册 /api/season-pass 路由
+  - server/server.js 同时注册（主服务器）
+  - 验证: curl /api/season-pass/status?player_id=1 → {"success":true,"player":{"level":1}} ✅
+  - 截止: 2026-04-05
 - GET /api/season-pass/status — 获取赛季ID/等级/经验（服务端控制）
 - POST /api/season-pass/claim/:level — 领取奖励
 - POST /api/season-pass/purchase — 战令购买接口
@@ -4589,3 +4599,47 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 单笔成交≥10000灵石 → io.emit('auction:broadcast', {...}) 全服广播
 - 同一买家1分钟内只广播1次防刷屏
 - 关联文件: server/backend/routes/auction.js
+
+## [P0-119-1-B] 世界BOSS分级系统 ← 2026-03-31-morning
+- 在 worldboss.js 中添加难度选择逻辑
+- 添加4个难度BOSS: 幼崽(Lv.1-20)/本体(Lv.21-40)/觉醒(Lv.41-60)/完全体(Lv.61+)
+- BOSS属性根据玩家等级段动态选择
+- 鼓舞机制改为"降低BOSS防御"而非"增加伤害"
+- 参与伤害即获得部分奖励（按伤害比例）
+- 关联文件: server/backend/routes/worldboss.js, server/game/worldboss_system.js
+- 截止: 2026-04-02
+
+## [P1-119-1-B] 成就系统实时状态回填 ← 2026-03-31-morning
+- achievements.js /list 路由中，对每条成就实时查询玩家当前realm/combatPower
+- realm类: progress = min(player.realm, target)，completed = (player.realm >= target)
+- combat类: progress = min(player.combat_power, target)
+- 新玩家首次触发成就时，一次性补录所有已满足条件的历史成就
+- 关联文件: server/backend/routes/achievements.js
+- 截止: 2026-04-03
+
+## [P1-119-2-B] 竞技场对手池补充逻辑 ← 2026-03-31-morning
+- arena.js opponents路由: 当候选对手<3时，无条件补充AI对手
+- AI对手战力分布: 1个弱(-30%)、1个接近(±10%)、1个强(+30%)
+- 添加 isRecommend 标记战力最接近玩家的对手
+- 关联文件: server/backend/routes/arena.js
+- 截止: 2026-04-03
+
+## [P1-119-3-B] 每日任务totalProgress修复 ← 2026-03-31-morning
+- dailyQuest.js /list 路由: totalProgress = round(completedCount / totalQuests * 100)
+- 验证: curl /api/dailyQuest/list?player_id=1 中 totalProgress > 0
+- 关联文件: server/backend/routes/dailyQuest.js
+- 截止: 2026-04-02
+
+## [P2-119-2-B1] 封魔渊后端MVP ← 2026-03-31-morning
+- 创建 server/backend/routes/sealed_realm.js
+- 复用 dungeon.js 挑战逻辑
+- 3种难度副本: 初级(Lv.20+)/中级(Lv.40+)/高级(Lv.60+)
+- 关联文件: server/backend/routes/sealed_realm.js
+- 截止: 2026-04-10
+
+## [P2-119-2-B2] 天梯赛季后端 ← 2026-03-31-morning
+- 在 arena.js 中添加赛季重置逻辑（每周一0点）
+- 保留段位(rank_id)，重置积分(arena_points)
+- 赛季结算时按排名发放奖励
+- 关联文件: server/backend/routes/arena.js
+- 截止: 2026-04-12
