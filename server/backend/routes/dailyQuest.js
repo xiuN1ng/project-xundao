@@ -173,33 +173,36 @@ function saveQuestToDB(userId, questId, progress, completed, claimed) {
   }
 }
 
-// 每日任务配置（奖励提升3-5倍）
+// 每日任务配置（奖励×10）
+// 全部完成额外奖励：每日宝箱(神圣精华×1 + 灵石×10000)
+const COMPLETE_ALL_BONUS = { lingshi: 10000, item: { id: 'mystic_chest', name: '神秘宝箱', count: 1 } };
+
 const questTemplates = [
   // 修炼类（target改为次数，delta=1对应1次修炼）
-  { id: 1, type: 'cultivate', name: '修炼时长', desc: '完成1次修炼', target: 1, unit: '次', reward: { lingshi: 500, exp: 200 }, difficulty: 1 },
-  { id: 2, type: 'cultivate', name: '专注修炼', desc: '完成3次修炼', target: 3, unit: '次', reward: { lingshi: 1500, exp: 600 }, difficulty: 2 },
-  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '完成6次修炼', target: 6, unit: '次', reward: { lingshi: 3000, exp: 1200 }, difficulty: 3 },
+  { id: 1, type: 'cultivate', name: '修炼时长', desc: '完成1次修炼', target: 1, unit: '次', reward: { lingshi: 5000, exp: 2000 }, difficulty: 1 },
+  { id: 2, type: 'cultivate', name: '专注修炼', desc: '完成3次修炼', target: 3, unit: '次', reward: { lingshi: 15000, exp: 6000 }, difficulty: 2 },
+  { id: 3, type: 'cultivate', name: '刻苦修炼', desc: '完成6次修炼', target: 6, unit: '次', reward: { lingshi: 30000, exp: 12000 }, difficulty: 3 },
 
   // 战斗类
-  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 200, exp: 100 }, difficulty: 1 },
-  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 2000, exp: 800 }, difficulty: 2 },
-  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 6000, exp: 2400 }, difficulty: 3 },
+  { id: 4, type: 'battle', name: '初战告捷', desc: '完成1次战斗', target: 1, unit: '次', reward: { lingshi: 2000, exp: 1000 }, difficulty: 1 },
+  { id: 5, type: 'battle', name: '战斗达人', desc: '完成10次战斗', target: 10, unit: '次', reward: { lingshi: 20000, exp: 8000 }, difficulty: 2 },
+  { id: 6, type: 'battle', name: '战斗大师', desc: '完成30次战斗', target: 30, unit: '次', reward: { lingshi: 60000, exp: 24000 }, difficulty: 3 },
 
   // 副本类
-  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 500, exp: 300 }, difficulty: 1 },
-  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 2500, exp: 1500 }, difficulty: 2 },
-  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 5000, exp: 3000 }, difficulty: 3 },
+  { id: 7, type: 'chapter', name: '初试身手', desc: '通关第1章', target: 1, unit: '章', reward: { lingshi: 5000, exp: 3000 }, difficulty: 1 },
+  { id: 8, type: 'chapter', name: '小试牛刀', desc: '通关第5章', target: 5, unit: '章', reward: { lingshi: 25000, exp: 15000 }, difficulty: 2 },
+  { id: 9, type: 'chapter', name: '章节通关', desc: '通关第10章', target: 10, unit: '章', reward: { lingshi: 50000, exp: 30000 }, difficulty: 3 },
 
   // 消费类
-  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 30 }, difficulty: 1 },
-  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 150 }, difficulty: 2 },
+  { id: 10, type: 'shop', name: '消费达人', desc: '消费100灵石', target: 100, unit: '灵石', reward: { diamonds: 300 }, difficulty: 1 },
+  { id: 11, type: 'shop', name: '购物狂人', desc: '消费500灵石', target: 500, unit: '灵石', reward: { diamonds: 1500 }, difficulty: 2 },
 
   // 社交类
-  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 200 }, difficulty: 1 },
+  { id: 12, type: 'friend', name: '结识好友', desc: '添加1个好友', target: 1, unit: '人', reward: { lingshi: 2000 }, difficulty: 1 },
 
   // 装备类
-  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 300, exp: 150 }, difficulty: 1 },
-  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 1500, exp: 750 }, difficulty: 2 }
+  { id: 13, type: 'equipment', name: '装备强化', desc: '强化装备1次', target: 1, unit: '次', reward: { lingshi: 3000, exp: 1500 }, difficulty: 1 },
+  { id: 14, type: 'equipment', name: '装备进阶', desc: '强化装备5次', target: 5, unit: '次', reward: { lingshi: 15000, exp: 7500 }, difficulty: 2 }
 ];
 
 // 用户任务进度（内存）- 已移至文件顶部避免 TDZ
@@ -494,10 +497,38 @@ router.post('/claim', (req, res) => {
   userQuest.claimed = true;
   saveQuestToDB(userId, questId, userQuest.progress, userQuest.completed, userQuest.claimed);
 
+  // 检查是否全部任务已完成并领取，发放全完成奖励
+  const allQuests = questTemplates;
+  const allDone = allQuests.every(q => {
+    const qd = data.quests[q.id];
+    return qd && qd.completed && qd.claimed;
+  });
+
+  let bonusMsg = '';
+  if (allDone) {
+    // 发放全完成奖励：灵石+稀有道具
+    const bonusLingshi = COMPLETE_ALL_BONUS.lingshi;
+    const bonusItem = COMPLETE_ALL_BONUS.item;
+    const db = req.db || globalDb;
+    try {
+      // 更新灵石
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(bonusLingshi, userId);
+      // 写入背包
+      db.prepare(`INSERT INTO player_items (user_id, item_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        userId, bonusItem.id, bonusItem.name, 'misc', 'mystic_chest', bonusItem.count, 'daily_quest_complete_all'
+      );
+      bonusMsg = ` + 全部完成奖励：${bonusLingshi}灵石、${bonusItem.name}×${bonusItem.count}！`;
+    } catch (e) {
+      console.warn('[dailyQuest] 全完成奖励发放失败:', e.message);
+      bonusMsg = '（全部完成奖励发放失败）';
+    }
+  }
+
   res.json({
     success: true,
     reward: quest.reward,
-    message: `获得${quest.reward.lingshi || 0}灵石, ${quest.reward.exp || 0}经验`
+    completeAllBonus: allDone ? COMPLETE_ALL_BONUS : null,
+    message: `获得${quest.reward.lingshi || 0}灵石, ${quest.reward.exp || 0}经验${bonusMsg}`
   });
 });
 
