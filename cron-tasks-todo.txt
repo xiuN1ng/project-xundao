@@ -4065,7 +4065,12 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 === 2026-03-30 任务 ===
 [B-01] 修复灵兽捕捉 SQL 错误：player_beasts 表字段名 template_id vs beast_id 不匹配，capture handler 写入字段与表结构不一致。统一为 template_id INTEGER。# 完成 | 2026-03-30 13:27 | f5bb3463
-[B-02] 实现月卡 API：在 welfare_api.js 中注册 GET /monthly-card/status、POST /monthly-card/buy、POST /monthly-card/claim 路由，对接 welfare_storage.js 中已有的函数。
+[B-02] 实现月卡 API：在 welfare_api.js 中注册 GET /monthly-card/status、POST /monthly-card/buy、POST /monthly-card/claim 路由，对接 welfare_storage.js 中已有的函数。  # 完成 | 2026-03-30 13:52 | 6ff5dc93
+  - 新建 server/backend/routes/membership.js (/api/membership/status + /purchase + /claim)
+  - 对接 welfareStorage.getMonthlyCardStatus/buyMonthlyCard/claimMonthlyCardReward
+  - backend/server.js 注册 app.use('/api/membership', membershipApi)
+  - 前端 MonthCard.vue 调用 /api/membership/* 即可正常对接
+  - 验证: GET /api/membership/status?player_id=1 ✅, POST /api/membership/claim ✅, POST /api/membership/purchase ✅
 [B-03] 修复每日登录礼状态矛盾：welfare/daily 的 canClaim 与 welfare/sign-in 的 signedToday 逻辑不一致，统一用日期字符串判断今日是否已领取。# 完成 | 2026-03-30 12:46 | 996d4a97
 [B-04] 章节星星持久化：chapter.js 当前 stars 只存内存变量，需要写入 chapter_progress 表（加 stars 列），同时通关时正确更新。# 完成 | 2026-03-30 70b14a97
   - 新建 chapter_progress 表 (user_id, chapter_id, stars, total_kills, first_clear_at, updated_at)
