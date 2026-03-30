@@ -4080,7 +4080,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-05] 添加 /api/beast/summon 路由：在 beast_api.js 添加 router.post('/summon')，复用已有的保底和消耗逻辑。  # 完成 | 2026-03-30 11:52 | 48e3d776
 [B-06] 填充真实排行榜数据：rank/combat 当前全是假玩家，改用 Users 表真实数据，增加分服/全服排行。
 [B-07] 修复竞技场对手池：注册时自动加入 arena_players，填充 NPC 对手池（不同境界/战力 AI）。
-[B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。
+[B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。  # 完成 | 2026-03-30 18:20 | 8e51a83d
 [B-09] 添加 /api/shop/items alias：在 server.js 为 /api/shop/items 添加路由 alias 映射到 /api/shop/list。# 完成 | 2026-03-30 78564302
 [B-10] 每日任务奖励 ×10：灵石奖励翻 10 倍，增加道具奖励选项，全部完成额外奖励稀有道具。
 
