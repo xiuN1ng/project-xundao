@@ -4257,10 +4257,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - 截止: 2026-04-01
 
 ## P1 系统完善
-[B-P1-110-1] rank.js 过滤 AI 假数据
-  - /combat 端点: WHERE id > 0 排除 AI 假账号
-  - 混入 3-5 个高战力 AI 填充空白名次
-  - 添加当前排名: SELECT COUNT(*) + 1 FROM Users WHERE combat_power > ?
+[B-P1-110-1] rank.js 过滤 AI 假数据  # 完成 | 2026-03-30 5df5bc48
+  - /combat 端点: WHERE id > 0 排除 AI 假账号 ✅
+  - 混入 3-5 个高战力 AI 填充空白名次 ✅ (limit<5时自动补足天机阁主/青云剑仙等AI)
+  - 添加当前排名: GET /combat?player_id=X 返回 {list, myRank: {myRank, combatPower}} ✅
   - 文件: server/backend/routes/rank.js
   - 截止: 2026-04-02
 
