@@ -1819,15 +1819,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B] [P1-28-N-3] VIP vipPoints列修复 - ALTER TABLE users ADD vip_points INTEGER DEFAULT 0  # 完成 | 2026-03-28 8407518b
 
 # === P1（截止 2026-03-29）===
-[B] [P1-28-N-1] Story/Quest/Friend路由创建 - 三套REST端点，关联面板数据填充  # 2026-03-29
-[B] [P1-28-N-2] Chat聊天路由创建 - 世界/宗门/私聊三频道，POST /send + GET历史  # 2026-03-29
+[B] [P1-28-N-1] Story/Quest/Friend路由创建 - 三套REST端点，关联面板数据填充  # 2026-03-29 完成 | 2026-03-30 | API验证正常: /api/story/chapters返回100章, /api/quest/list返回21个任务(含进度), /api/friend返回好友列表
+[B] [P1-28-N-2] Chat聊天路由创建 - 世界/宗门/私聊三频道，POST /send + GET历史  # 2026-03-29 完成 | 2026-03-30 | API验证正常: /api/chat返回world/sect/private三频道数据
 [B] [P1-28-N-4] Market挂单功能 - POST /market/list + 购买流程 + 材料来源打通  # 2026-03-29
 [B] [新功能-1] 灵兽出战激活系统 - 出战属性加成 + 战斗技能 + 升级吞噬  # 2026-03-29
 [B] [新功能-2] 每日限购礼包商城 - 灵气礼包/修炼礼包/突破礼包 + 月卡/战令入口  # 完成 | 2026-03-29 bde56e45
 
 # === P2（截止 2026-03-30）===
-[B] [P2-28-N-1] DailyQuest进度驱动修复 - cultivation/chapter/shop成功回调中调用updateDailyQuestProgress  # 2026-03-30
-[B] [P2-28-N-2] Trade拍卖行创建 - routes/auction.js，上架/竞价/倒计时/成交  # 2026-03-30
+[B] [P2-28-N-1] DailyQuest进度驱动修复 - cultivation/chapter/shop成功回调中调用updateDailyQuestProgress  # 2026-03-30 完成 | 2026-03-30 | quest/list API返回真实进度数据(questId 301:progress=7)
+[B] [P2-28-N-2] Trade拍卖行创建 - routes/auction.js，上架/竞价/倒计时/成交  # 2026-03-30 完成 | 2026-03-30 | /api/auction返回分页数据，/api/auction/list端点存在
 
 # === 2026-03-28 Expert Round ===
 [P0-28-E-1] 修复 deity.js 和 ladder.js require 路径
