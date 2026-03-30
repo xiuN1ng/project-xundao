@@ -234,7 +234,63 @@ const achievementTemplates = [
   { id: 73, category: 'online', name: '修仙达人', desc: '累计登录100天', target: 100, reward: { diamonds: 1000 }, icon: '📅' }
 ];
 
-// 获取用户成就列表
+// GET /api/achievement/list?player_id=X - 正确的成就列表接口（解决 /list 被 /:userId 路由错误捕获的问题）
+router.get('/list', (req, res) => {
+  const userId = parseInt(req.query.player_id || req.query.userId);
+  if (!userId || isNaN(userId)) {
+    return res.json({ achievements: [], categories: {}, stats: { total: 0, completed: 0, claimed: 0 } });
+  }
+
+  // 确保 in-memory 数据与 DB 同步
+  if (!userAchievements[userId]) {
+    userAchievements[userId] = {};
+  }
+  if (db) {
+    try {
+      const rows = db.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
+      rows.forEach(row => {
+        const achId = Number(row.achievement_id);
+        if (!userAchievements[userId][achId] || userAchievements[userId][achId].progress === 0) {
+          userAchievements[userId][achId] = {
+            progress: row.progress,
+            completed: !!row.completed,
+            claimed: !!row.claimed
+          };
+        }
+      });
+    } catch (e) {
+      console.warn('[achievement] DB同步失败:', e.message);
+    }
+  }
+
+  const achievements = achievementTemplates.map(ach => {
+    const userAch = userAchievements[userId][ach.id];
+    return {
+      ...ach,
+      progress: userAch?.progress || 0,
+      completed: userAch?.completed || false,
+      claimed: userAch?.claimed || false
+    };
+  });
+
+  const categories = {};
+  achievements.forEach(ach => {
+    if (!categories[ach.category]) categories[ach.category] = [];
+    categories[ach.category].push(ach);
+  });
+
+  res.json({
+    achievements,
+    categories,
+    stats: {
+      total: achievements.length,
+      completed: achievements.filter(a => a.completed).length,
+      claimed: achievements.filter(a => a.claimed).length
+    }
+  });
+});
+
+// 获取用户成就列表（/:userId 路由）
 router.get('/:userId', (req, res) => {
   const userId = parseInt(req.params.userId);
   

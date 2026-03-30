@@ -5279,47 +5279,47 @@ app.post('/api/tutorial/claim', (req, res) => {
 // ============ 成就系统 ============
 
 // 成就配置
+// ACHIEVEMENTS: 完整的31个成就定义（numeric ID 与 achievement_progress 表对齐）
 const ACHIEVEMENTS = {
-  login_30: {
-    id: 'login_30',
-    name: '修仙达人',
-    description: '累计登录30天',
-    target: 30,
-    type: 'login_days',
-    reward: { spirit_stones: 100000, title: '修仙达人' }
-  },
-  realm_5: {
-    id: 'realm_5',
-    name: '元婴真君',
-    description: '突破到元婴境界（境界等级5）',
-    target: 5,
-    type: 'realm_level',
-    reward: { spirit_stones: 500000, title: '元婴真君' }
-  },
-  spirit_1m: {
-    id: 'spirit_1m',
-    name: '灵气之主',
-    description: '累计获得1亿灵气',
-    target: 100000000,
-    type: 'total_spirit',
-    reward: { spirit_stones: 1000000, title: '灵气之主' }
-  },
-  artifact_10: {
-    id: 'artifact_10',
-    name: '法宝收藏家',
-    description: '拥有10件不同法宝',
-    target: 10,
-    type: 'artifact_count',
-    reward: { spirit_stones: 300000, title: '法宝收藏家' }
-  },
-  gongfa_5: {
-    id: 'gongfa_5',
-    name: '功法大师',
-    description: '学习5本功法',
-    target: 5,
-    type: 'gongfa_count',
-    reward: { spirit_stones: 200000, title: '功法大师' }
-  }
+  // 境界修炼 (IDs 1-6)
+  1:  { id: 1,  name: '初入修仙',    desc: '达到练气期',     target: 2,  reward: { diamonds: 10 },   icon: '🧘', category: 'cultivate' },
+  2:  { id: 2,  name: '筑基成功',    desc: '达到筑基期',     target: 3,  reward: { diamonds: 50 },   icon: '🧘', category: 'cultivate' },
+  3:  { id: 3,  name: '金丹大道',    desc: '达到金丹期',     target: 4,  reward: { diamonds: 100 },  icon: '🧘', category: 'cultivate' },
+  4:  { id: 4,  name: '元婴期',      desc: '达到元婴期',     target: 5,  reward: { diamonds: 200 },  icon: '🧘', category: 'cultivate' },
+  5:  { id: 5,  name: '化神期',      desc: '达到化神期',     target: 6,  reward: { diamonds: 500 },  icon: '🧘', category: 'cultivate' },
+  6:  { id: 6,  name: '渡劫飞升',    desc: '达到渡劫期',     target: 7,  reward: { diamonds: 1000 }, icon: '🧘', category: 'cultivate' },
+  // 战力战斗 (IDs 10-13)
+  10: { id: 10, name: '初战告捷',    desc: '战力达到1000',   target: 1000,   reward: { lingshi: 100 },  icon: '⚔️', category: 'combat' },
+  11: { id: 11, name: '小有名气',    desc: '战力达到5000',   target: 5000,   reward: { lingshi: 500 },  icon: '⚔️', category: 'combat' },
+  12: { id: 12, name: '一方强者',    desc: '战力达到20000',  target: 20000,  reward: { lingshi: 2000 }, icon: '⚔️', category: 'combat' },
+  13: { id: 13, name: '威震天下',    desc: '战力达到100000', target: 100000, reward: { lingshi: 10000 }, icon: '⚔️', category: 'combat' },
+  // 装备强化 (IDs 20-22)
+  20: { id: 20, name: '初具装备',    desc: '强化装备到+5',   target: 5,   reward: { diamonds: 20 },  icon: '🗡️', category: 'equipment' },
+  21: { id: 21, name: '装备小成',    desc: '强化装备到+10',  target: 10,  reward: { diamonds: 50 },  icon: '🗡️', category: 'equipment' },
+  22: { id: 22, name: '装备大成',    desc: '强化装备到+15',  target: 15,  reward: { diamonds: 100 }, icon: '🗡️', category: 'equipment' },
+  // 灵兽 (IDs 30-32)
+  30: { id: 30, name: '捕获灵兽',    desc: '拥有1只灵兽',   target: 1,   reward: { diamonds: 10 },  icon: '🦊', category: 'beast' },
+  31: { id: 31, name: '灵兽伙伴',    desc: '拥有5只灵兽',   target: 5,   reward: { diamonds: 50 },  icon: '🦊', category: 'beast' },
+  32: { id: 32, name: '神兽环绕',    desc: '拥有神兽',      target: 1,   reward: { diamonds: 100 }, icon: '🦊', category: 'beast' },
+  // 章节通关 (IDs 40-44)
+  40: { id: 40, name: '初窥门径',    desc: '通关第5章',     target: 5,   reward: { lingshi: 100 },  icon: '📖', category: 'chapter' },
+  41: { id: 41, name: '小有所成',    desc: '通关第10章',    target: 10,  reward: { lingshi: 500 },  icon: '📖', category: 'chapter' },
+  42: { id: 42, name: '登堂入室',    desc: '通关第30章',    target: 30,  reward: { lingshi: 2000 }, icon: '📖', category: 'chapter' },
+  43: { id: 43, name: '登峰造极',    desc: '通关第50章',    target: 50,  reward: { lingshi: 5000 }, icon: '📖', category: 'chapter' },
+  44: { id: 44, name: '证道成仙',    desc: '通关第100章',   target: 100, reward: { diamonds: 1000 }, icon: '📖', category: 'chapter' },
+  // 社交 (IDs 50-52)
+  50: { id: 50, name: '结交朋友',    desc: '拥有5个好友',   target: 5,   reward: { lingshi: 50 },  icon: '👥', category: 'social' },
+  51: { id: 51, name: '人脉广泛',    desc: '拥有20个好友',  target: 20,  reward: { lingshi: 200 }, icon: '👥', category: 'social' },
+  52: { id: 52, name: '加入仙盟',    desc: '加入仙盟',      target: 1,   reward: { diamonds: 20 }, icon: '🏛️', category: 'social' },
+  // 充值 (IDs 60-62)
+  60: { id: 60, name: '初次充值',    desc: '首次充值任意金额', target: 1,  reward: { diamonds: 10 }, icon: '💎', category: 'spend' },
+  61: { id: 61, name: '累计充值',    desc: '累计充值100元',  target: 100, reward: { diamonds: 100 }, icon: '💎', category: 'spend' },
+  62: { id: 62, name: '充值大户',    desc: '累计充值1000元', target: 1000, reward: { diamonds: 1000 }, icon: '💎', category: 'spend' },
+  // 在线 (IDs 70-73)
+  70: { id: 70, name: '每日登录',    desc: '累计登录1天',   target: 1,   reward: { lingshi: 10 },  icon: '📅', category: 'online' },
+  71: { id: 71, name: '持续修炼',    desc: '累计登录7天',   target: 7,   reward: { diamonds: 50 },  icon: '📅', category: 'online' },
+  72: { id: 72, name: '持之以恒',    desc: '累计登录30天',  target: 30,  reward: { diamonds: 200 }, icon: '📅', category: 'online' },
+  73: { id: 73, name: '修仙达人',    desc: '累计登录100天', target: 100, reward: { diamonds: 1000 }, icon: '📅', category: 'online' },
 };
 
 // 获取玩家成就进度
@@ -5381,49 +5381,55 @@ app.get('/api/achievement/list', (req, res) => {
   try {
     const { player_id } = req.query;
     if (!player_id) {
-      // 返回空列表而不是错误
-      return res.json({ 
-        success: true, 
-        data: [],
+      return res.json({
+        success: true,
+        data: { achievements: [], total_count: 0, completed_count: 0, claimed_count: 0 },
         message: '请提供 player_id 参数'
       });
     }
 
-    // 确保玩家存在
-    let player = db.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-    let actualPlayerId = player_id;
-    if (!player) {
-      const result = db.prepare('INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)').run(`player_${player_id}`, 10000, 1, 0);
-      player = db.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
+    const userId = parseInt(player_id);
+    if (isNaN(userId)) {
+      return res.status(400).json({ success: false, error: '无效的 player_id' });
     }
 
-    // 更新所有成就进度
-    updateAllAchievements(actualPlayerId);
-
-    // 获取玩家成就状态
-    const achievements = db.prepare('SELECT * FROM player_achievements WHERE player_id = ?').all(actualPlayerId);
-    const achievementMap = {};
-    for (const a of achievements) {
-      achievementMap[a.achievement_id] = a;
+    // 使用与 achievement_trigger_service 相同的数据库路径
+    const achievementDbPath = path.join(__dirname, 'backend', 'data', 'game.db');
+    let achievementDb;
+    let achievementMap = {};
+    try {
+      const Database = require('better-sqlite3');
+      achievementDb = new Database(achievementDbPath);
+      const rows = achievementDb.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
+      for (const row of rows) {
+        achievementMap[Number(row.achievement_id)] = {
+          progress: row.progress,
+          completed: !!row.completed,
+          claimed: !!row.claimed
+        };
+      }
+      achievementDb.close();
+    } catch (e) {
+      // achievement_progress 表可能不存在或 DB 连接失败，返回空映射
     }
 
-    // 构建返回数据
-    const list = Object.values(ACHIEVEMENTS).map(achievement => {
-      const playerAchievement = achievementMap[achievement.id] || { progress: 0, completed: 0, claimed: 0 };
-      const progress = playerAchievement.progress;
-      const target = achievement.target;
+    // 构建返回数据（合并 ACHIEVEMENTS 模板 + DB 进度）
+    const list = Object.values(ACHIEVEMENTS).map(ach => {
+      const playerAch = achievementMap[ach.id] || { progress: 0, completed: false, claimed: false };
+      const progress = playerAch.progress;
+      const target = ach.target;
       const percent = Math.min(100, Math.round((progress / target) * 100));
 
       return {
-        id: achievement.id,
-        name: achievement.name,
-        description: achievement.description,
+        id: ach.id,
+        name: ach.name,
+        description: ach.desc || ach.description || ach.name,
         target: target,
         progress: progress,
         percent: percent,
-        completed: playerAchievement.completed === 1,
-        claimed: playerAchievement.claimed === 1,
-        reward: achievement.reward
+        completed: playerAch.completed,
+        claimed: playerAch.claimed,
+        reward: ach.reward
       };
     });
 
