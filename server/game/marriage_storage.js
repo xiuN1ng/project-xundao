@@ -16,6 +16,13 @@ try {
   db = new Database(dbPath);
 }
 
+// 允许外部注入 db 实例（解决循环依赖时 db 未初始化的问题）
+function setDb(newDb) {
+  if (newDb && typeof newDb.exec === 'function') {
+    db = newDb;
+  }
+}
+
 // MySQL pool兼容层
 const pool = {
   execute(sql, params) {
@@ -301,6 +308,7 @@ async function getSpouseId(playerId) {
 }
 
 module.exports = {
+  setDb,
   initMarriageTables,
   createMarriage,
   getMarriage,

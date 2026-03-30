@@ -11,7 +11,7 @@ const { MARRIAGE_CONFIG, MARRIAGE_GIFTS } = require('../../game/marriage_config'
 // 获取玩家数据的辅助函数（从 req 中获取 playerId 和 playerData）
 function getPlayer(req) {
   // 优先从 body/query 获取
-  const playerId = parseInt(req.body.player_id || req.query.player_id || 1);
+  const playerId = parseInt((req.body && req.body.player_id) || req.query.player_id || 1);
   // 尝试从 backend/routes/player 模块获取
   let playerData = null;
   try {
@@ -212,4 +212,11 @@ router.post('/proposal/cancel', async (req, res) => {
   }
 });
 
-module.exports = router;
+// 允许外部注入 db 实例
+function setDb(database) {
+  if (marriageDB && typeof marriageDB.setDb === 'function') {
+    marriageDB.setDb(database);
+  }
+}
+
+module.exports = { router, setDb };

@@ -8659,6 +8659,16 @@ try {
   Logger.warn('⚠ 婚姻路由加载失败:', e.message);
 }
 
+// ==================== 婚姻系统路由注册 ====================
+try {
+  const marriageRoute = require('./backend/routes/marriage');
+  app.use('/api/marriage', marriageRoute.router);
+  if (db && marriageRoute.setDb) marriageRoute.setDb(db);
+  Logger.info('✓ 婚姻系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 婚姻路由加载失败:', e.message);
+}
+
 // ==================== 第二批路由注册 ====================
 // friend/quest/commission/fashion/mount/wing/sect-missions
 try {
