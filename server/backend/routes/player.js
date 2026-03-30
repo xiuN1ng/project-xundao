@@ -32,16 +32,16 @@ const GONGFAS = [
 
 // 灵根类型配置（与 spirit_root.js 保持一致）
 const SPIRIT_ROOTS = {
-  metal:  { id: 'metal',  nameCN: '金灵根', bonus: { attack: 15, critRate: 5, critDamage: 10 } },
-  wood:   { id: 'wood',   nameCN: '木灵根', bonus: { hp: 100, defense: 8, healEffect: 15 } },
-  water:  { id: 'water',  nameCN: '水灵根', bonus: { skillDamage: 12, cdReduction: 8, maxHp: 50 } },
-  fire:   { id: 'fire',   nameCN: '火灵根', bonus: { attack: 12, critRate: 8, burnDamage: 20 } },
-  earth:  { id: 'earth',  nameCN: '土灵根', bonus: { defense: 12, hp: 80, resistance: 10 } },
-  wind:   { id: 'wind',   nameCN: '风灵根', bonus: { speed: 15, dodge: 10, attack: 5 } },
-  thunder:{ id: 'thunder',nameCN: '雷灵根', bonus: { attack: 10, comboRate: 15, stunChance: 5 } },
-  ice:    { id: 'ice',    nameCN: '冰灵根', bonus: { defense: 8, freezeChance: 8, hp: 40 } },
-  dark:   { id: 'dark',   nameCN: '暗灵根', bonus: { attack: 12, lifesteal: 8, critDamage: 15 } },
-  light:  { id: 'light',  nameCN: '光灵根', bonus: { healEffect: 20, shield: 15, defense: 5 } },
+  metal:  { id: 'metal',  nameCN: '金灵根', spiritRate: 1.05, bonus: { attack: 15, critRate: 5, critDamage: 10 } },
+  wood:   { id: 'wood',   nameCN: '木灵根', spiritRate: 1.08, bonus: { hp: 100, defense: 8, healEffect: 15 } },
+  water:  { id: 'water',  nameCN: '水灵根', spiritRate: 1.07, bonus: { skillDamage: 12, cdReduction: 8, maxHp: 50 } },
+  fire:   { id: 'fire',   nameCN: '火灵根', spiritRate: 1.06, bonus: { attack: 12, critRate: 8, burnDamage: 20 } },
+  earth:  { id: 'earth',  nameCN: '土灵根', spiritRate: 1.06, bonus: { defense: 12, hp: 80, resistance: 10 } },
+  wind:   { id: 'wind',   nameCN: '风灵根', spiritRate: 1.07, bonus: { speed: 15, dodge: 10, attack: 5 } },
+  thunder:{ id: 'thunder',nameCN: '雷灵根', spiritRate: 1.05, bonus: { attack: 10, comboRate: 15, stunChance: 5 } },
+  ice:    { id: 'ice',    nameCN: '冰灵根', spiritRate: 1.05, bonus: { defense: 8, freezeChance: 8, hp: 40 } },
+  dark:   { id: 'dark',   nameCN: '暗灵根', spiritRate: 1.06, bonus: { attack: 12, lifesteal: 8, critDamage: 15 } },
+  light:  { id: 'light',  nameCN: '光灵根', spiritRate: 1.08, bonus: { healEffect: 20, shield: 15, defense: 5 } },
 };
 
 /**
@@ -60,6 +60,7 @@ function getSpiritRootBonus(db, userId) {
     return {
       spiritRootId: root.id,
       spiritRootName: root.nameCN,
+      spiritRate: root.spiritRate || 1.0,
       atk: b.attack || 0,
       def: b.defense || 0,
       hp: b.hp || 0,
@@ -430,3 +431,4 @@ router.get('/bag', (req, res) => {
 module.exports = router;
 module.exports._player = player;
 module.exports.setDb = setDb;
+module.exports.getSpiritRootBonus = getSpiritRootBonus;

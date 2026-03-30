@@ -32,6 +32,16 @@ try {
   eventBus = null;
 }
 
+// 灵根加成
+let getSpiritRootBonus;
+try {
+  const playerModule = require('./player');
+  getSpiritRootBonus = playerModule.getSpiritRootBonus;
+} catch (e) {
+  Logger.info('getSpiritRootBonus 加载失败:', e.message);
+  getSpiritRootBonus = () => ({ spiritRate: 1.0 });
+}
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
@@ -227,7 +237,9 @@ router.get('/', (req, res) => {
     const realmLevel = config.realm_level || 1;
     const storedPower = parseInt(cult.cultivationPower) || 0;
     const accumulatedPower = parseInt(cult.accumulated_power) || 0;
-    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const rootBonus = getSpiritRootBonus(db, userId);
+    const spiritRate = rootBonus.spiritRate || 1.0;
+    const cultivationPower = Math.floor((storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50) * spiritRate);
 
     res.json({
       success: true,
@@ -240,7 +252,8 @@ router.get('/', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower
+        cultivationPower,
+        spiritRate
       },
       player: {
         level: player.level,
@@ -273,7 +286,9 @@ router.get('/status', (req, res) => {
     const realmLevel = config.realm_level || 1;
     const storedPower = parseInt(cult.cultivationPower) || 0;
     const accumulatedPower = parseInt(cult.accumulated_power) || 0;
-    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const rootBonus = getSpiritRootBonus(db, userId);
+    const spiritRate = rootBonus.spiritRate || 1.0;
+    const cultivationPower = Math.floor((storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50) * spiritRate);
     const nextRealm = cult.realm + 1;
     const canBreakthrough = realmConfig[nextRealm] && parseInt(cult.value) >= config.cost;
 
@@ -289,6 +304,7 @@ router.get('/status', (req, res) => {
         progress,
         cost: config.cost,
         cultivationPower,
+        spiritRate,
         accumulatedPower,
         canBreakthrough,
         nextRealm: realmConfig[nextRealm] ? nextRealm : null
@@ -324,7 +340,9 @@ router.get('/info', (req, res) => {
     const realmLevel = config.realm_level || 1;
     const storedPower = parseInt(cult.cultivationPower) || 0;
     const accumulatedPower = parseInt(cult.accumulated_power) || 0;
-    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const rootBonus = getSpiritRootBonus(db, userId);
+    const spiritRate = rootBonus.spiritRate || 1.0;
+    const cultivationPower = Math.floor((storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50) * spiritRate);
 
     res.json({
       success: true,
@@ -337,7 +355,8 @@ router.get('/info', (req, res) => {
         realmLevel: config.realm_level,
         progress,
         cost: config.cost,
-        cultivationPower
+        cultivationPower,
+        spiritRate
       },
       player: {
         level: player.level,
@@ -375,9 +394,12 @@ router.post('/start', (req, res) => {
 
     // 先计算 currentCultivationPower，再计算动态灵石消耗
     const realmLevel = config.realm_level || 1;
+    // 灵根加成
+    const rootBonus = getSpiritRootBonus(db, userId);
+    const spiritRate = rootBonus.spiritRate || 1.0;
     // 优先使用DB中存储的cultivationPower（突破后保留值），再加上当前修炼值的贡献
     const storedPower = parseInt(cult.cultivationPower) || 0;
-    const currentCultivationPower = storedPower + Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const currentCultivationPower = Math.floor((storedPower + parseInt(cult.value) * 0.1 + realmLevel * 50) * spiritRate);
     const LINGSHI_COST = getCultivationCost(currentCultivationPower);
 
     // 灵石不足检查
@@ -413,8 +435,8 @@ router.post('/start', (req, res) => {
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
     // 同步修炼值 + cultivationPower（永久写入DB，解决永久=0问题）
-    // cultivationPower = 保留的修炼效率(retainedPower) + 历史总修炼量(accumulated_power×0.001) + 境界基础
-    const finalCultivationPower = Math.floor(storedPower + newAccumulatedPower * 0.001 + realmLevel * 50);
+    // cultivationPower = (保留的修炼效率(retainedPower) + 历史总修炼量(accumulated_power×0.001) + 境界基础) × spiritRate
+    const finalCultivationPower = Math.floor((storedPower + newAccumulatedPower * 0.001 + realmLevel * 50) * spiritRate);
 
     // 扣除灵石（写入 Users.lingshi，权威数据源）
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
@@ -455,6 +477,7 @@ router.post('/start', (req, res) => {
       newValue,
       progress: newProgress,
       cultivationPower: finalCultivationPower,
+      spiritRate,
       powerBonus,
       expGain,
       maxed: newValue >= config.cost,
