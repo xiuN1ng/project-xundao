@@ -137,7 +137,9 @@ router.get('/market', (req, res) => {
 // POST /api/trade/list
 router.post('/list', (req, res) => {
   try {
-    const { player_id, item_id, price, category, item_name, item_icon, item_data } = req.body;
+    const { player_id, item_id, price, category, item_name, item_icon, item_data, icon } = req.body;
+    const finalIcon = item_icon || icon || '📦';
+    const finalName = item_name || '物品';
 
     if (!player_id || !item_id || !price) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
@@ -161,8 +163,8 @@ router.post('/list', (req, res) => {
       player_id,
       sellerName,
       item_id,
-      item_name || '物品',
-      item_icon || '📦',
+      finalName,
+      finalIcon,
       item_data ? (typeof item_data === 'string' ? item_data : JSON.stringify(item_data)) : null,
       price,
       category || 'other'
