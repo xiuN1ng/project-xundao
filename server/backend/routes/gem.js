@@ -104,6 +104,92 @@ router.get('/', (req, res) => {
   }
 });
 
+// ─── GET /api/gem/list ────────────────────────────────────────────────────────
+// 玩家宝石列表 (alias for /)
+router.get('/list', (req, res) => {
+  const userId = getUserId(req);
+  const db = getDb();
+  try {
+    const gems = db.prepare('SELECT * FROM player_gems WHERE user_id = ? ORDER BY id').all(userId);
+    const enriched = gems.map(g => ({
+      ...g,
+      currentAttr: calcGemAttr(g.gem_key, g.level),
+    }));
+    res.json({ success: true, gems: enriched });
+  } catch (err) {
+    res.json({ success: true, gems: [] });
+  } finally {
+    db.close();
+  }
+});
+
+// ─── POST /api/gem/equip ─────────────────────────────────────────────────────
+// 装备宝石到装备栏 (alias for /embed)
+router.post('/equip', (req, res) => {
+  // Delegate to embed handler logic
+  const userId = getUserId(req);
+  const { equipmentId, gemKey, quality, slotIndex = 0 } = req.body;
+
+  if (!equipmentId || !gemKey || !GEM_TEMPLATES[gemKey]) {
+    return res.json({ success: false, message: '参数不完整或宝石类型无效' });
+  }
+
+  const tpl = GEM_TEMPLATES[gemKey];
+  const q = quality || tpl.quality;
+  const db = getDb();
+
+  try {
+    const eq = db.prepare('SELECT * FROM Equipment WHERE id = ? AND userId = ?').get(equipmentId, userId);
+    if (!eq) {
+      return res.json({ success: false, message: '装备不存在或不属于你' });
+    }
+
+    const oldGem = db.prepare(
+      'SELECT * FROM equipment_gems WHERE user_id = ? AND equipment_id = ? AND slot_index = ?'
+    ).get(userId, equipmentId, slotIndex);
+
+    if (oldGem) {
+      const invOld = db.prepare(
+        'SELECT * FROM player_gems WHERE user_id = ? AND gem_key = ? AND quality = ?'
+      ).get(userId, oldGem.gem_key, oldGem.quality);
+      if (invOld) {
+        db.prepare('UPDATE player_gems SET count = count + 1 WHERE id = ?').run(invOld.id);
+      } else {
+        db.prepare(
+          'INSERT INTO player_gems (user_id, gem_key, gem_name, quality, attr_type, attr_value, level, count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(userId, oldGem.gem_key, oldGem.gem_name, oldGem.quality, oldGem.attr_type, oldGem.attr_value, 1, 1);
+      }
+      db.prepare('DELETE FROM equipment_gems WHERE id = ?').run(oldGem.id);
+    }
+
+    if (req.body.fromInventory !== false) {
+      const invGem = db.prepare(
+        'SELECT * FROM player_gems WHERE user_id = ? AND gem_key = ? AND quality = ? AND count > 0'
+      ).get(userId, gemKey, q);
+      if (!invGem) {
+        return res.json({ success: false, message: '背包中没有该宝石' });
+      }
+      if (invGem.count <= 1) {
+        db.prepare('DELETE FROM player_gems WHERE id = ?').run(invGem.id);
+      } else {
+        db.prepare('UPDATE player_gems SET count = count - 1 WHERE id = ?').run(invGem.id);
+      }
+    }
+
+    const attrValue = calcGemAttr(gemKey, invGem ? invGem.level : 1);
+    db.prepare(
+      'INSERT INTO equipment_gems (user_id, equipment_id, gem_key, gem_name, quality, attr_type, attr_value, slot_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(userId, equipmentId, gemKey, tpl.name, q, tpl.attrType, attrValue, slotIndex);
+
+    res.json({ success: true, message: '宝石镶嵌成功', gemKey, slotIndex });
+  } catch (err) {
+    console.error('[gem] equip error:', err.message);
+    res.json({ success: false, message: '镶嵌失败: ' + err.message });
+  } finally {
+    db.close();
+  }
+});
+
 // ─── GET /api/gem/templates ───────────────────────────────────────────────────
 // 所有宝石模板
 router.get('/templates', (req, res) => {
