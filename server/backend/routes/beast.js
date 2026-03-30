@@ -33,9 +33,9 @@ function initBeastTables(db) {
       UNIQUE(player_id, template_id)
     );
     CREATE TABLE IF NOT EXISTS beast_pity_counter (
-      user_id INTEGER PRIMARY KEY,
-      count INTEGER DEFAULT 0,
-      last_capture_at TEXT DEFAULT (datetime('now'))
+      player_id INTEGER PRIMARY KEY,
+      consecutive_non_mythical INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS player_beast_skills (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +53,8 @@ const beastTemplates = [
   { id: 2, icon: '🦅', name: '雷鹰', quality: 'uncommon', baseAttack: 120, baseHp: 500 },
   { id: 3, icon: '🐉', name: '青龙', quality: 'rare', baseAttack: 300, baseHp: 1500 },
   { id: 4, icon: '🦄', name: '白虎', quality: 'epic', baseAttack: 600, baseHp: 3000 },
-  { id: 5, icon: '👑', name: '麒麟', quality: 'legendary', baseAttack: 1000, baseHp: 5000 }
+  { id: 5, icon: '👑', name: '麒麟', quality: 'legendary', baseAttack: 1000, baseHp: 5000 },
+  { id: 6, icon: '💥', name: '混沌兽', quality: 'legendary', baseAttack: 1500, baseHp: 8000 }
 ];
 
 const evolveRules = {
@@ -96,17 +97,17 @@ router.get('/my', (req, res) => {
   const userId = extractUserId(req);
   try {
     const beasts = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? ORDER BY level DESC').all(userId);
-    const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId);
+    const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(userId);
     res.json({
       beasts: beasts.map(b => ({
         id: b.id, userId: b.player_id, templateId: b.template_id, name: b.name,
         level: b.level, quality: b.quality, attack: b.attack, hp: b.hp,
         isActive: !!b.is_active, skillId: b.skill_id, intimacy: b.intimacy
       })),
-      pity: pity || { user_id: userId, count: 0 }
+      pity: pity || { player_id: userId, consecutive_non_mythical: 0 }
     });
   } catch(e) {
-    res.json({ beasts: [], pity: { user_id: userId, count: 0 }, error: e.message });
+    res.json({ beasts: [], pity: { player_id: userId, consecutive_non_mythical: 0 }, error: e.message });
   }
 });
 
@@ -147,14 +148,14 @@ router.post('/capture', (req, res) => {
   }
 
   // 保底逻辑: 累计90次未出神话则下次必出
-  const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId) || { count: 0 };
-  const newPityCount = pity.count + 1;
+  const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(userId) || { consecutive_non_mythical: 0 };
+  const newPityCount = pity.consecutive_non_mythical + 1;
   const guaranteedMyth = newPityCount >= 90;
 
   let capturedTemplate;
   if (guaranteedMyth) {
     capturedTemplate = beastTemplates.find(t => t.quality === 'legendary');
-    db.prepare('UPDATE beast_pity_counter SET count = 0, last_capture_at = datetime("now") WHERE user_id = ?').run(userId);
+    db.prepare("UPDATE beast_pity_counter SET consecutive_non_mythical = 0, updated_at = datetime('now') WHERE player_id = ?").run(userId);
   } else {
     // 普通抽取: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%
     const roll = Math.random() * 100;
@@ -172,14 +173,14 @@ router.post('/capture', (req, res) => {
     }
     capturedTemplate = templates[Math.floor(Math.random() * templates.length)] || beastTemplates[0];
 
-    db.prepare('INSERT OR REPLACE INTO beast_pity_counter (user_id, count, last_capture_at) VALUES (?, ?, datetime("now"))').run(userId, newPityCount);
+    db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, datetime('now'))").run(userId, newPityCount);
   }
 
   // 写入DB
   try {
     db.prepare(`INSERT INTO player_beasts (player_id, template_id, name, level, quality, attack, hp, is_active, intimacy)
-      VALUES (?, ?, ?, 1, ?, ?, ?, 0, 0)
-      ON CONFLICT(player_id, template_id) DO UPDATE SET level = level + 0`).run(
+      VALUES (?, ?, ?, 1, ?, ?, ?, 0, 50)
+      ON CONFLICT(player_id, template_id) DO UPDATE SET intimacy = intimacy`).run(
       userId, capturedTemplate.id, capturedTemplate.name, capturedTemplate.quality,
       capturedTemplate.baseAttack, capturedTemplate.baseHp
     );
@@ -221,7 +222,7 @@ router.post('/summon', (req, res) => {
   }
 
   // 获取当前保底进度
-  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId) || { count: 0 };
+  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(userId) || { consecutive_non_mythical: 0 };
   let currentPityCount = pityRow.count;
 
   const results = [];
@@ -263,8 +264,8 @@ router.post('/summon', (req, res) => {
         );
       } else {
         db.prepare(`INSERT INTO player_beasts (player_id, template_id, name, level, quality, attack, hp, is_active, intimacy)
-          VALUES (?, ?, ?, 1, ?, ?, ?, 0, 0)
-          ON CONFLICT(player_id, template_id) DO UPDATE SET level = level + 0`).run(
+          VALUES (?, ?, ?, 1, ?, ?, ?, 0, 50)
+          ON CONFLICT(player_id, template_id) DO UPDATE SET intimacy = intimacy`).run(
           userId, capturedTemplate.id, capturedTemplate.name, capturedTemplate.quality,
           capturedTemplate.baseAttack, capturedTemplate.baseHp
         );
@@ -285,7 +286,7 @@ router.post('/summon', (req, res) => {
   }
 
   // 更新保底计数器
-  db.prepare('INSERT OR REPLACE INTO beast_pity_counter (user_id, count, last_capture_at) VALUES (?, ?, datetime("now"))').run(userId, currentPityCount);
+  db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, datetime('now'))").run(userId, currentPityCount);
 
   res.json({
     success: true,
@@ -306,7 +307,7 @@ router.get('/summon-status', (req, res) => {
   initBeastTables(db);
   const userId = extractUserId(req);
 
-  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId) || { count: 0 };
+  const pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(userId) || { consecutive_non_mythical: 0 };
   const count = pityRow.count || 0;
 
   res.json({
@@ -473,8 +474,8 @@ router.get('/pity', (req, res) => {
   const db = getDb(req);
   initBeastTables(db);
   const userId = extractUserId(req);
-  const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE user_id = ?').get(userId);
-  res.json({ userId, count: pity ? pity.count : 0, nextMythical: pity ? (90 - pity.count) : 90 });
+  const pity = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(userId);
+  res.json({ userId, count: pity ? pity.consecutive_non_mythical : 0, nextMythical: pity ? (90 - pity.consecutive_non_mythical) : 90 });
 });
 
 // GET /api/beast/stats - 获取玩家灵兽统计信息

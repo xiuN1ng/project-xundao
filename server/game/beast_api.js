@@ -221,6 +221,9 @@ function initBeastDatabase(database) {
   }
   console.log('[beast_api] initBeastDatabase: first init db =', newPath, 'caller:', new Error().stack.split('\n')[2]);
   db = database;
+  // 迁移: 添加 template_id 和 intimacy 列（如果不存在）
+  try { db.exec("ALTER TABLE player_beasts ADD COLUMN template_id INTEGER"); } catch(e) {}
+  try { db.exec("ALTER TABLE player_beasts ADD COLUMN intimacy INTEGER DEFAULT 50"); } catch(e) {}
   db.exec(`
     CREATE TABLE IF NOT EXISTS beast_templates (
       id TEXT PRIMARY KEY,
@@ -720,7 +723,7 @@ router.post('/capture', (req, res) => {
     let actualPlayerId = player_id;
     
     if (!player) {
-      const result = db.prepare('INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)').run(`player_${player_id}`, 10000, 1, 0);
+      const result = db.prepare('INSERT INTO player (user_id, spirit_stones, level, realm) VALUES (?, ?, ?, ?)').run(parseInt(player_id), 10000, 1, 1);
       actualPlayerId = result.lastInsertRowid;
       player = db.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
     }
@@ -782,7 +785,7 @@ router.post('/capture', (req, res) => {
     if (!guaranteedPity) {
       // 正常捕捉流程
       const baseRate = beastTemplate.capture_rate || 0.3;
-      const realmBonus = player.realm_level * 0.02;
+      const realmBonus = (player.realm || 1) * 0.02;
       const qualityBonus = BEAST_QUALITY[beastTemplate.quality]?.capture_bonus || 1;
       const finalRate = Math.min(0.8, baseRate * qualityBonus + realmBonus);
       

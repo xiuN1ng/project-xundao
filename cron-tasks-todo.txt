@@ -4062,3 +4062,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-106-2] 注册 talent.js 路由（16665字节完整实现，当前未挂载）  # 完成 | 2026-03-30 确认已注册(api works)
 [B-106-3] 修复 arena daily_reward_claimed 列缺失：ALTER TABLE arena ADD COLUMN daily_reward_claimed INTEGER DEFAULT 0  # 完成 | 2026-03-30 5b08aa71
 [B-106-4] 诊断 abyss 路由 404 谜题：server.js 第3291行已注册，日志显示加载成功，但所有端点返回404  # 完成 | 2026-03-30 /list和/info均正常返回
+
+=== 2026-03-30 任务 ===
+[B-01] 修复灵兽捕捉 SQL 错误：player_beasts 表字段名 template_id vs beast_id 不匹配，capture handler 写入字段与表结构不一致。统一为 template_id INTEGER。
+[B-02] 实现月卡 API：在 welfare_api.js 中注册 GET /monthly-card/status、POST /monthly-card/buy、POST /monthly-card/claim 路由，对接 welfare_storage.js 中已有的函数。
+[B-03] 修复每日登录礼状态矛盾：welfare/daily 的 canClaim 与 welfare/sign-in 的 signedToday 逻辑不一致，统一用日期字符串判断今日是否已领取。
+[B-04] 章节星星持久化：chapter.js 当前 stars 只存内存变量，需要写入 chapter_progress 表（加 stars 列），同时通关时正确更新。
+[B-05] 添加 /api/beast/summon 路由：在 beast_api.js 添加 router.post('/summon')，复用已有的保底和消耗逻辑。
+[B-06] 填充真实排行榜数据：rank/combat 当前全是假玩家，改用 Users 表真实数据，增加分服/全服排行。
+[B-07] 修复竞技场对手池：注册时自动加入 arena_players，填充 NPC 对手池（不同境界/战力 AI）。
+[B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。
+[B-09] 添加 /api/shop/items alias：在 server.js 为 /api/shop/items 添加路由 alias 映射到 /api/shop/list。
+[B-10] 每日任务奖励 ×10：灵石奖励翻 10 倍，增加道具奖励选项，全部完成额外奖励稀有道具。
