@@ -221,9 +221,33 @@ function initBeastDatabase(database) {
   }
   console.log('[beast_api] initBeastDatabase: first init db =', newPath, 'caller:', new Error().stack.split('\n')[2]);
   db = database;
-  // 迁移: 添加 template_id 和 intimacy 列（如果不存在）
+  // 迁移: 添加/修复 template_id 和 intimacy 列
   try { db.exec("ALTER TABLE player_beasts ADD COLUMN template_id INTEGER"); } catch(e) {}
   try { db.exec("ALTER TABLE player_beasts ADD COLUMN intimacy INTEGER DEFAULT 50"); } catch(e) {}
+  // 迁移: 更新已有行的 template_id（从 beast_templates.rarity 映射）
+  try {
+    db.exec(`
+      UPDATE player_beasts
+      SET template_id = (
+        SELECT bt.rarity FROM beast_templates bt
+        WHERE bt.id = player_beasts.beast_id
+      )
+      WHERE template_id IS NULL AND beast_id IS NOT NULL
+    `);
+  } catch(e) { /* 映射可能失败，忽略 */ }
+  // 迁移: 修复 UNIQUE 约束（改为 template_id 以匹配 routes/beast.js）
+  try {
+    // 如果存在旧的 UNIQUE(player_id, beast_id) 约束，重建表
+    const tableInfo = db.prepare("PRAGMA table_info(player_beasts)").all();
+    const hasBeastIdUnique = db.prepare(`
+      SELECT name FROM sqlite_master WHERE type='index'
+      AND tbl_name='player_beasts'
+      AND sql LIKE '%player_id%beast_id%'
+    `).all();
+    if (hasBeastIdUnique.length > 0) {
+      db.exec('DROP INDEX IF EXISTS idx_player_beasts_player_beast');
+    }
+  } catch(e) { /* 忽略 */ }
   db.exec(`
     CREATE TABLE IF NOT EXISTS beast_templates (
       id TEXT PRIMARY KEY,
@@ -244,12 +268,13 @@ function initBeastDatabase(database) {
     )
   `);
 
-  // 玩家灵兽表
+  // 玩家灵兽表（与 routes/beast.js 共用，UNIQUE 约束在 template_id）
   db.exec(`
     CREATE TABLE IF NOT EXISTS player_beasts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id INTEGER NOT NULL,
-      beast_id TEXT NOT NULL,
+      beast_id TEXT,
+      template_id INTEGER,
       level INTEGER DEFAULT 1,
       exp INTEGER DEFAULT 0,
       affection INTEGER DEFAULT 50,
@@ -258,7 +283,13 @@ function initBeastDatabase(database) {
       is_active INTEGER DEFAULT 0,
       obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(player_id, beast_id)
+      name TEXT DEFAULT '',
+      quality TEXT DEFAULT 'common',
+      attack INTEGER DEFAULT 0,
+      hp INTEGER DEFAULT 0,
+      skill_id INTEGER,
+      intimacy INTEGER DEFAULT 50,
+      UNIQUE(player_id, template_id)
     )
   `);
 
@@ -824,9 +855,9 @@ router.post('/capture', (req, res) => {
     const randomMood = moodOptions[Math.floor(Math.random() * moodOptions.length)];
     
     db.prepare(`
-      INSERT INTO player_beasts (player_id, beast_id, level, exp, affection, mood, is_active)
-      VALUES (?, ?, 1, 0, 50, ?, 0)
-    `).run(actualPlayerId, finalBeastTemplate.id, randomMood);
+      INSERT INTO player_beasts (player_id, beast_id, template_id, level, exp, affection, mood, is_active)
+      VALUES (?, ?, ?, 1, 0, 50, ?, 0)
+    `).run(actualPlayerId, finalBeastTemplate.id, finalBeastTemplate.rarity, randomMood);
     
     // 更新捕捉成功记录
     if (!guaranteedPity) {
@@ -939,8 +970,8 @@ router.post('/summon', (req, res) => {
         const hpGrowth = Math.floor(capturedBeast.base_hp * 0.2);
         db.prepare("UPDATE player_beasts SET level = ?, exp = 0, affection = COALESCE(affection, 50) + 2, updated_at = datetime('now') WHERE id = ?").run(newLevel, existing.id);
       } else {
-        db.prepare(`INSERT INTO player_beasts (player_id, beast_id, level, exp, affection, mood, is_active)
-          VALUES (?, ?, 1, 0, 50, 'normal', 0)`).run(player_id, capturedBeast.id);
+        db.prepare(`INSERT INTO player_beasts (player_id, beast_id, template_id, level, exp, affection, mood, is_active)
+          VALUES (?, ?, ?, 1, 0, 50, 'normal', 0)`).run(player_id, capturedBeast.id, capturedBeast.rarity);
       }
 
       results.push({
