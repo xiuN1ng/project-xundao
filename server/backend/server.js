@@ -179,6 +179,7 @@ app.use('/api/heartDemon', require('./routes/heart_demon'));
 app.use('/api/lingdao', require('./routes/lingdao'));
 app.use('/api/welfare', require('../game/welfare_api'));
 app.use('/api/daily-dungeon', require('../game/daily_dungeon'));
+app.use('/api/daily-trial', require('./routes/daily-trial'));
 app.use('/api/gongfa', require('./routes/gongfa'));
 app.use('/api/paradise', require('./routes/paradise'));
 app.use('/api/deity-list', require('./routes/deity'));
