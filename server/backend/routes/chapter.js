@@ -27,6 +27,71 @@ try {
   db = null;
 }
 
+// ========== 章节进度表初始化（stars持久化）==========
+function initChapterProgressTable() {
+  if (!db) return;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chapter_progress (
+        user_id     INTEGER NOT NULL,
+        chapter_id  INTEGER NOT NULL,
+        stars       INTEGER DEFAULT 0,
+        total_kills INTEGER DEFAULT 0,
+        first_clear_at TEXT,
+        updated_at   TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, chapter_id)
+      )
+    `);
+    console.log('[chapter] chapter_progress 表初始化完成');
+  } catch (e) {
+    console.error('[chapter] chapter_progress 表初始化失败:', e.message);
+  }
+}
+initChapterProgressTable();
+
+// 从DB加载章节星星进度（合并到userProgress内存）
+function loadChapterStarsFromDB(userId, useDb) {
+  if (!useDb) return;
+  try {
+    const rows = useDb.prepare(
+      'SELECT chapter_id, stars, total_kills FROM chapter_progress WHERE user_id = ?'
+    ).all(userId);
+    if (rows.length > 0) {
+      userProgress[userId] = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
+      for (const row of rows) {
+        userProgress[userId].stars[row.chapter_id] = row.stars;
+        userProgress[userId].totalKills = Math.max(userProgress[userId].totalKills || 0, row.total_kills);
+        // 重建 currentChapter 为最大已通关章节+1
+        if (row.stars > 0) {
+          const clearedChapter = row.chapter_id;
+          if (clearedChapter >= userProgress[userId].currentChapter && clearedChapter < 100) {
+            userProgress[userId].currentChapter = Math.max(userProgress[userId].currentChapter, clearedChapter + 1);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[chapter] loadChapterStarsFromDB 失败:', e.message);
+  }
+}
+
+// 保存章节星星到DB（UPSERT）
+function saveChapterStarsToDB(userId, chapterId, stars, kills, useDb) {
+  if (!useDb) return;
+  try {
+    useDb.prepare(`
+      INSERT INTO chapter_progress (user_id, chapter_id, stars, total_kills, first_clear_at, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+      ON CONFLICT(user_id, chapter_id) DO UPDATE SET
+        stars = MAX(stars, excluded.stars),
+        total_kills = MAX(total_kills, excluded.total_kills),
+        updated_at = datetime('now')
+    `).run(userId, chapterId, stars, kills);
+  } catch (e) {
+    console.error('[chapter] saveChapterStarsToDB 失败:', e.message);
+  }
+}
+
 // 成就触发服务
 let achievementTrigger;
 try {
@@ -213,6 +278,11 @@ let userProgress = { 1: { currentChapter: 1, totalKills: 0, stars: {} } };
 // 获取章节列表
 router.get('/', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
+  const useDb = req.db || db;
+  // 从DB加载星星进度（仅首次或内存为空时）
+  if (!userProgress[userId] || Object.keys(userProgress[userId].stars || {}).length === 0) {
+    loadChapterStarsFromDB(userId, useDb);
+  }
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
 
   const chaptersWithStars = chapters.map(ch => ({
@@ -227,6 +297,11 @@ router.get('/', (req, res) => {
 // 获取章节列表 (兼容 /list 路径)
 router.get('/list', (req, res) => {
   const userId = parseInt(req.query.userId) || 1;
+  const useDb = req.db || db;
+  // 从DB加载星星进度（仅首次或内存为空时）
+  if (!userProgress[userId] || Object.keys(userProgress[userId].stars || {}).length === 0) {
+    loadChapterStarsFromDB(userId, useDb);
+  }
   const progress = userProgress[userId] || { currentChapter: 1, totalKills: 0, stars: {} };
 
   const chaptersWithStars = chapters.map(ch => ({
@@ -299,6 +374,9 @@ router.post('/complete', (req, res) => {
   const previousStars = progress.stars[chapterId] || 0;
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
+
+  // ========== 星星持久化到DB ==========
+  saveChapterStarsToDB(userId, chapterId, progress.stars[chapterId], kills, useDb);
 
   // ========== 奖励发放（使用共享db连接）==========
   let spiritStonesGained = 0;
@@ -437,6 +515,9 @@ router.post('/battle', (req, res) => {
   const previousStars = progress.stars[chapterId] || 0;
   const isFirstClear = previousStars === 0;
   progress.stars[chapterId] = Math.max(previousStars, stars);
+
+  // ========== 星星持久化到DB ==========
+  saveChapterStarsToDB(userId, chapterId, progress.stars[chapterId], kills, useDb);
 
   // ========== 奖励发放（使用共享db连接）==========
   let spiritStonesGained = 0;
