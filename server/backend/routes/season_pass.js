@@ -355,7 +355,7 @@ router.post('/purchase', (req, res) => {
       }
 
       // 更新战令购买状态
-      const updatePass = db.prepare('UPDATE season_pass SET purchased = 1, updated_at = datetime("now") WHERE player_id = ? AND season_id = ?');
+      const updatePass = db.prepare("UPDATE season_pass SET purchased = 1, updated_at = datetime('now') WHERE player_id = ? AND season_id = ?");
       updatePass.run(playerId, seasonId);
     } catch (e) {
       console.log('[season_pass] 购买失败:', e.message);
@@ -471,7 +471,7 @@ router.post('/add-exp', (req, res) => {
   if (db) {
     try {
       // 增加经验
-      const updateExp = db.prepare('UPDATE season_pass SET exp = exp + ?, updated_at = datetime("now") WHERE player_id = ? AND season_id = ?');
+      const updateExp = db.prepare("UPDATE season_pass SET exp = exp + ?, updated_at = datetime('now') WHERE player_id = ? AND season_id = ?");
       updateExp.run(expGain, playerId, seasonId);
 
       // 重新获取数据检查是否升级
