@@ -1797,7 +1797,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [P0] realm-dungeon路由：创建routes/realm_dungeon.js并注册到server.js（含list/status/enter/battle/claim）  # 完成 | 2026-03-28 741a47a6
 [P0] chat路由：创建routes/chat.js并注册（含history/send/online端点，世界/宗门/私聊三频道）  # 完成 | 2026-03-28 9d23401f
 [P1] Paradise添加灵田福地（minRealm=1，炼气期可进入，探索时间120秒，奖励灵石30-50+经验100-200）  # 完成 | 2026-03-28 c7cc361a (gitee)
-[P1] 每日任务接口重构：GET /dailyQuest/daily, /weekly, /challenge（三个独立端点）+ claim端点支持三类ID
+[P1] 每日任务接口重构：GET /dailyQuest/daily, /weekly, /challenge（三个独立端点）+ claim端点支持三类ID  # 完成 | 2026-03-30 3860341d
+  - 文件: server/backend/routes/dailyQuest.js
+  - 修复: /daily/:userId?, /weekly/:userId?, /challenge/:userId? 路由解决 /daily 被 /:userId 误匹配问题
+  - 修复: extractUserId() 统一从 query.player_id / query.userId 提取用户ID
+  - 验证: curl /api/dailyQuest/daily?userId=1 → daily[0].progress=1, completed=true
 [P1] 材料兑换系统：routes/material_exchange.js（含templates/exchange端点，铁锭×5→火晶×1等兑换模板，每日限制次数）  # 完成 | 2026-03-28 a14257ea
 [P2] 章节星级+扫荡后端：chapter/complete计算星级，chapter_stars表，扫荡端点
 
