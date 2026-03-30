@@ -4082,7 +4082,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-07] 修复竞技场对手池：注册时自动加入 arena_players，填充 NPC 对手池（不同境界/战力 AI）。
 [B-08] 增加飞升境以上成长路径：添加 2-3 个更高境界（大乘、渡劫、真仙），或设计"修炼时光"离线成长系统。  # 完成 | 2026-03-30 18:20 | 8e51a83d
 [B-09] 添加 /api/shop/items alias：在 server.js 为 /api/shop/items 添加路由 alias 映射到 /api/shop/list。# 完成 | 2026-03-30 78564302
-[B-10] 每日任务奖励 ×10：灵石奖励翻 10 倍，增加道具奖励选项，全部完成额外奖励稀有道具。
+[B-10] 每日任务奖励 ×10：灵石奖励翻 10 倍，增加道具奖励选项，全部完成额外奖励稀有道具。# 完成 | 2026-03-30 20:43 | 429cc355
+  - dailyQuest.js: questTemplates奖励×10 (500→5000灵石等)
+  - 新增 COMPLETE_ALL_BONUS: 神秘宝箱×1 + 10000灵石
+  - claim路由: 全部14个任务completed+claimed时额外发放bonus到Users+player_items
+  - gitee push: 429cc355
 
 # === P1-107 (2026-03-30 第107轮) ===
 [B-107-1] 注册 spirit_root 路由：server.js 添加 app.use('/api/spirit-root', require('./backend/routes/spirit_root'))，确认路径正确  # 紧急 | 截止 2026-04-02
