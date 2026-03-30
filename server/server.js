@@ -8720,6 +8720,14 @@ try {
 }
 
 try {
+  const fishingRoute = require('./backend/routes/fishing');
+  app.use('/api/fishing', fishingRoute);
+  Logger.info('✓ 钓鱼系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 钓鱼路由加载失败:', e.message);
+}
+
+try {
   const sectMissionsRoute = require('./backend/routes/sect-missions');
   app.use('/api/sect-missions', sectMissionsRoute);
   Logger.info('✓ 宗门任务路由已加载');
