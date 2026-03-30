@@ -4541,7 +4541,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 在 server.js 添加: const fishingRoute = require('./backend/routes/fishing'); app.use('/api/fishing', fishingRoute);
 - 关联文件: server/server.js | 截止: 2026-04-05
 
-## [P2-116-1-B] 创建灵兽进化合成 backend/routes/beast_evolve.js — P2
+## [P2-116-1-B] 创建灵兽进化合成 backend/routes/beast_evolve.js — P2 # 完成 | 2026-03-31 003e1edf
 - 合成公式: 主灵兽+副灵兽+材料=新灵兽，新资质=max(主,副)*(1.1~1.3)
 - 合成材料: 灵兽精华/天道符咒/属性灵石
 - 合成成功率: 同品质80%, 跨品质50%, 失败返还50%材料
@@ -4569,3 +4569,21 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - cultivation.js 添加"灵石保留阈值"字段
 - 余额低于阈值时自动停止并提示
 - 关联文件: server/backend/routes/cultivation.js
+
+# ========== 从策划提案分发 — 2026-03-31 第118轮 ==========
+
+## [P0-118-3] server.js 注册 auctionRoute — 2026-04-01
+- server/backend/routes/auction.js 存在且完整（router.get/, router.post/bid, router.post/publish 等）
+- 在 server.js 添加: const auctionRoute = require('./backend/routes/auction'); app.use('/api/auction', auctionRoute);
+- 参照 fashion.js 在 line 8700 和 fishing.js 在 line 8724 的注册方式
+- 关联文件: server/server.js | 截止: 2026-04-01
+
+## [P0-118-4] server.js 注册 paradiseRoute — 2026-04-01
+- server/backend/routes/paradise.js 存在且完整（GET /types, GET /status, POST /explore, POST /claim-reward 等）
+- 在 server.js 添加: const paradiseRoute = require('./backend/routes/paradise'); app.use('/api/paradise', paradiseRoute);
+- 关联文件: server/server.js | 截止: 2026-04-01
+
+## [P2-118-1-B] auction.js 成交广播 — 2026-04-10
+- 单笔成交≥10000灵石 → io.emit('auction:broadcast', {...}) 全服广播
+- 同一买家1分钟内只广播1次防刷屏
+- 关联文件: server/backend/routes/auction.js
