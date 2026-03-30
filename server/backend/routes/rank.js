@@ -227,6 +227,147 @@ router.get('/', (req, res) => {
 });
 
 // 获取各类排行榜（支持 ?player_id=X 查询当前玩家排名）
+// ============ 排行榜周报奖励系统 ============
+
+// 周报奖励配置
+const WEEKLY_REWARDS = [
+  { minRank: 1,  maxRank: 1,  lingshi: 5000, title: '傲视群雄', titleIcon: '👑', desc: '战力榜第1名' },
+  { minRank: 2,  maxRank: 3,  lingshi: 3000, title: '登堂入室', titleIcon: '🏆', desc: '战力榜第2-3名' },
+  { minRank: 4,  maxRank: 10, lingshi: 1500, title: null,       titleIcon: '🥈', desc: '战力榜第4-10名' },
+  { minRank: 11, maxRank: 50, lingshi: 800,  title: null,       titleIcon: '🥉', desc: '战力榜第11-50名' },
+  { minRank: 51, maxRank: 100,lingshi: 300,  title: null,       titleIcon: '🎖️', desc: '战力榜第51-100名' },
+];
+
+// 初始化周报奖励表
+if (db) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS rank_weekly_rewards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        week_key TEXT NOT NULL,
+        rank_type TEXT NOT NULL DEFAULT 'combat',
+        rank INTEGER NOT NULL,
+        lingshi_awarded INTEGER DEFAULT 0,
+        title_awarded TEXT,
+        claimed_at TEXT DEFAULT (datetime('now', '+8 hours')),
+        UNIQUE(player_id, week_key, rank_type)
+      )
+    `);
+  } catch (e) {
+    console.error('[rank] weekly_rewards表初始化失败:', e.message);
+  }
+}
+
+// 获取本周 week_key (格式: 2026-W13)
+function getWeekKey() {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+// 获取玩家在战力榜的排名
+function getPlayerCombatRankNum(uid) {
+  if (!db) return null;
+  try {
+    const player = db.prepare(`
+      SELECT FLOOR(attack * 10 + defense * 5 + hp / 10 + level * 50 + realm * 500) as combatPower
+      FROM Users WHERE id = ? AND id > 0
+    `).get(uid);
+    if (!player) return null;
+    const power = player.combatPower;
+    const rank = db.prepare(`
+      SELECT COUNT(*) + 1 as myRank
+      FROM Users
+      WHERE id > 0 AND FLOOR(attack * 10 + defense * 5 + hp / 10 + level * 50 + realm * 500) > ?
+    `).get(power);
+    return rank.myRank;
+  } catch (e) {
+    return null;
+  }
+}
+
+// GET /api/rank/weekly-status - 获取本周排名和可领取奖励
+router.get('/weekly-status', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || 1;
+  const weekKey = getWeekKey();
+  if (!db) return res.json({ success: false, message: '数据库不可用' });
+
+  try {
+    const rankNum = getPlayerCombatRankNum(playerId);
+    if (rankNum === null) return res.json({ success: false, message: '玩家不存在' });
+
+    const claimed = db.prepare(
+      'SELECT * FROM rank_weekly_rewards WHERE player_id = ? AND week_key = ? AND rank_type = ?'
+    ).get(playerId, weekKey, 'combat');
+
+    const reward = WEEKLY_REWARDS.find(r => rankNum >= r.minRank && rankNum <= r.maxRank) || null;
+    res.json({
+      success: true,
+      data: {
+        weekKey,
+        rank: rankNum,
+        reward,
+        claimed: !!claimed,
+        claimedAt: claimed ? claimed.claimed_at : null,
+        tiers: WEEKLY_REWARDS.map(r => ({
+          range: r.maxRank === r.minRank ? `#${r.minRank}` : `#${r.minRank}-${r.maxRank}`,
+          lingshi: r.lingshi,
+          title: r.title ? `${r.titleIcon} ${r.title}` : null,
+          desc: r.desc
+        }))
+      }
+    });
+  } catch (e) {
+    console.error('[rank] GET /weekly-status error:', e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// POST /api/rank/claim-weekly - 领取周报奖励
+router.post('/claim-weekly', (req, res) => {
+  const { player_id } = req.body;
+  const uid = parseInt(player_id);
+  if (!uid) return res.json({ success: false, message: '缺少 player_id' });
+  const weekKey = getWeekKey();
+  if (!db) return res.json({ success: false, message: '数据库不可用' });
+
+  try {
+    const existing = db.prepare(
+      'SELECT * FROM rank_weekly_rewards WHERE player_id = ? AND week_key = ? AND rank_type = ?'
+    ).get(uid, weekKey, 'combat');
+    if (existing) return res.json({ success: false, message: '本周奖励已领取，请勿重复领取' });
+
+    const rankNum = getPlayerCombatRankNum(uid);
+    if (rankNum === null) return res.json({ success: false, message: '玩家不存在' });
+    if (rankNum > 100) return res.json({ success: false, message: `当前排名#${rankNum}，需进入前100名才能领取奖励` });
+
+    const reward = WEEKLY_REWARDS.find(r => rankNum >= r.minRank && rankNum <= r.maxRank);
+    if (!reward) return res.json({ success: false, message: '未获得本周奖励' });
+
+    const transaction = db.transaction(() => {
+      if (reward.lingshi > 0) {
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.lingshi, uid);
+      }
+      db.prepare(`
+        INSERT INTO rank_weekly_rewards (player_id, week_key, rank_type, rank, lingshi_awarded, title_awarded, claimed_at)
+        VALUES (?, ?, 'combat', ?, ?, ?, datetime('now', '+8 hours'))
+      `).run(uid, weekKey, rankNum, reward.lingshi || 0, reward.title || null);
+    });
+    transaction();
+
+    res.json({
+      success: true,
+      message: `恭喜！获得第${rankNum}名奖励：💰 ${reward.lingshi || 0} 灵石${reward.title ? ` + ${reward.titleIcon} ${reward.title} 称号` : ''}`,
+      data: { rank: rankNum, lingshiAwarded: reward.lingshi || 0, titleAwarded: reward.title }
+    });
+  } catch (e) {
+    console.error('[rank] POST /claim-weekly error:', e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
 router.get('/:type', (req, res) => {
   const { type } = req.params;
   const { limit, player_id } = req.query;
