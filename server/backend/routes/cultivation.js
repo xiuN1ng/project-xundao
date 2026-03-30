@@ -56,6 +56,7 @@ try {
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN daily_exchange_count INTEGER DEFAULT 0"); } catch (e) { /* 列已存在 */ }
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN last_exchange_date TEXT"); } catch (e) { /* 列已存在 */ }
   try { db.exec("ALTER TABLE Cultivations ADD COLUMN accumulated_power INTEGER DEFAULT 0"); } catch (e) { /* 列已存在 */ }
+  try { db.exec("ALTER TABLE Users ADD COLUMN spirit_stone_reserve INTEGER DEFAULT 100"); } catch (e) { /* 列已存在 */ }
   Logger.info('数据库连接成功');
 } catch (err) {
   Logger.error('数据库连接失败:', err.message);
@@ -213,7 +214,8 @@ function getPlayer(userId) {
         name: user.nickname,
         level: user.level,
         realm: user.realm,
-        lingshi: user.lingshi
+        lingshi: user.lingshi,
+        spirit_stone_reserve: user.spirit_stone_reserve
       };
     }
     // 回退到 player 表
@@ -404,7 +406,21 @@ router.post('/start', (req, res) => {
     const LINGSHI_COST = getCultivationCost(currentCultivationPower);
 
     // 灵石不足检查
-    if (parseInt(player.lingshi || 0) < LINGSHI_COST) {
+    const currentLingshi = parseInt(player.lingshi || 0);
+    // ========== 灵石保留阈值保护 ==========
+    const reserveThreshold = parseInt(player.spirit_stone_reserve) || 100;
+    const lingshiAfterCost = currentLingshi - LINGSHI_COST;
+    if (lingshiAfterCost < reserveThreshold) {
+      return res.json({
+        success: false,
+        autoStopped: true,
+        message: `灵石保留阈值保护：当前灵石 ${currentLingshi}，修炼消耗 ${LINGSHI_COST}，余额将低于保留底线 ${reserveThreshold}`,
+        reserveThreshold,
+        currentLingshi,
+        lingshiCost: LINGSHI_COST
+      });
+    }
+    if (currentLingshi < LINGSHI_COST) {
       return res.json({ success: false, message: '灵石不足' });
     }
 
@@ -894,6 +910,44 @@ router.post('/record-logout', (req, res) => {
     res.json({ success: true, message: '离线时间已记录' });
   } catch (err) {
     Logger.error('POST /record-logout error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// 灵石保留阈值设置
+router.get('/reserve', (req, res) => {
+  const userId = req.userId || 1;
+  try {
+    const player = db.prepare('SELECT id, lingshi, spirit_stone_reserve FROM Users WHERE id = ?').get(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+    res.json({
+      success: true,
+      reserveThreshold: player.spirit_stone_reserve || 100,
+      currentLingshi: player.lingshi,
+      message: `当前灵石保留阈值：${player.spirit_stone_reserve || 100}灵石，余额：${player.lingshi}`
+    });
+  } catch (err) {
+    Logger.error('GET /reserve error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+router.post('/reserve', (req, res) => {
+  const userId = req.userId || 1;
+  const { threshold } = req.body;
+  if (threshold === undefined || threshold === null) {
+    return res.json({ success: false, message: '请提供 threshold 参数（保留灵石数量）' });
+  }
+  const newThreshold = Math.max(0, parseInt(threshold) || 100);
+  try {
+    db.prepare('UPDATE Users SET spirit_stone_reserve = ? WHERE id = ?').run(newThreshold, userId);
+    res.json({
+      success: true,
+      reserveThreshold: newThreshold,
+      message: `灵石保留阈值已设置为 ${newThreshold}灵石，余额低于此值时自动停止修炼`
+    });
+  } catch (err) {
+    Logger.error('POST /reserve error:', err.message);
     res.json({ success: false, message: err.message });
   }
 });
