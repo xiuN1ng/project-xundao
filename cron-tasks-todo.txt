@@ -4064,7 +4064,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 [B-106-4] 诊断 abyss 路由 404 谜题：server.js 第3291行已注册，日志显示加载成功，但所有端点返回404  # 完成 | 2026-03-30 /list和/info均正常返回
 
 === 2026-03-30 任务 ===
-[B-01] 修复灵兽捕捉 SQL 错误：player_beasts 表字段名 template_id vs beast_id 不匹配，capture handler 写入字段与表结构不一致。统一为 template_id INTEGER。
+[B-01] 修复灵兽捕捉 SQL 错误：player_beasts 表字段名 template_id vs beast_id 不匹配，capture handler 写入字段与表结构不一致。统一为 template_id INTEGER。# 完成 | 2026-03-30 13:27 | f5bb3463
 [B-02] 实现月卡 API：在 welfare_api.js 中注册 GET /monthly-card/status、POST /monthly-card/buy、POST /monthly-card/claim 路由，对接 welfare_storage.js 中已有的函数。
 [B-03] 修复每日登录礼状态矛盾：welfare/daily 的 canClaim 与 welfare/sign-in 的 signedToday 逻辑不一致，统一用日期字符串判断今日是否已领取。# 完成 | 2026-03-30 12:46 | 996d4a97
 [B-04] 章节星星持久化：chapter.js 当前 stars 只存内存变量，需要写入 chapter_progress 表（加 stars 列），同时通关时正确更新。# 完成 | 2026-03-30 70b14a97
