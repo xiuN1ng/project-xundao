@@ -861,6 +861,152 @@ router.post('/capture', (req, res) => {
   }
 });
 
+// POST /api/beast/summon - 灵兽召唤（单抽/十连 + 保底）
+router.post('/summon', (req, res) => {
+  try {
+    const player_id = parseInt(req.body.player_id) || parseInt(req.query.player_id) || 1;
+    const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 10);
+
+    // 灵石消耗：单抽50，十连450（九折优惠）
+    const costPerSummon = 50;
+    const totalCost = count === 10 ? costPerSummon * 10 * 0.9 : costPerSummon * count;
+
+    // 扣除灵石
+    const player = db.prepare('SELECT * FROM Users WHERE id = ?').get(player_id);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+    if ((player.lingshi || 0) < totalCost) {
+      return res.status(400).json({ success: false, error: '灵石不足' });
+    }
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(totalCost, player_id);
+
+    // 获取保底进度
+    let pityRow = db.prepare('SELECT * FROM beast_pity_counter WHERE player_id = ?').get(player_id);
+    if (!pityRow) {
+      db.prepare('INSERT INTO beast_pity_counter (player_id, consecutive_non_mythical) VALUES (?, 0)').run(player_id);
+      pityRow = { consecutive_non_mythical: 0 };
+    }
+    let currentPityCount = pityRow.consecutive_non_mythical || 0;
+
+    const results = [];
+    let mythicalAppeared = false;
+
+    for (let i = 0; i < count; i++) {
+      currentPityCount++;
+      const guaranteedMyth = currentPityCount >= 90;
+
+      let capturedBeast;
+      if (guaranteedMyth) {
+        // 保底触发：强制获得传说灵兽
+        const legendaryBeasts = Object.entries(BEAST_DATA).filter(([, b]) => b.quality === 'legendary');
+        const chosen = legendaryBeasts[Math.floor(Math.random() * legendaryBeasts.length)];
+        capturedBeast = { id: chosen[0], ...chosen[1] };
+        currentPityCount = 0;
+        mythicalAppeared = true;
+      } else {
+        // 普通抽取: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%
+        const roll = Math.random() * 100;
+        let quality;
+        if (roll < 1) quality = 'legendary';
+        else if (roll < 5) quality = 'epic';
+        else if (roll < 15) quality = 'rare';
+        else if (roll < 40) quality = 'uncommon';
+        else quality = 'common';
+
+        const pool = Object.entries(BEAST_DATA).filter(([, b]) => b.quality === quality);
+        if (pool.length === 0) {
+          // 回退到 common
+          const commonPool = Object.entries(BEAST_DATA).filter(([, b]) => b.quality === 'common');
+          const fallback = commonPool[Math.floor(Math.random() * commonPool.length)];
+          capturedBeast = { id: fallback[0], ...fallback[1] };
+        } else {
+          const picked = pool[Math.floor(Math.random() * pool.length)];
+          capturedBeast = { id: picked[0], ...picked[1] };
+        }
+
+        if (quality === 'legendary') {
+          currentPityCount = 0;
+          mythicalAppeared = true;
+        }
+      }
+
+      // 写入 player_beasts（使用 beast_id 列，与 capture 系统一致）
+      const existing = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND beast_id = ?').get(player_id, capturedBeast.id);
+      if (existing) {
+        const newLevel = (existing.level || 1) + 1;
+        const atkGrowth = Math.floor(capturedBeast.base_atk * 0.2);
+        const hpGrowth = Math.floor(capturedBeast.base_hp * 0.2);
+        db.prepare("UPDATE player_beasts SET level = ?, exp = 0, affection = COALESCE(affection, 50) + 2, updated_at = datetime('now') WHERE id = ?").run(newLevel, existing.id);
+      } else {
+        db.prepare(`INSERT INTO player_beasts (player_id, beast_id, level, exp, affection, mood, is_active)
+          VALUES (?, ?, 1, 0, 50, 'normal', 0)`).run(player_id, capturedBeast.id);
+      }
+
+      results.push({
+        beast_id: capturedBeast.id,
+        name: capturedBeast.name,
+        quality: capturedBeast.quality,
+        icon: capturedBeast.icon || '',
+        base_atk: capturedBeast.base_atk,
+        base_hp: capturedBeast.base_hp,
+        isNew: !existing
+      });
+    }
+
+    // 更新保底计数器
+    db.prepare("INSERT OR REPLACE INTO beast_pity_counter (player_id, consecutive_non_mythical, updated_at) VALUES (?, ?, datetime('now'))").run(player_id, currentPityCount);
+
+    res.json({
+      success: true,
+      count,
+      cost: totalCost,
+      beasts: results,
+      pity: {
+        count: currentPityCount,
+        nextMythical: Math.max(0, 90 - currentPityCount),
+        mythicalAppeared
+      }
+    });
+  } catch (error) {
+    console.error('[beast/summon] error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/beast/summon-status - 获取召唤状态（保底进度）
+router.get('/summon-status', (req, res) => {
+  try {
+    const player_id = parseInt(req.body.player_id) || parseInt(req.query.player_id) || 1;
+
+    const pityRow = db.prepare('SELECT consecutive_non_mythical FROM beast_pity_counter WHERE player_id = ?').get(player_id);
+    const currentPityCount = pityRow ? (pityRow.consecutive_non_mythical || 0) : 0;
+
+    // 统计各品质灵兽数量
+    const ownedBeasts = db.prepare('SELECT beast_id FROM player_beasts WHERE player_id = ?').all(player_id);
+    const ownedIds = new Set(ownedBeasts.map(b => b.beast_id));
+
+    const byQuality = { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0, mythical: 0 };
+    for (const [id, beast] of Object.entries(BEAST_DATA)) {
+      if (ownedIds.has(id)) {
+        byQuality[beast.quality] = (byQuality[beast.quality] || 0) + 1;
+      }
+    }
+
+    res.json({
+      success: true,
+      pity: {
+        count: currentPityCount,
+        nextMythical: Math.max(0, 90 - currentPityCount)
+      },
+      owned: byQuality,
+      summonCost: { single: 50, tenPull: 450 }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ 宠物培养/升级 API ============
 
 // 获取玩家所有灵兽

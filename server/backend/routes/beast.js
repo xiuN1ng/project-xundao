@@ -256,8 +256,9 @@ router.post('/summon', (req, res) => {
     }
 
     // 写入DB（已有则合并，level+1）
+    let existing = null;
     try {
-      const existing = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND template_id = ?').get(userId, capturedTemplate.id);
+      existing = db.prepare('SELECT * FROM player_beasts WHERE player_id = ? AND template_id = ?').get(userId, capturedTemplate.id);
       if (existing) {
         db.prepare('UPDATE player_beasts SET level = level + 1, attack = attack + ? * (level + 1) / level, hp = hp + ? * (level + 1) / level WHERE id = ?').run(
           capturedTemplate.baseAttack, capturedTemplate.baseHp, existing.id
