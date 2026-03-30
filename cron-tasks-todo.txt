@@ -4442,7 +4442,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 参考: /docs/PROPOSALS/2026-03-31-N114.md
 - 优先级: P0
 
-### [P0] 创建 server/routes/adventure.js — 奇遇系统API
+### [P0] 创建 server/routes/adventure.js — 奇遇系统API  # 完成 | 2026-03-31 01:50 | 4b521b57
 - 实现 GET /api/adventure/status, GET /api/adventure/events, POST /api/adventure/claim/:eventId, POST /api/adventure/trigger
 - 参考: /docs/PROPOSALS/2026-03-31-N114.md
 - 优先级: P0
