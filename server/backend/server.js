@@ -201,6 +201,14 @@ app.use('/api/deity-list', require('./routes/deity'));
 app.use('/api/art', require('./routes/art'));
 app.use('/api/ladder', require('./routes/ladder'));
 
+// 天道领悟系统
+try {
+  app.use('/api/comprehension', require('./routes/comprehension'));
+  console.log('✓ 天道领悟系统路由已加载');
+} catch(e) {
+  console.log('[comprehension] 领悟路由加载失败:', e.message);
+}
+
 // 引导系统
 try {
   app.use('/api/guide', require('./routes/guide'));
