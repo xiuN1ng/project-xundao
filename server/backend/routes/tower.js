@@ -80,7 +80,10 @@ function initDatabase() {
 
 // 获取玩家ID（从请求头或默认）
 function getPlayerId(req) {
-  return req.headers['x-player-id'] || req.body?.playerId || 'player_1';
+  // 支持多种参数来源：header / body / query
+  const id = req.headers['x-player-id'] || req.body?.playerId || req.query?.player_id || req.query?.playerId || '1';
+  // 清理非数字前缀（如 'player_1' → '1'）
+  return id.toString().replace(/^player_/, '').replace(/^player-/, '') || '1';
 }
 
 // 获取玩家名称
@@ -95,10 +98,24 @@ function getPlayerTowerData(playerId) {
     const row = stmt.get(playerId);
 
     if (row) {
+      // 获取境界，计算境界准入最低层
+      const realm = getPlayerRealm(playerId);
+      const realmFloorMin = realm * 8;
+      let currentFloor = row.current_floor || 1;
+      let highestFloor = row.highest_floor || 0;
+
+      // 如果当前层低于境界准入，自动调整到境界准入层（修复历史遗留问题）
+      if (currentFloor < realmFloorMin) {
+        Logger.info(`玩家${playerId}塔层[${currentFloor}]低于境界准入[${realmFloorMin}]，自动调整`);
+        currentFloor = realmFloorMin;
+        if (highestFloor < realmFloorMin) highestFloor = realmFloorMin;
+      }
+
       return {
         playerId: row.player_id,
-        currentFloor: row.current_floor || 1,
-        highestFloor: row.highest_floor || 0,
+        currentFloor,
+        highestFloor,
+        realmFloorMin,
         totalWins: row.total_wins || 0,
         totalBattles: row.total_battles || 0,
         firstClearFloors: row.first_clear_floors ? JSON.parse(row.first_clear_floors) : [],
@@ -111,10 +128,15 @@ function getPlayerTowerData(playerId) {
     Logger.error('获取塔数据错误:', error.message);
   }
 
+  // 新玩家：根据境界设置起始层
+  const realm = getPlayerRealm(playerId);
+  const realmFloorMin = realm * 8;
+
   return {
     playerId,
-    currentFloor: 1,
-    highestFloor: 0,
+    currentFloor: realmFloorMin,
+    highestFloor: realmFloorMin,
+    realmFloorMin,
     totalWins: 0,
     totalBattles: 0,
     firstClearFloors: [],
@@ -356,6 +378,18 @@ function simulateBattle(player, monster, floor) {
   };
 }
 
+// 获取玩家境界
+function getPlayerRealm(playerId) {
+  try {
+    const stmt = db.prepare('SELECT realm FROM Users WHERE id = ?');
+    const user = stmt.get(playerId);
+    return user ? (user.realm || 1) : 1;
+  } catch (error) {
+    Logger.error('获取玩家境界错误:', error.message);
+    return 1;
+  }
+}
+
 // 获取玩家战斗力属性
 function getPlayerBattleStats(playerId) {
   try {
@@ -386,15 +420,34 @@ function getFirstClearReward(floor) {
   const baseExp = 200 * Math.pow(1.3, floor / 10);
 
   let bonus = '';
+  const bossDrops = [];
+
   if (isBossFloor(floor)) {
     bonus = 'BOSS首杀额外奖励';
+    // 每10层BOSS掉落表
+    const bossDropTable = {
+      10:  { items: [{ id: 'beast_fruit', name: '灵兽果', count: 1 }], spiritStones: 100 },
+      20:  { items: [{ id: 'gongfa_fragment', name: '功法残页', count: 2 }], spiritStones: 150 },
+      30:  { items: [{ id: 'fashion_fragment_blue', name: '时装碎片(蓝)', count: 1 }], spiritStones: 200 },
+      40:  { items: [{ id: 'gongfa_fragment', name: '功法残页', count: 3 }, { id: 'beast_fruit', name: '灵兽果', count: 1 }], spiritStones: 300 },
+      50:  { items: [{ id: 'fashion_fragment_purple', name: '时装碎片(紫)', count: 1 }], spiritStones: 400 },
+      60:  { items: [{ id: 'beast_fruit', name: '灵兽果', count: 2 }, { id: 'gongfa_fragment', name: '功法残页', count: 3 }], spiritStones: 500 },
+      70:  { items: [{ id: 'fashion_fragment_purple', name: '时装碎片(紫)', count: 2 }], spiritStones: 600 },
+      80:  { items: [{ id: 'gongfa_fragment', name: '功法残页', count: 5 }, { id: 'beast_fruit', name: '灵兽果', count: 3 }], spiritStones: 800 },
+      90:  { items: [{ id: 'fashion_fragment_orange', name: '时装碎片(橙)', count: 1 }], spiritStones: 1000 },
+      100: { items: [{ id: 'fashion_fragment_orange', name: '时装碎片(橙)', count: 3 }, { id: 'beast_fruit', name: '灵兽果', count: 5 }], spiritStones: 2000 }
+    };
+    const drop = bossDropTable[floor] || { items: [], spiritStones: 100 };
+    bossDrops.push(...drop.items);
   }
 
   return {
     spiritStones: Math.floor(baseSpiritStones),
     exp: Math.floor(baseExp),
     bonus: bonus,
-    isBossFloor: isBossFloor(floor)
+    isBossFloor: isBossFloor(floor),
+    bossDrops: bossDrops,
+    bossSpiritStones: bossDrops.length > 0 ? Math.floor(50 * Math.pow(1.4, floor / 10)) : 0
   };
 }
 
@@ -439,6 +492,7 @@ router.get('/', (req, res) => {
     data: {
       currentFloor: data.currentFloor,
       highestFloor: data.highestFloor,
+      realmFloorMin: data.realmFloorMin,
       totalFloors: MAX_FLOOR,
       totalWins: data.totalWins,
       totalBattles: data.totalBattles,
@@ -460,6 +514,7 @@ router.get('/info', (req, res) => {
     data: {
       currentFloor: data.currentFloor,
       highestFloor: data.highestFloor,
+      realmFloorMin: data.realmFloorMin,
       totalFloors: MAX_FLOOR,
       totalWins: data.totalWins,
       totalBattles: data.totalBattles,
@@ -480,9 +535,10 @@ router.get('/floor/:floor', (req, res) => {
 
   const monster = getFloorMonster(floor);
 
-  // 获取玩家当前进度
+  // 获取玩家当前进度和境界
   const playerId = getPlayerId(req);
   const playerData = getPlayerTowerData(playerId);
+  const realmFloorMin = playerData.realmFloorMin || (getPlayerRealm(playerId) * 8);
 
   res.json({
     success: true,
@@ -492,7 +548,8 @@ router.get('/floor/:floor', (req, res) => {
       isBossFloor: isBossFloor(floor),
       isEliteFloor: isEliteFloor(floor),
       firstClearReward: getFirstClearReward(floor),
-      sweepAvailable: playerData.highestFloor >= floor
+      sweepAvailable: playerData.highestFloor >= floor,
+      realmFloorMin
     }
   });
 });
@@ -505,6 +562,16 @@ router.post('/challenge', (req, res) => {
 
   if (!floor || floor < 1 || floor > MAX_FLOOR) {
     return res.status(400).json({ success: false, error: '层数无效' });
+  }
+
+  // ========== 境界准入检查：realm × 8 ==========
+  const playerRealm = getPlayerRealm(playerId);
+  const realmFloorMin = playerRealm * 8;
+  if (floor < realmFloorMin) {
+    return res.status(400).json({
+      success: false,
+      error: `境界压制：${['炼气期', '筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '合体期', '大乘期', '渡劫期', '真仙'][playerRealm - 1] || '真仙'}修士只能挑战第${realmFloorMin}层及以上的塔层，请先提升境界`
+    });
   }
 
   let data = getPlayerTowerData(playerId);
@@ -596,6 +663,16 @@ router.post('/sweep', (req, res) => {
 
   if (!floor || floor < 1 || floor > MAX_FLOOR) {
     return res.status(400).json({ success: false, error: '层数无效' });
+  }
+
+  // 境界准入检查
+  const playerRealm = getPlayerRealm(playerId);
+  const realmFloorMin = playerRealm * 8;
+  if (floor < realmFloorMin) {
+    return res.status(400).json({
+      success: false,
+      error: `境界压制：此塔层需要更高境界才能扫荡`
+    });
   }
 
   const data = getPlayerTowerData(playerId);
