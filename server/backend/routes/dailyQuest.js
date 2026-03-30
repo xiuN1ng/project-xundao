@@ -236,6 +236,7 @@ function initDailyQuests(userId) {
 
   // 如果quests为空（服务器重启后首次调用），从DB加载已保存的进度
   const hasAnyProgress = Object.keys(userQuests[userId].quests).length > 0;
+  let dbLoadedCount = 0;
   if (!hasAnyProgress && db) {
     try {
       const rows = db.prepare('SELECT quest_id, progress, completed, claimed FROM daily_quest_progress WHERE user_id = ? AND quest_date = ?').all(userId, today);
@@ -247,22 +248,25 @@ function initDailyQuests(userId) {
           claimed: !!row.claimed
         };
       });
+      dbLoadedCount = rows.length;
     } catch (e) {
       // DB加载失败，使用内存初始化
     }
   }
 
-  // 初始化未完成的每日任务
-  questTemplates.forEach(quest => {
-    if (!userQuests[userId].quests[quest.id]) {
-      userQuests[userId].quests[quest.id] = {
-        questId: quest.id,
-        progress: 0,
-        completed: false,
-        claimed: false
-      };
-    }
-  });
+  // 仅当DB没有今日数据时才初始化默认任务（避免覆盖已加载的DB数据）
+  if (dbLoadedCount === 0) {
+    questTemplates.forEach(quest => {
+      if (!userQuests[userId].quests[quest.id]) {
+        userQuests[userId].quests[quest.id] = {
+          questId: quest.id,
+          progress: 0,
+          completed: false,
+          claimed: false
+        };
+      }
+    });
+  }
 
   return userQuests[userId];
 }
@@ -339,9 +343,21 @@ function extractUserId(req) {
   return parseInt(req.query.userId) || parseInt(req.query.player_id) || parseInt(req.params.userId) || 1;
 }
 
-// 获取每日任务概览（根路径）
+// 获取每日任务概览（根路径）- 合并DB进度
 router.get('/', (req, res) => {
+  const userId = extractUserId(req);
+  // 如果提供了 userId，则加载用户进度
+  const data = userId > 0 ? initDailyQuests(userId) : null;
   const quests = questTemplates;
+
+  // 辅助函数：为任务合并DB进度
+  const mergeQuest = (q) => {
+    const base = { id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward, difficulty: q.difficulty };
+    if (data && data.quests && data.quests[q.id]) {
+      return { ...base, progress: data.quests[q.id].progress, completed: data.quests[q.id].completed, claimed: data.quests[q.id].claimed };
+    }
+    return { ...base, progress: 0, completed: false, claimed: false };
+  };
 
   // 按难度分类统计
   const daily = quests.filter(q => q.difficulty === 1);
@@ -353,9 +369,9 @@ router.get('/', (req, res) => {
     data: {
       totalQuests: quests.length,
       categories: {
-        daily: { name: '每日任务', count: daily.length, rewards: daily.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) },
-        weekly: { name: '每周任务', count: weekly.length, rewards: weekly.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) },
-        challenge: { name: '挑战任务', count: challenge.length, rewards: challenge.map(q => ({ id: q.id, name: q.name, desc: q.desc, target: q.target, unit: q.unit, reward: q.reward })) }
+        daily: { name: '每日任务', count: daily.length, rewards: daily.map(mergeQuest) },
+        weekly: { name: '每周任务', count: weekly.length, rewards: weekly.map(mergeQuest) },
+        challenge: { name: '挑战任务', count: challenge.length, rewards: challenge.map(mergeQuest) }
       }
     }
   });
