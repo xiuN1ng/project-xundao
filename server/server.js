@@ -8752,6 +8752,14 @@ try {
   Logger.warn('⚠ 福地路由加载失败:', e.message);
 }
 
+try {
+  const seasonPassRoute = require('./backend/routes/season_pass');
+  app.use('/api/season-pass', seasonPassRoute);
+  Logger.info('✓ 战令路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 战令路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({

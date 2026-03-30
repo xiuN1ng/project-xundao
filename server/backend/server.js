@@ -180,6 +180,7 @@ app.use('/api/friend', require('./routes/friend'));
 app.use('/api/friends', require('./routes/friend')); // 前端 /api/friends 路径兼容
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/auction', require('./routes/auction'));
+app.use('/api/season-pass', require('./routes/season_pass'));
 app.use('/api/cave', require('./routes/cave'));
 app.use('/api/fishing', require('./routes/fishing'));
 app.use('/api/secret', require('./routes/secret'));
