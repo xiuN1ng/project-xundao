@@ -4159,8 +4159,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   - chapter.js: 添加章节通关触发
   - 截止: 2026-04-03 | 优先级: P1
 
-[B-108-5] 诊断 arena battle 类型 dailyQuest 不更新
+[B-108-5] 诊断 arena battle 类型 dailyQuest 不更新  # 完成 | 2026-03-31 b757eb9a
   - arena.js: dailyQuestRouter.updateDailyQuestProgress('battle', 1) 排查
+  - 根因: arena_battles 表未在 initArenaTables() 中创建，导致 /records 端点崩溃
+  - 修复: 在 initArenaTables() 中添加 CREATE TABLE IF NOT EXISTS arena_battles
   - 截止: 2026-04-07 | 优先级: P2
 
 [B-108-6] 确认/新建 celestial_war.js（v9.0天界战争）
