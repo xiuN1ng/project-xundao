@@ -124,6 +124,7 @@ app.use('/api/market', require('./routes/market'));
 app.use('/api/material-exchange', require('./routes/material_exchange'));
 app.use('/api/beast', require('../game/beast_api'));
 app.use('/api/beastEquipment', require('../game/beast_equipment'));
+app.use('/api/beast-evolve', require('./routes/beast_evolve'));
 app.use('/api/pet', require('./routes/pet'));
 app.use('/api/spirit-artifact', require('../game/spirit_artifact_api'));
 app.use('/api/spirit', require('../game/spirit_artifact_api')); // 前端 /api/spirit 别名
