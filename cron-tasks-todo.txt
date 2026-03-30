@@ -4609,7 +4609,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 关联文件: server/backend/routes/worldboss.js, server/game/worldboss_system.js
 - 截止: 2026-04-02
 
-## [P1-119-1-B] 成就系统实时状态回填 ← 2026-03-31-morning
+## [P1-119-1-B] 成就系统实时状态回填 ← 2026-03-31-morning # 完成 | 2026-03-31 fb12c41f
 - achievements.js /list 路由中，对每条成就实时查询玩家当前realm/combatPower
 - realm类: progress = min(player.realm, target)，completed = (player.realm >= target)
 - combat类: progress = min(player.combat_power, target)
@@ -4617,14 +4617,15 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 关联文件: server/backend/routes/achievements.js
 - 截止: 2026-04-03
 
-## [P1-119-2-B] 竞技场对手池补充逻辑 ← 2026-03-31-morning
+## [P1-119-2-B] 竞技场对手池补充逻辑 ← 2026-03-31-morning # 完成 | 2026-03-31 fb12c41f
 - arena.js opponents路由: 当候选对手<3时，无条件补充AI对手
 - AI对手战力分布: 1个弱(-30%)、1个接近(±10%)、1个强(+30%)
 - 添加 isRecommend 标记战力最接近玩家的对手
+- /opponents/:userId 和 /match 两个路由均修复
 - 关联文件: server/backend/routes/arena.js
 - 截止: 2026-04-03
 
-## [P1-119-3-B] 每日任务totalProgress修复 ← 2026-03-31-morning
+## [P1-119-3-B] 每日任务totalProgress修复 ← 2026-03-31-morning # 完成 | 2026-03-31 fb12c41f
 - dailyQuest.js /list 路由: totalProgress = round(completedCount / totalQuests * 100)
 - 验证: curl /api/dailyQuest/list?player_id=1 中 totalProgress > 0
 - 关联文件: server/backend/routes/dailyQuest.js
