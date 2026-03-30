@@ -4600,7 +4600,7 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 同一买家1分钟内只广播1次防刷屏
 - 关联文件: server/backend/routes/auction.js
 
-## [P0-119-1-B] 世界BOSS分级系统 ← 2026-03-31-morning
+## [P0-119-1-B] 世界BOSS分级系统 ← 2026-03-31-morning # 完成 | 2026-03-31 06:29 | 7ba04671
 - 在 worldboss.js 中添加难度选择逻辑
 - 添加4个难度BOSS: 幼崽(Lv.1-20)/本体(Lv.21-40)/觉醒(Lv.41-60)/完全体(Lv.61+)
 - BOSS属性根据玩家等级段动态选择
