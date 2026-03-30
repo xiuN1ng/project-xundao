@@ -172,7 +172,7 @@ function getOrCreateCultivation(userId) {
     let cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
     if (!cult) {
       try {
-        db.prepare("INSERT INTO Cultivations (userId, value, realm, cultivationPower, createdAt, updatedAt) VALUES (?, 0, 1, 0, datetime('now'), datetime('now'))").run(userId);
+        db.prepare("INSERT INTO Cultivations (userId, value, realm, cultivationPower, accumulated_power, createdAt, updatedAt) VALUES (?, 0, 1, 0, 0, datetime('now'), datetime('now'))").run(userId);
       } catch (insertErr) {
         Logger.error('INSERT Cultivations 失败:', insertErr.message, 'userId:', userId);
       }
@@ -223,7 +223,9 @@ router.get('/', (req, res) => {
     const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
     const dailyTimes = getDailyCultivationTimes(userId);
     const realmLevel = config.realm_level || 1;
-    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const storedPower = parseInt(cult.cultivationPower) || 0;
+    const accumulatedPower = parseInt(cult.accumulated_power) || 0;
+    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
 
     res.json({
       success: true,
@@ -267,7 +269,9 @@ router.get('/status', (req, res) => {
     const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
     const dailyTimes = getDailyCultivationTimes(userId);
     const realmLevel = config.realm_level || 1;
-    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const storedPower = parseInt(cult.cultivationPower) || 0;
+    const accumulatedPower = parseInt(cult.accumulated_power) || 0;
+    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
     const nextRealm = cult.realm + 1;
     const canBreakthrough = realmConfig[nextRealm] && parseInt(cult.value) >= config.cost;
 
@@ -283,6 +287,7 @@ router.get('/status', (req, res) => {
         progress,
         cost: config.cost,
         cultivationPower,
+        accumulatedPower,
         canBreakthrough,
         nextRealm: realmConfig[nextRealm] ? nextRealm : null
       },
@@ -315,7 +320,9 @@ router.get('/info', (req, res) => {
     const progress = Math.min(Math.floor((parseInt(cult.value) / config.cost) * 100), 100);
     const dailyTimes = getDailyCultivationTimes(userId);
     const realmLevel = config.realm_level || 1;
-    const cultivationPower = Math.floor(parseInt(cult.value) * 0.1 + realmLevel * 50);
+    const storedPower = parseInt(cult.cultivationPower) || 0;
+    const accumulatedPower = parseInt(cult.accumulated_power) || 0;
+    const cultivationPower = Math.floor(storedPower + accumulatedPower * 0.001 + parseInt(cult.value) * 0.1 + realmLevel * 50);
 
     res.json({
       success: true,
@@ -397,15 +404,20 @@ router.post('/start', (req, res) => {
       gain = gain * 2;
     }
 
+    // ========== 累积修炼值：每次修炼累加到 accumulated_power（历史总修炼量）==========
+    const oldAccumulatedPower = parseInt(cult.accumulated_power) || 0;
+    const newAccumulatedPower = oldAccumulatedPower + gain;
+
     const newValue = Math.min(parseInt(cult.value) + gain, config.cost);
     const newProgress = Math.min(Math.floor((newValue / config.cost) * 100), 100);
     // 同步修炼值 + cultivationPower（永久写入DB，解决永久=0问题）
-    const finalCultivationPower = Math.floor(newValue * 0.1 + realmLevel * 50);
+    // cultivationPower = 保留的修炼效率(retainedPower) + 历史总修炼量(accumulated_power×0.001) + 境界基础
+    const finalCultivationPower = Math.floor(storedPower + newAccumulatedPower * 0.001 + realmLevel * 50);
 
     // 扣除灵石（写入 Users.lingshi，权威数据源）
     db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(LINGSHI_COST, userId);
-    // 同步修炼值 + cultivationPower
-    db.prepare('UPDATE Cultivations SET value = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, finalCultivationPower, userId);
+    // 同步修炼值 + cultivationPower + accumulated_power
+    db.prepare('UPDATE Cultivations SET value = ?, cultivationPower = ?, accumulated_power = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(newValue, finalCultivationPower, newAccumulatedPower, userId);
     // 增加今日修炼次数
     incrementDailyCultivationTimes(userId);
     // 增加玩家经验（1次修炼 = 10 exp）
