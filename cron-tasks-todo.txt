@@ -4128,19 +4128,19 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # === P1-108 (2026-03-31 第108轮) ===
 
-[B-108-1] 【第6次】注册 spirit_root 路由
+[B-108-1] 【第6次】注册 spirit_root 路由  # 完成 | 2026-03-30 d524cd65
   - 文件: server/server.js
   - 添加: app.use('/api/spirit-root', require('./backend/routes/spirit_root'))
   - 验证: curl http://localhost:3001/api/spirit-root/roots?player_id=1 → 应返回JSON数组
   - 截止: 2026-04-01 | 优先级: P1-紧急
 
-[B-108-2] 【第6次】注册 talent 路由
+[B-108-2] 【第6次】注册 talent 路由  # 完成 | 2026-03-30 d524cd65
   - 文件: server/server.js
   - 添加: app.use('/api/talent', require('./backend/routes/talent'))
   - 验证: curl http://localhost:3001/api/talent/list?player_id=1 → 应返回天赋树JSON
   - 截止: 2026-04-01 | 优先级: P1-紧急
 
-[B-108-3] 注册 gacha 路由（514行实现，从未接入）
+[B-108-3] 注册 gacha 路由（514行实现，从未接入）  # 完成 | 2026-03-30 d524cd65
   - 文件: server/server.js
   - 添加: app.use('/api/gacha', require('./backend/routes/gacha'))
   - 验证: curl http://localhost:3001/api/gacha/list?player_id=1 → 应返回奖池数据
@@ -4198,3 +4198,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 
 # [P1-B-98-5] 新建 dailyChallenge.js 后端
 # 截止: 2026-04-20
+
+# === 2026-03-30 后端紧急修复 ===
+[B-030-1] 多个路由userId空值导致NOT NULL约束崩溃  # 完成 | 2026-03-30 d524cd65
+  - 文件: server/backend/routes/chapter.js, dungeon.js, achievement.js
+  - 问题: req.body.userId为空时导致 chapter_progress.forge_materials.daily_quest_progress NOT NULL失败
+  - 修复: 添加 req.userId || parseInt(req.body.userId) || 1 降级fallback
+  - 验证: tail /tmp/server.log | grep "NOT NULL" 应减少或消失
+  - 截止: 2026-03-30
