@@ -456,10 +456,10 @@ router.post('/benefits', (req, res) => {
     )`);
 
     // 获取玩家 VIP 等级
-    const user = db.prepare('SELECT id, vip_level, vipLevel, lingshi FROM Users WHERE id = ?').get(userId);
+    const user = db.prepare('SELECT id, vipLevel, lingshi FROM Users WHERE id = ?').get(userId);
     if (!user) return res.json({ success: false, error: '玩家不存在' });
 
-    const vipLevel = user.vip_level || user.vipLevel || 0;
+    const vipLevel = user.vipLevel || 0;
     if (vipLevel < 1) {
       return res.json({ success: false, error: 'VIP等级不足1级，无法领取每日福利' });
     }
