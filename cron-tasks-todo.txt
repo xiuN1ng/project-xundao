@@ -78,11 +78,12 @@
 - 截止: 2026-04-02
 - 完成: 2026-03-31 新增 /backend/routes/alchemy.js，添加 /info /refine /learn /furnace/upgrade 端点，修复404问题
 
-## [P1-125-1-B] 装备分解/合成端点不存在
+## [P1-125-1-B] 装备分解/合成端点不存在 ✅ 已完成
 - backend/routes/equipment.js 添加 POST /decompose 和 /synthesize
 - 添加 equipment_decompose_recipes 配方表
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-05
+- 完成: 2026-03-31 新增 /decompose /synthesize /decompose-recipes /synthesize-recipes 端点
 
 ## [P1-125-2-B] Tutorial /api/tutorial/status 返回404
 - 检查 game/tutorial_api.js mount 情况并修复
@@ -104,3 +105,17 @@
 - player_beast_lend 表
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-20
+
+## [P1-122-1-B] 成就系统实时状态回填（跨轮未修复）
+- achievements.js 的 /sprint 或 /list 路由中
+- 对 realm 类成就: progress = min(player.realm, target), completed = (player.realm >= target)
+- 对 combat 类成就: progress = min(player.combat_power, target), completed = (player.combat_power >= target)
+- achievement_trigger_service 首次触发时补录所有已满足条件的历史成就
+- 关联: server/backend/routes/achievements.js
+- 截止: 2026-04-01
+
+## [P1-122-2-B] 排行榜路由别名（添加 /api/ranking 指向 /api/rank）
+- 在 server/backend/server.js 中添加: app.use('/api/ranking', require('./routes/rank'));
+- 验证: curl /api/ranking/combat 返回与 /api/rank/combat 相同数据
+- 关联: server/backend/server.js
+- 截止: 2026-04-01
