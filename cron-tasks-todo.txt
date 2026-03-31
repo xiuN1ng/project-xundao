@@ -219,3 +219,20 @@
 - 关联: server/backend/routes/flash_sale.js
 - 截止: 2026-04-15
 
+
+# ========== 2026-04-01 P0 修复 (心跳自动执行) ==========
+
+[P0] 天梯API崩溃 (ladder_api.js)
+     问题: loadDependencies()未被调用，ladderStorage始终为undefined
+     修复: 将初始化移到模块顶层立即执行
+     变更:
+       [B] server/game/ladder_api.js (修复ladderStorage初始化) ✅ (2026-04-01 04:30)
+     验证: GET /api/ladder/info ✅ GET /api/ladder/season ✅
+
+[P0] 封神榜API崩溃 (deity_list_api.js)
+     问题: 同ladder_api.js + require()返回整个模块而非.deityStorage
+     修复: 顶层初始化 + 使用.deityStorage获取正确导出
+     变更:
+       [B] server/game/deity_list_api.js (双重修复) ✅ (2026-04-01 04:32)
+     验证: GET /api/deity-list/types ✅
+
