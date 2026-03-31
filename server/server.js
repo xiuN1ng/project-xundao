@@ -4670,40 +4670,44 @@ app.get('/api/ranking/:type', (req, res) => {
     let ranking = [];
 
     if (type === 'combat') {
-      // 战力排行榜：从 Users 表实时计算
+      // 战力排行榜：从 player 表实时计算
       ranking = db.prepare(`
-        SELECT id, username as name, level, realm,
-               FLOOR(attack*10 + defense*5 + hp/10) as value,
-               attack, defense, hp, spirit_stones as lingshi
-        FROM Users WHERE id > 0
+        SELECT id, username as name, level, realm_level as realm,
+               combat_power as value,
+               spirit_stones as lingshi
+        FROM player WHERE id > 0
         ORDER BY value DESC LIMIT ?
       `).all(n);
     } else if (type === 'level') {
       ranking = db.prepare(`
-        SELECT id, username as name, level, realm as realm_level,
+        SELECT id, username as name, level, realm_level as realm,
                level as value, spirit_stones as lingshi
-        FROM Users WHERE id > 0
+        FROM player WHERE id > 0
         ORDER BY realm DESC, level DESC LIMIT ?
       `).all(n);
     } else if (type === 'wealth') {
       ranking = db.prepare(`
-        SELECT id, username as name, level, realm as realm_level,
-               spirit_stones as value, lingshi
-        FROM Users WHERE id > 0
+        SELECT id, username as name, level, realm_level as realm,
+               spirit_stones as value, spirit_stones as lingshi
+        FROM player WHERE id > 0
         ORDER BY spirit_stones DESC LIMIT ?
       `).all(n);
     } else if (type === 'chapter') {
-      // 章节排行榜：从 chapter_progress 表读取
-      ranking = db.prepare(`
-        SELECT u.id, u.username as name, u.level, u.realm as realm_level,
-               COALESCE(MAX(cp.chapter_id), 0) as value,
-               u.spirit_stones as lingshi
-        FROM Users u
-        LEFT JOIN chapter_progress cp ON u.id = cp.user_id
-        WHERE u.id > 0
-        GROUP BY u.id
-        ORDER BY value DESC LIMIT ?
-      `).all(n);
+      // 章节排行榜：从 dungeon_records 表读取（如无数据则用玩家数替代）
+      try {
+        ranking = db.prepare(`
+          SELECT p.id, p.username as name, p.level, p.realm_level,
+                 COALESCE(MAX(dr.chapter_id), 0) as value,
+                 p.spirit_stones as lingshi
+          FROM player p
+          LEFT JOIN dungeon_records dr ON p.id = dr.player_id
+          WHERE p.id > 0
+          GROUP BY p.id
+          ORDER BY value DESC LIMIT ?
+        `).all(n);
+      } catch(e) {
+        ranking = [];
+      }
     } else {
       return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
     }
@@ -4722,14 +4726,14 @@ app.get('/api/ranking/:type', (req, res) => {
     if (uid > 0) {
       let myRankInfo = null;
       if (type === 'combat') {
-        const me = db.prepare(`SELECT FLOOR(attack*10+defense*5+hp/10) as power FROM Users WHERE id = ?`).get(uid);
-        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND FLOOR(attack*10+defense*5+hp/10) > ?`).get(me ? me.power : 0);
-        myRankInfo = { myRank: rank.r, combatPower: me ? me.power : 0 };
+        const me = db.prepare(`SELECT combat_power as power FROM player WHERE id = ?`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND combat_power > ?`).get(me ? me.power : 0);
+        myRankInfo = { myRank: rank ? rank.r : 0, combatPower: me ? me.power : 0 };
       } else if (type === 'level') {
-        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND (realm > (SELECT realm FROM Users WHERE id = ?) OR (realm = (SELECT realm FROM Users WHERE id = ?) AND level > (SELECT level FROM Users WHERE id = ?)))`).get(uid, uid, uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND (realm_level > (SELECT realm_level FROM player WHERE id = ?) OR (realm_level = (SELECT realm_level FROM player WHERE id = ?) AND level > (SELECT level FROM player WHERE id = ?)))`).get(uid, uid, uid);
         myRankInfo = { myRank: rank ? rank.r : 0 };
       } else if (type === 'wealth') {
-        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND spirit_stones > (SELECT spirit_stones FROM Users WHERE id = ?)`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND spirit_stones > (SELECT spirit_stones FROM player WHERE id = ?)`).get(uid);
         myRankInfo = { myRank: rank ? rank.r : 0 };
       }
       return res.json({ success: true, list, myRank: myRankInfo });
@@ -4755,19 +4759,19 @@ app.get('/api/ranking/:type/me', (req, res) => {
     const uid = parseInt(player_id);
 
     if (type === 'combat') {
-      const me = db.prepare(`SELECT id, username as name, level, realm as realm_level, FLOOR(attack*10+defense*5+hp/10) as combat_power FROM Users WHERE id = ?`).get(uid);
+      const me = db.prepare(`SELECT id, username as name, level, realm_level, combat_power FROM player WHERE id = ?`).get(uid);
       if (!me) return res.json({ success: false, error: '玩家不存在' });
-      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND FLOOR(attack*10+defense*5+hp/10) > ?`).get(me.combat_power);
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND combat_power > ?`).get(me.combat_power);
       res.json({ success: true, myRank: rank.r, player: me });
     } else if (type === 'level') {
-      const me = db.prepare(`SELECT id, username as name, level, realm as realm_level FROM Users WHERE id = ?`).get(uid);
+      const me = db.prepare(`SELECT id, username as name, level, realm_level FROM player WHERE id = ?`).get(uid);
       if (!me) return res.json({ success: false, error: '玩家不存在' });
-      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND (realm > ? OR (realm = ? AND level > ?))`).get(me.realm_level, me.realm_level, me.level);
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND (realm_level > ? OR (realm_level = ? AND level > ?))`).get(me.realm_level, me.realm_level, me.level);
       res.json({ success: true, myRank: rank.r, player: me });
     } else if (type === 'wealth') {
-      const me = db.prepare(`SELECT id, username as name, spirit_stones as lingshi FROM Users WHERE id = ?`).get(uid);
+      const me = db.prepare(`SELECT id, username as name, spirit_stones as lingshi FROM player WHERE id = ?`).get(uid);
       if (!me) return res.json({ success: false, error: '玩家不存在' });
-      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND spirit_stones > ?`).get(me.lingshi);
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND spirit_stones > ?`).get(me.lingshi);
       res.json({ success: true, myRank: rank.r, player: me });
     } else {
       res.json({ success: false, error: '未知排行榜类型' });
