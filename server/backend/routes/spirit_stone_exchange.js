@@ -3,37 +3,25 @@
  * 
  * 功能:
  * - 查询玩家的普通灵石(lingshi)和储备灵石(spirit_stone_reserve)
- * - 储备灵石转换为普通灵石(1:1，每日限额10000，10%手续费)
+ * - 储备灵石转换为普通灵石(1:1，每日限额50000，10%手续费)
  * - 普通灵石转换为储备灵石(1:1，无限额，手续5%)
  * - 兑换记录历史
- * 
- * 数据库字段:
- * - lingshi: 普通灵石，可用于玩家市场交易、宗门捐献
- * - spirit_stone_reserve: 储备灵石，仅可用于系统商店
  */
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
 
-// 数据库（从 server.js 注入）
-let db = null;
-let database = null;
+// 数据库连接
+const DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
+let db;
 try {
-  const serverPath = require('path').resolve(__dirname, '../server.js');
-  const serverModule = require(serverPath);
-  db = serverModule.db || (serverModule.database && serverModule.database.db);
-  database = serverModule.database;
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
 } catch (e) {
-  console.log('[spirit_stone] 无法获取DB引用:', e.message);
+  console.error('[spirit_stone] DB连接失败:', e.message);
 }
-
-// 备用：直接从 server.js 获取
-try {
-  const parentPath = require('path').resolve(__dirname, '../server.js');
-  const parentModule = require(parentPath);
-  if (!db && parentModule.db) db = parentModule.db;
-  if (!database && parentModule.database) database = parentModule.database;
-} catch (e) {}
 
 // 配置
 const EXCHANGE_CONFIG = {
