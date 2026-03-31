@@ -44,6 +44,20 @@ function initAuctionTables() {
         created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (auction_id) REFERENCES auction_items(id)
       );
+
+      CREATE TABLE IF NOT EXISTS auction_broadcasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        auction_id INTEGER NOT NULL,
+        seller_id INTEGER NOT NULL,
+        seller_name TEXT,
+        buyer_id INTEGER,
+        buyer_name TEXT,
+        item_name TEXT,
+        item_type TEXT,
+        final_price INTEGER NOT NULL,
+        message TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
     `);
   } finally {
     db.close();
@@ -51,6 +65,35 @@ function initAuctionTables() {
 }
 
 initAuctionTables();
+
+// Helper: record auction broadcast for high-value transactions (>= 10000 lingshi)
+// 1 broadcast per buyer per minute to prevent spam
+function recordAuctionBroadcast(db, auction, finalPrice) {
+  if (finalPrice < 10000) return; // Only broadcast transactions >= 10000 lingshi
+
+  try {
+    // Check if this buyer already got a broadcast in the last 60 seconds
+    const oneMinuteAgo = new Date(Date.now() - 60000).toISOString().slice(0, 19).replace('T', ' ');
+    const recent = db.prepare(`
+      SELECT id FROM auction_broadcasts
+      WHERE buyer_id = ? AND created_at > ?
+    `).get(auction.current_bidder_id, oneMinuteAgo);
+
+    if (recent) return; // Skip, buyer already broadcast within 1 minute
+
+    // Compose broadcast message
+    const itemRarity = auction.item_type || 'material';
+    const rarityLabel = { equipment: '【装备】', material: '【材料】', beast: '【灵兽】', fashion: '【时装】', pill: '【丹药】', gongfa: '【功法】' }[itemRarity] || '【物品】';
+    const message = `${rarityLabel} ${auction.item_name} 以 ${finalPrice.toLocaleString()} 灵石成交！买家 ${auction.current_bidder_name || '神秘人'} 抱得宝贝归~`;
+
+    db.prepare(`
+      INSERT INTO auction_broadcasts (auction_id, seller_id, seller_name, buyer_id, buyer_name, item_name, item_type, final_price, message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(auction.id, auction.seller_id, auction.seller_name, auction.current_bidder_id, auction.current_bidder_name, auction.item_name, auction.item_type, finalPrice, message);
+  } catch (e) {
+    // Silently ignore broadcast errors to not break the main flow
+  }
+}
 
 // Helper: settle expired auctions
 function settleExpiredAuctions() {
@@ -74,6 +117,9 @@ function settleExpiredAuctions() {
 
         // Mark as sold
         db.prepare(`UPDATE auction_items SET status = 'sold' WHERE id = ?`).run(auction.id);
+
+        // Record broadcast for high-value transactions
+        recordAuctionBroadcast(db, auction, auction.current_price);
       } else {
         // No bids — mark as expired
         db.prepare(`UPDATE auction_items SET status = 'expired' WHERE id = ?`).run(auction.id);
@@ -323,6 +369,48 @@ router.get('/:id', (req, res) => {
     db.close();
   }
 });
+
+// GET /api/auction/broadcasts — get recent high-value auction broadcasts
+router.get('/broadcasts', (req, res) => {
+  const db = getDb();
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const broadcasts = db.prepare(`
+      SELECT * FROM auction_broadcasts
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    res.json({
+      success: true,
+      broadcasts: broadcasts.map(b => ({
+        ...b,
+        created_at_relative: getRelativeTime(b.created_at)
+      }))
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
+});
+
+// Helper: get relative time string
+function getRelativeTime(sqlDatetime) {
+  try {
+    const then = new Date(sqlDatetime.replace(' ', 'T')).getTime();
+    const diff = Date.now() - then;
+    const secs = Math.floor(diff / 1000);
+    if (secs < 60) return `${secs}秒前`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}分钟前`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}小时前`;
+    return `${Math.floor(hrs / 24)}天前`;
+  } catch (e) {
+    return sqlDatetime;
+  }
+}
 
 // POST /api/auction/claim — claim won item (for players who won)
 router.post('/claim', (req, res) => {
