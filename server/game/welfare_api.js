@@ -457,7 +457,7 @@ router.get('/daily', (req, res) => {
       success: true,
       data: {
         date: todayStr,
-        daily: { canClaim: canClaimDaily, reward: dailyReward },
+        daily: { canClaim: canClaimDaily, reward: canClaimDaily ? dailyReward : { type: 'lingshi', amount: 0, name: '已领取' } },
         firstRecharge: firstRechargeStatus,
         growthFund: {
           purchased: growthFundStatus.purchased,
