@@ -5,6 +5,73 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+
+// ==================== 数据库支持 ====================
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
+let db = null;
+
+try {
+  const Database = require('better-sqlite3');
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode=WAL');
+  initCaveVisitTables();
+} catch (e) {
+  console.log('[cave] DB初始化失败:', e.message);
+}
+
+function initCaveVisitTables() {
+  if (!db) return;
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cave_visits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        visitor_id INTEGER NOT NULL,
+        host_id INTEGER NOT NULL,
+        visited_at TEXT DEFAULT (datetime('now')),
+        reward_given INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS cave_visit_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        visitor_id INTEGER NOT NULL,
+        host_id INTEGER NOT NULL,
+        visited_at TEXT DEFAULT (datetime('now')),
+        reward_given INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS cave_rankings (
+        player_id INTEGER PRIMARY KEY,
+        charm INTEGER DEFAULT 0,
+        comfort INTEGER DEFAULT 0,
+        decorations INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_cave_visits_visitor ON cave_visits(visitor_id);
+      CREATE INDEX IF NOT EXISTS idx_cave_visits_host ON cave_visits(host_id);
+    `);
+  } catch (e) {
+    console.log('[cave] 访客表初始化失败:', e.message);
+  }
+}
+
+// 同步洞府数据到排行榜表
+function syncCaveRanking(cave) {
+  if (!db) return;
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO cave_rankings (player_id, charm, comfort, decorations, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(player_id) DO UPDATE SET
+        charm = excluded.charm,
+        comfort = excluded.comfort,
+        decorations = excluded.decorations,
+        updated_at = datetime('now')
+    `);
+    stmt.run(cave.playerId, cave.charm, cave.comfort, cave.decorations.length);
+  } catch (e) {
+    // ignore
+  }
+}
 
 // ==================== 装饰物配置 ====================
 const DECORATION_TYPES = {
@@ -114,8 +181,8 @@ function calcCultivationBonus(comfort) {
 
 // 计算访客吸引力（基于魅力值）
 function calcVisitorAttraction(charm) {
-  // 魅力值每20点可吸引1个访客，上限10个
-  return Math.min(10, Math.floor(charm / 20));
+  // 魅力值每5点可吸引1个访客，上限10个
+  return Math.min(10, Math.floor(charm / 5));
 }
 
 // 获取作物成熟状态
@@ -515,6 +582,233 @@ router.get('/stats', (req, res) => {
       cultivationBonus: calcCultivationBonus(cave.comfort),
       visitorAttraction: calcVisitorAttraction(cave.charm),
     },
+  });
+});
+
+// GET /api/cave/ranking - 洞府魅力排行榜（必须在 /:player_id 之前，否则被误匹配）
+router.get('/ranking', (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const pageSize = parseInt(req.query.page_size) || 10;
+  const offset = (page - 1) * pageSize;
+
+  // 优先从数据库读取排行榜
+  if (db) {
+    try {
+      // 先同步当前在线玩家的洞府数据到排行榜
+      for (const [pid, cave] of caveDb.data) {
+        syncCaveRanking(cave);
+      }
+
+      const totalRow = db.prepare('SELECT COUNT(*) as total FROM cave_rankings').get();
+      const total = totalRow ? totalRow.total : 0;
+
+      const ranks = db.prepare(`
+        SELECT cr.player_id, cr.charm, cr.comfort, cr.decorations, cr.updated_at,
+               COALESCE(u.nickname, '修士' || cr.player_id) as player_name,
+               COALESCE(u.level, 1) as level
+        FROM cave_rankings cr
+        LEFT JOIN Users u ON u.id = cr.player_id
+        ORDER BY cr.charm DESC, cr.comfort DESC
+        LIMIT ? OFFSET ?
+      `).all(pageSize, offset);
+
+      const ranking = ranks.map((r, idx) => ({
+        rank: offset + idx + 1,
+        playerId: r.player_id,
+        playerName: r.player_name,
+        level: r.level,
+        charm: r.charm,
+        comfort: r.comfort,
+        decorationCount: r.decorations,
+        cultivationBonus: calcCultivationBonus(r.comfort),
+        updatedAt: r.updated_at,
+      }));
+
+      return res.json({
+        success: true,
+        ranking,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
+    } catch (e) {
+      console.log('[cave] 排行榜DB查询失败:', e.message);
+    }
+  }
+
+  // Fallback: 从内存构建排行榜
+  const allCaves = Array.from(caveDb.data.entries())
+    .map(([playerId, cave]) => ({
+      playerId,
+      charm: cave.charm,
+      comfort: cave.comfort,
+      decorationCount: cave.decorations.length,
+      cultivationBonus: calcCultivationBonus(cave.comfort),
+    }))
+    .sort((a, b) => b.charm - a.charm);
+
+  const total = allCaves.length;
+  const paged = allCaves.slice(offset, offset + pageSize).map((c, idx) => ({
+    rank: offset + idx + 1,
+    playerId: c.playerId,
+    playerName: `修士${c.playerId}`,
+    charm: c.charm,
+    comfort: c.comfort,
+    decorationCount: c.decorationCount,
+    cultivationBonus: c.cultivationBonus,
+  }));
+
+  res.json({
+    success: true,
+    ranking: paged,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  });
+});
+
+// POST /api/cave/visit - 访问其他玩家的洞府
+router.post('/visit', (req, res) => {
+  const { host_id, visitor_id } = req.body;
+  const visitorId = parseInt(visitor_id) || (req.userId || 1);
+  const hostId = parseInt(host_id);
+
+  if (!hostId || hostId === visitorId) {
+    return res.json({ success: false, message: '无效的目标玩家' });
+  }
+
+  const cave = caveDb.getOrCreateCave(hostId);
+
+  // 检查目标洞府是否有访客容量
+  const capacity = calcVisitorAttraction(cave.charm);
+  if (capacity === 0) {
+    return res.json({ success: false, message: '该洞府魅力值不足，无法被访问' });
+  }
+
+  // 检查今日访问次数限制（每个玩家每天最多访问5次）
+  let canVisit = true;
+  if (db) {
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const row = db.prepare(`
+        SELECT COUNT(*) as cnt FROM cave_visits
+        WHERE visitor_id = ? AND date(visited_at) = ?
+      `).get(visitorId, todayStr);
+      if (row && row.cnt >= 5) {
+        canVisit = false;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (!canVisit) {
+    return res.json({ success: false, message: '今日访问次数已达上限（5次/天）' });
+  }
+
+  // 记录访客
+  if (db) {
+    try {
+      db.prepare(`
+        INSERT INTO cave_visits (visitor_id, host_id, visited_at, reward_given)
+        VALUES (?, ?, datetime('now'), 0)
+      `).run(visitorId, hostId);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 计算访问奖励
+  const visitorReward = Math.min(50, Math.max(5, cave.charm * 2));
+  const hostReward = Math.min(30, Math.max(3, cave.comfort));
+
+  let hostName = `修士${hostId}`;
+  let visitorName = `修士${visitorId}`;
+  if (db) {
+    try {
+      const hostRow = db.prepare('SELECT nickname FROM Users WHERE id = ?').get(hostId);
+      if (hostRow) hostName = hostRow.nickname;
+      const visitorRow = db.prepare('SELECT nickname FROM Users WHERE id = ?').get(visitorId);
+      if (visitorRow) visitorName = visitorRow.nickname;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `拜访了 ${hostName} 的洞府！`,
+    visit: {
+      hostId,
+      hostName,
+      visitorId,
+      visitorName,
+      visitedAt: new Date().toISOString(),
+      visitorReward,
+      hostReward,
+      hostCharm: cave.charm,
+      hostComfort: cave.comfort,
+      hostCultivationBonus: calcCultivationBonus(cave.comfort),
+    },
+  });
+});
+
+// GET /api/cave/:player_id - 获取指定玩家的洞府详情（互访）（必须在 /ranking 之后）
+router.get('/:player_id', (req, res) => {
+  const hostId = parseInt(req.params.player_id) || 1;
+  const visitorId = parseInt(req.query.visitor_id) || (req.userId || 1);
+
+  // 不能访问自己的洞府（用 /detail）
+  if (hostId === visitorId) {
+    return res.json({ success: false, message: '请使用 /detail 查看自己的洞府' });
+  }
+
+  const cave = caveDb.getOrCreateCave(hostId);
+
+  // 更新所有灵田状态
+  const fields = cave.spiritFields.map(field => ({
+    ...field,
+    ...getCropStatus(field),
+  }));
+
+  // 查询今日访客记录
+  let visitCountToday = 0;
+  if (db) {
+    try {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+      const row = db.prepare(`
+        SELECT COUNT(*) as cnt FROM cave_visits
+        WHERE host_id = ? AND date(visited_at) = ?
+      `).get(hostId, todayStr);
+      visitCountToday = row ? row.cnt : 0;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  res.json({
+    success: true,
+    cave: {
+      playerId: cave.playerId,
+      charm: cave.charm,
+      comfort: cave.comfort,
+      decorations: cave.decorations,
+      decorationSlots: cave.decorationSlots,
+      spiritFields: fields,
+      fieldSlots: cave.fieldSlots,
+      totalHarvests: cave.totalHarvests,
+      cultivationBonus: calcCultivationBonus(cave.comfort),
+      visitorAttraction: calcVisitorAttraction(cave.charm),
+      visitCountToday,
+    },
+    hostId,
   });
 });
 
