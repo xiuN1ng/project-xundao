@@ -120,8 +120,51 @@
 - 关联: server/backend/routes/achievements.js
 - 截止: 2026-04-01
 
-## [P1-122-2-B] 排行榜路由别名（添加 /api/ranking 指向 /api/rank）
+## [P1-122-2-B] 排行榜路由别名（添加 /api/ranking 指向 /api/rank）✅ 已完成
 - 在 server/backend/server.js 中添加: app.use('/api/ranking', require('./routes/rank'));
 - 验证: curl /api/ranking/combat 返回与 /api/rank/combat 相同数据
 - 关联: server/backend/server.js
 - 截止: 2026-04-01
+- 完成: 2026-03-31 在 server.js 中添加 /api/ranking 别名路由
+
+# ========== 从策划提案分发 — 2026-03-31 第126轮 ==========
+# 分发时间: 2026-03-31 12:57
+
+## [P0-126-1-B] realm_dungeon 路由挂载（最高优先级）
+- server/server.js 添加: app.use('/api/realm-dungeon', require('./backend/routes/realm_dungeon'));
+- 确认 backend/routes/realm_dungeon.js 中 REALM_DUNGEON_DATA 引用路径正确
+- 关联: server/server.js, server/backend/routes/realm_dungeon.js
+- 截止: 2026-04-02
+
+## [P1-126-1-B] daily-quest 路径别名
+- server/server.js 添加: app.use('/api/daily-quest', require('./backend/routes/dailyQuest'));
+- 同时保留 /api/dailyQuest 兼容原有路径
+- 关联: server/server.js
+- 截止: 2026-04-02
+
+## [P1-126-2-B] SeasonPass level 实时同步
+- season_pass.js 的 /status 端点: 从 players 表读取 level 而非 player_season_pass 表
+- 截止: 2026-04-03
+
+## [P1-126-3-B] Tribulation realm_level 实时同步
+- tribulation.js 的 /status 端点: 从 players 表读取 realm 而非 tribulation_progress 表
+- 截止: 2026-04-03
+
+## [P1-126-4-B] WorldBoss damageCap 强制移除（跨轮敦促）
+- worldboss.js attack 路由: 移除 Math.min(damage, 500) 强制封顶
+- 改为: actualDamage = Math.max(1, damage - bossDefense)
+- 关联: server/game/worldboss.js
+- 截止: 2026-04-02
+
+## [P2-126-1-B] SeasonPass 任务列表补充
+- season_pass.js 的 /tasks 端点补充任务配置表查询
+- 添加赛季任务触发逻辑（战斗/修炼/购物事件更新进度）
+- 截止: 2026-04-10
+
+## [P2-126-2-B] 宗门秘境宝库后端
+- 创建 sect_treasury.js 或在 sect_system.js 中添加:
+  - POST /api/sect/treasury/deposit
+  - POST /api/sect/treasury/withdraw
+  - GET /api/sect/treasury
+- 添加 player_sect_treasury 表
+- 截止: 2026-04-20
