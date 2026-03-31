@@ -67,20 +67,23 @@ export default {
   methods: {
     async loadRank() {
       const res = await fetch('http://localhost:3001/api/arena/ranks?limit=20')
-      this.ranks = await res.json()
+      const json = await res.json()
+      this.ranks = json.data?.ranking || json.ranking || []
     },
     async loadMyRank() {
       const res = await fetch('http://localhost:3001/api/arena/rank/1')
-      const data = await res.json()
-      this.myRank = data.rank
+      const json = await res.json()
+      this.myRank = json.rank || json.data?.ranking?.current || 0
     },
     async loadOpponents() {
       const res = await fetch('http://localhost:3001/api/arena/opponents/1')
-      this.opponents = await res.json()
+      const json = await res.json()
+      this.opponents = json.data?.opponents || json.opponents || []
     },
     async loadRecords() {
       const res = await fetch('http://localhost:3001/api/arena/records/1')
-      this.records = await res.json()
+      const json = await res.json()
+      this.records = json.data?.records || json.records || []
     },
     async challenge(opponent) {
       const res = await fetch('http://localhost:3001/api/arena/challenge', {

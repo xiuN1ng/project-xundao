@@ -117,6 +117,7 @@ app.use('/api/commission', require('./routes/commission'));
 app.use('/api/trade', require('./routes/trade'));
 app.use('/api/talent', require('./routes/talent'));
 app.use('/api/spirit-root', require('./routes/spirit_root'));
+app.use('/api/spirit-stone', require('./routes/spirit_stone_exchange'));
 app.use('/api/adventure', require('./routes/adventure'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/shop', require('./routes/shop'));

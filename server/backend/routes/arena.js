@@ -376,13 +376,16 @@ router.get('/ranks', (req, res) => {
 
     const ranking = players.map((p, index) => {
       const rank = ArenaSystem ? ArenaSystem.getRank(p.rank_id) : { icon: '👤' };
+      const combatPower = Math.floor(p.level * 500 + (p.realm_level || 1) * 2000);
       return {
         rank: parseInt(offset) + index + 1,
         playerId: p.id,
+        name: p.username,
         username: p.username,
         level: p.level,
         realmLevel: p.realm_level,
-        combatPower: Math.floor(p.level * 500 + (p.realm_level || 1) * 2000),
+        combat: combatPower,
+        combatPower,
         arenaPoints: p.arena_points,
         rankId: p.rank_id,
         rankName: p.rank_name,
@@ -486,7 +489,8 @@ router.get('/rank/:userId', (req, res) => {
           current: ranking,
           total: totalPlayers,
           percentage: Math.round((1 - (ranking / totalPlayers)) * 100)
-        }
+        },
+        rank: ranking
       }
     });
   } catch (error) {
@@ -796,9 +800,12 @@ router.get('/opponents/:userId', (req, res) => {
       const cpRatio = Math.min(opCP / playerCombatPower, playerCombatPower / opCP);
       return {
         playerId: op.id,
+        userId: op.id,
+        name: op.username,
         username: op.username,
         level: op.level,
         realmLevel: op.realm_level,
+        combat: opCP,
         combatPower: opCP,
         arenaPoints: op.arena_points,
         rankId: op.rank_id,
@@ -859,11 +866,14 @@ router.get('/records/:userId', (req, res) => {
     `).all(userId, userId, parseInt(limit));
 
     const formattedRecords = records.map(r => ({
+      id: r.id,
       battleId: r.id,
       season: r.season,
-      attackerId: r.attacker_id,
+      challengerId: r.attacker_id,
+      challengerName: r.attacker_name || '未知',
       attackerName: r.attacker_name || '未知',
-      defenderId: r.defender_id,
+      targetId: r.defender_id,
+      targetName: r.defender_name || '未知',
       defenderName: r.defender_name || '未知',
       attackerPointsBefore: r.attacker_points_before,
       attackerPointsAfter: r.attacker_points_after,
@@ -876,6 +886,7 @@ router.get('/records/:userId', (req, res) => {
       result: r.result,
       winnerId: r.winner_id,
       isWin: r.winner_id === parseInt(userId),
+      time: r.battle_time,
       battleTime: r.battle_time,
       formattedTime: new Date(r.battle_time).toLocaleString('zh-CN')
     }));
