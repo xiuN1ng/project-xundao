@@ -217,6 +217,17 @@ try {
   console.log('[guide] 引导路由加载失败:', e.message);
 }
 
+// AFK挂机系统
+try {
+  const afkRouter = require('./routes/afk');
+  afkRouter.initAfkTables();
+  if (afkRouter.setDb) afkRouter.setDb(db);
+  app.use('/api/afk', afkRouter);
+  console.log('✓ AFK挂机系统路由已加载');
+} catch(e) {
+  console.log('[afk] AFK路由加载失败:', e.message);
+}
+
 app.get('/api/health', (req, res) => res.json({status:'ok',timestamp:Date.now()}));
 
 // 注入玩家数据引用到成就系统 (成就奖励需要更新玩家资源)

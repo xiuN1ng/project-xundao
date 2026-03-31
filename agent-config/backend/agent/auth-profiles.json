@@ -6,7 +6,7 @@
       "provider": "minimax-portal",
       "access": "sk-cp-WRWn6NeqOIIq-I3ijVwNxLdyyIoVW1pFscK00I2LIlf_3k4Rx8EtxCTBNTJ5h3wGUaKcoPSGF_pGl13QsxuAl7idKE2zhRWQDirvOrcwA8bT3-xcXriJmTo",
       "refresh": "xWZEBpAsDCoqLWpslK9SlEdWqDFEOW63vMqyZHilAGQ=",
-      "expires": 1805361458548
+      "expires": 1806458863677
     },
     "minimax-cn:default": {
       "type": "api_key",
@@ -19,7 +19,7 @@
   },
   "usageStats": {
     "minimax-portal:default": {
-      "lastUsed": 1774916346144,
+      "lastUsed": 1774920842751,
       "errorCount": 0,
       "lastFailureAt": 1773827646267
     },

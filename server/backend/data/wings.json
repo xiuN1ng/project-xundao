@@ -37,5 +37,25 @@
         "acquiredAt": "2026-03-27T02:16:54.307Z"
       }
     ]
+  },
+  "27": {
+    "owned": [
+      {
+        "id": 1,
+        "type": "angel",
+        "name": "天使翅膀",
+        "rarity": "common",
+        "level": 1,
+        "exp": 0,
+        "atkBonus": 10,
+        "defBonus": 5,
+        "hpBonus": 20,
+        "active": true,
+        "skills": [
+          "护盾 I"
+        ],
+        "acquiredAt": "2026-03-31T02:07:31.560Z"
+      }
+    ]
   }
 }
