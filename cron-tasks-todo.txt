@@ -68,3 +68,38 @@
 - 来源: 提案 2026-03-31 第124轮
 - 截止: 2026-04-20
 - 完成: 2026-03-31 完成 sect_trial.js 路由模块，包含赛季管理/积分排行/战斗录入/奖励领取
+
+# === 来自: 提案 2026-03-31 第125轮 ===
+
+## [P0-125-1-B] Alchemy 整个路由返回404
+- 原因排查: alchemy_api.js mount 重复 + 路由栈冲突
+- 修复: 移除重复 mount + 添加 /info /refine /learn /upgrade 端点
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-02
+
+## [P1-125-1-B] 装备分解/合成端点不存在
+- backend/routes/equipment.js 添加 POST /decompose 和 /synthesize
+- 添加 equipment_decompose_recipes 配方表
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-05
+
+## [P1-125-2-B] Tutorial /api/tutorial/status 返回404
+- 检查 game/tutorial_api.js mount 情况并修复
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-05
+
+## [P1-125-3-B] DailyQuest /api/daily-quest/list 返回404
+- 检查 dailyQuest.js /list 端点并修复
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-05
+
+## [回归-P1-B] Tasks 系统 /api/tasks 仍返回404
+- 确认路由被覆盖问题，参考 routes_old/tasks.js 重写
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-02
+
+## [P2-125-1-B] 仙友助战后端
+- friend_api.js 添加借调灵兽 API（/beast-lend, /beast-borrow, /lendable-beasts）
+- player_beast_lend 表
+- 来源: 提案 2026-03-31 第125轮
+- 截止: 2026-04-20

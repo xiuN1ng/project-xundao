@@ -141,6 +141,7 @@ app.use('/api/chapter', chapterRouter);
 try { if (chapterRouter.setPlayerRef) chapterRouter.setPlayerRef(playerModule._player); } catch(e) { console.log('[chapter setPlayerRef]', e.message); }
 app.use('/api/story', require('./routes/story'));
 app.use('/api/pill', require('./routes/pill'));
+app.use('/api/alchemy', require('./routes/alchemy'));
 
 // 运营
 app.use('/api/announcement', require('./routes/announcement'));
