@@ -4772,10 +4772,12 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 来源: 提案 2026-03-31 第122轮
 - 截止: 2026-04-12
 
-## [P0-123-1-B] 修复 Arena 前后端路径错配
+## [P0-123-1-B] 修复 Arena 前后端路径错配 # 完成 | 2026-03-31 071e5547
 - 确认 /api/arena/info/opponents/challenge/ranking 数据格式与前端期望一致
 - 来源: 提案 2026-03-31 第123轮
 - 截止: 2026-04-02
+- 修复: arena.js 5处字段别名(name/combat/userId/rank等) + ArenaPanel.vue 4处 data 提取逻辑
+- 修复: /rank→新增rank字段 /ranks→name+combat /opponents→name+userId+combat /records→challengerName+targetName+time
 
 ## [P0-123-2-B] 修复每日签到路径错配
 - /api/bonus/daily 已有实现，确认前端正确对接
