@@ -169,3 +169,53 @@
   - GET /api/sect/treasury
 - 添加 player_sect_treasury 表
 - 截止: 2026-04-20
+
+# ========== 从策划提案分发 — 2026-03-31 第127轮 ==========
+# 分发时间: 2026-03-31 13:53
+
+## [P0-127-2-B] Alchemy表缺失修复（紧急）
+- alchemy.js 初始化时添加 player_alchemy_pills 等表的 CREATE TABLE IF NOT EXISTS
+- 确认 player_alchemy_furnace, player_alchemy_recipes 表也已正确创建
+- 关联: server/backend/routes/alchemy.js
+- 截止: 2026-03-31
+
+## [P0-127-1-B] player/status数据修复
+- player.js GET / 路由：查明 Users 表读取失败的真实原因
+- 添加日志输出实际SQL查询结果
+- 如字段名不匹配，统一为正确字段名
+- 添加数据一致性校验
+- 关联: server/backend/routes/player.js
+- 截止: 2026-04-02
+
+## [P1-127-1-B] Tutorial表修复
+- server.js 的 player_tutorial 表添加 current_step 列
+- 或修改 tutorial.js 兼容现有表结构
+- 关联: server/server.js
+- 截止: 2026-04-02
+
+## [P1-127-2-B] loadRoutes挂起修复（路由系统级）
+- 将 routes/index.js 的 loadRoutes 调用包装在 setImmediate 中避免阻塞主线程
+- 或在 server.js 中显式添加 art/pet/gacha/sect/shop/achievement/vip/welfare/friend 等路由（参考dailyQuest写法）
+- 关联: server/server.js, server/routes/index.js
+- 截止: 2026-04-03
+
+## [P1-127-3-B] Achievement实时进度补录（跨轮未修复）
+- achievements.js 的 /sprint 和 /list 端点：实时状态回填
+- realm类成就: progress = min(player.realm, target), completed = player.realm >= target
+- combat类成就: 从 players.combat_power 实时计算
+- 关联: server/backend/routes/achievements.js
+- 截止: 2026-04-02
+
+## [P1-127-4-B] SeasonPass数据同步
+- season_pass.js /status：从 players 表读取当前level，与赛季等级取较大值
+- 关联: server/backend/routes/season_pass.js
+- 截止: 2026-04-03
+
+## [P2-127-1-B] 限时抢购后端
+- 新建 server/backend/routes/flash_sale.js
+- 每日12:00和20:00刷新抢购商品
+- 每个玩家限购1次，有库存限制
+- API: GET /flash-sale/list, POST /flash-sale/buy
+- 关联: server/backend/routes/flash_sale.js
+- 截止: 2026-04-15
+
