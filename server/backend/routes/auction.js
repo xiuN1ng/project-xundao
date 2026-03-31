@@ -179,11 +179,44 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/auction/list — alias for listing (browse)
+// POST /api/auction/list — alias for GET / (browse auctions)
+// NOTE: This endpoint is kept for backward compatibility with clients that POST to /list
+// It extracts filters from request body and reuses the GET / logic
 router.post('/list', (req, res) => {
-  // Forward to GET handler by re-parsing
-  req.query.item_type = req.body.item_type || req.body.itemType;
-  router.handle(req, res);
+  const userId = parseInt(req.body.userId || req.body.player_id || req.body.user_id || 1);
+  const itemType = req.body.item_type || req.body.itemType || req.query?.item_type || '';
+  const page = parseInt(req.body.page || req.query?.page || 1);
+  const pageSize = Math.min(parseInt(req.body.pageSize || req.query?.pageSize || 20), 50);
+  const offset = (page - 1) * pageSize;
+
+  const db = getDb();
+  try {
+    // First settle expired auctions
+    settleExpiredAuctions();
+
+    let query = `SELECT * FROM auction_items WHERE status = 'active' AND end_time > datetime('now')`;
+    const params = [];
+    if (itemType) {
+      query += ` AND item_type = ?`;
+      params.push(itemType);
+    }
+    query += ` ORDER BY end_time ASC LIMIT ? OFFSET ?`;
+    params.push(pageSize, offset);
+
+    const items = db.prepare(query).all(...params);
+    const total = db.prepare(`SELECT COUNT(*) as count FROM auction_items WHERE status = 'active' AND end_time > datetime('now') ${itemType ? ' AND item_type = ?' : ''}`).get(...(itemType ? [itemType] : [])).count;
+
+    res.json({
+      success: true,
+      items,
+      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      myUserId: userId
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  } finally {
+    db.close();
+  }
 });
 
 // GET /api/auction/my — my auctions (as seller or bidder)
