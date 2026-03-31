@@ -34,6 +34,86 @@ function loadDependencies() {
   return playerStorage && alchemyRecipeStorage;
 }
 
+// ========== 整合信息 API ==========
+
+// 获取炼丹系统完整信息（recipes + materials + furnace + pills）
+router.get('/', async (req, res) => {
+  try {
+    if (!loadDependencies()) {
+      return res.status(500).json({ success: false, error: '系统初始化中...' });
+    }
+
+    const { player_id } = req.query;
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少玩家ID' });
+    }
+
+    // 并行获取所有数据
+    const [recipes, materials, pills, furnaceData] = await Promise.all([
+      alchemyRecipeStorage.getRecipeList({}),
+      alchemyMaterialStorage.getPlayerMaterials(parseInt(player_id)),
+      alchemyPillStorage.getPlayerPills(parseInt(player_id)),
+      alchemyFurnaceStorage.getFurnace(parseInt(player_id))
+    ]);
+
+    // 格式化丹方
+    const formattedRecipes = recipes.map(r => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      rarity: r.rarity,
+      realm_req: r.realm_req,
+      level_req: r.level_req,
+      materials: r.materials ? JSON.parse(r.materials) : {},
+      effects: r.effects ? JSON.parse(r.effects) : {},
+      exp_bonus: r.exp_bonus || 0,
+      success_rate: r.success_rate || 0
+    }));
+
+    // 格式化材料
+    const formattedMaterials = materials.map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      quantity: m.quantity || 0,
+      quality: m.quality || 1
+    }));
+
+    // 格式化丹药
+    const formattedPills = pills.map(p => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      rarity: p.rarity,
+      quantity: p.quantity || 0,
+      effects: p.effects ? JSON.parse(p.effects) : {}
+    }));
+
+    // 炉子信息
+    const furnaceLevel = furnaceData.furnace_level || 1;
+    const furnaceBonus = alchemyFurnaceStorage.getFurnaceBonus(furnaceLevel);
+
+    res.json({
+      success: true,
+      data: {
+        recipes: formattedRecipes,
+        materials: formattedMaterials,
+        pills: formattedPills,
+        furnace: {
+          level: furnaceLevel,
+          exp: furnaceData.furnace_exp || 0,
+          bonus: furnaceBonus
+        },
+        recipe_count: formattedRecipes.length,
+        material_count: formattedMaterials.length,
+        pill_count: formattedPills.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========== 丹方 API ==========
 
 // 获取丹方列表

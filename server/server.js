@@ -4604,36 +4604,124 @@ app.post('/api/shop/buy', (req, res) => {
 });
 
 // ==================== 排行榜系统 API ====================
-// 模拟排行榜数据
-const RANKING_DATA = {
-  realm: [
-    { rank: 1, name: '青云子', value: '大乘期', avatar: '🧙' },
-    { rank: 2, name: '玄霄真人', value: '大乘期', avatar: '🧘' },
-    { rank: 3, name: '九幽魔君', value: '炼虚期', avatar: '👹' },
-    { rank: 4, name: '太乙散人', value: '炼虚期', avatar: '🧚' },
-    { rank: 5, name: '万妖女王', value: '化神期', avatar: '👸' }
-  ],
-  combat: [
-    { rank: 1, name: '剑仙李逍遥', value: 999999, avatar: '⚔️' },
-    { rank: 2, name: '刀魔傲天', value: 888888, avatar: '🔪' },
-    { rank: 3, name: '拳皇霸体', value: 777777, avatar: '👊' },
-    { rank: 4, name: '暗影刺客', value: 666666, avatar: '🗡️' },
-    { rank: 5, name: '法神姜子牙', value: 555555, avatar: '🔮' }
-  ],
-  wealth: [
-    { rank: 1, name: '富甲天下', value: 10000000, avatar: '💰' },
-    { rank: 2, name: '灵石大亨', value: 8000000, avatar: '💎' },
-    { rank: 3, name: '仙商盟主', value: 5000000, avatar: '🏪' },
-    { rank: 4, name: '炼丹宗师', value: 3000000, avatar: '⚗️' },
-    { rank: 5, name: '炼器大师', value: 2000000, avatar: '🔧' }
-  ]
-};
 
-// GET /api/ranking/:type - 获取排行榜
+// GET /api/ranking/:type - 获取排行榜（真实数据）
 app.get('/api/ranking/:type', (req, res) => {
-  const { type } = req.params;
-  const data = RANKING_DATA[type] || [];
-  res.json({ success: true, data });
+  try {
+    const { type } = req.params;
+    const { limit, player_id } = req.query;
+    const n = Math.min(parseInt(limit) || 50, 100);
+    const uid = parseInt(player_id) || 0;
+
+    let ranking = [];
+
+    if (type === 'combat') {
+      // 战力排行榜：从 Users 表实时计算
+      ranking = db.prepare(`
+        SELECT id, username as name, level, realm,
+               FLOOR(attack*10 + defense*5 + hp/10) as value,
+               attack, defense, hp, spirit_stones as lingshi
+        FROM Users WHERE id > 0
+        ORDER BY value DESC LIMIT ?
+      `).all(n);
+    } else if (type === 'level') {
+      ranking = db.prepare(`
+        SELECT id, username as name, level, realm as realm_level,
+               level as value, spirit_stones as lingshi
+        FROM Users WHERE id > 0
+        ORDER BY realm DESC, level DESC LIMIT ?
+      `).all(n);
+    } else if (type === 'wealth') {
+      ranking = db.prepare(`
+        SELECT id, username as name, level, realm as realm_level,
+               spirit_stones as value, lingshi
+        FROM Users WHERE id > 0
+        ORDER BY spirit_stones DESC LIMIT ?
+      `).all(n);
+    } else if (type === 'chapter') {
+      // 章节排行榜：从 chapter_progress 表读取
+      ranking = db.prepare(`
+        SELECT u.id, u.username as name, u.level, u.realm as realm_level,
+               COALESCE(MAX(cp.chapter_id), 0) as value,
+               u.spirit_stones as lingshi
+        FROM Users u
+        LEFT JOIN chapter_progress cp ON u.id = cp.user_id
+        WHERE u.id > 0
+        GROUP BY u.id
+        ORDER BY value DESC LIMIT ?
+      `).all(n);
+    } else {
+      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+    }
+
+    const list = ranking.map((p, i) => ({
+      rank: i + 1,
+      player_id: p.id,
+      name: p.name,
+      value: p.value,
+      level: p.level,
+      realm_level: p.realm_level || p.realm || 0,
+      lingshi: p.lingshi || 0
+    }));
+
+    // 附加当前玩家排名
+    if (uid > 0) {
+      let myRankInfo = null;
+      if (type === 'combat') {
+        const me = db.prepare(`SELECT FLOOR(attack*10+defense*5+hp/10) as power FROM Users WHERE id = ?`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND FLOOR(attack*10+defense*5+hp/10) > ?`).get(me ? me.power : 0);
+        myRankInfo = { myRank: rank.r, combatPower: me ? me.power : 0 };
+      } else if (type === 'level') {
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND (realm > (SELECT realm FROM Users WHERE id = ?) OR (realm = (SELECT realm FROM Users WHERE id = ?) AND level > (SELECT level FROM Users WHERE id = ?)))`).get(uid, uid, uid);
+        myRankInfo = { myRank: rank ? rank.r : 0 };
+      } else if (type === 'wealth') {
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND spirit_stones > (SELECT spirit_stones FROM Users WHERE id = ?)`).get(uid);
+        myRankInfo = { myRank: rank ? rank.r : 0 };
+      }
+      return res.json({ success: true, list, myRank: myRankInfo });
+    }
+
+    res.json({ success: true, list });
+  } catch (error) {
+    Logger.error('排行榜查询错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/ranking/:type/me - 获取我的排名
+app.get('/api/ranking/:type/me', (req, res) => {
+  try {
+    const { type } = req.params;
+    const { player_id } = req.query;
+
+    if (!player_id) {
+      return res.status(400).json({ success: false, error: '缺少 player_id 参数' });
+    }
+
+    const uid = parseInt(player_id);
+
+    if (type === 'combat') {
+      const me = db.prepare(`SELECT id, username as name, level, realm as realm_level, FLOOR(attack*10+defense*5+hp/10) as combat_power FROM Users WHERE id = ?`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND FLOOR(attack*10+defense*5+hp/10) > ?`).get(me.combat_power);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else if (type === 'level') {
+      const me = db.prepare(`SELECT id, username as name, level, realm as realm_level FROM Users WHERE id = ?`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND (realm > ? OR (realm = ? AND level > ?))`).get(me.realm_level, me.realm_level, me.level);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else if (type === 'wealth') {
+      const me = db.prepare(`SELECT id, username as name, spirit_stones as lingshi FROM Users WHERE id = ?`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND spirit_stones > ?`).get(me.lingshi);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else {
+      res.json({ success: false, error: '未知排行榜类型' });
+    }
+  } catch (error) {
+    Logger.error('获取我的排名错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ==================== 邮件系统 API ====================
@@ -7266,16 +7354,62 @@ app.post('/api/achievements/claim', (req, res) => {
 
 // 任务: /api/tasks/*
 app.get('/api/tasks/list', (req, res) => {
-  const { player_id } = req.query;
-  if (!player_id) return res.json({ success: true, data: [] });
-  const achievements = db.prepare('SELECT * FROM player_achievements WHERE player_id = ?').all(player_id);
-  const achievementMap = {};
-  for (const a of achievements) { achievementMap[a.achievement_id] = a; }
-  const list = Object.values(ACHIEVEMENTS).map(achievement => {
-    const playerAchievement = achievementMap[achievement.id] || { progress: 0, completed: 0, claimed: 0 };
-    return { id: achievement.id, name: achievement.name, description: achievement.description, progress: playerAchievement.progress, target: achievement.target, completed: playerAchievement.completed, claimed: playerAchievement.claimed };
-  });
-  res.json({ success: true, data: list });
+  try {
+    const { player_id } = req.query;
+    if (!player_id) return res.json({ success: true, data: [] });
+
+    // 获取所有任务模板
+    const allTasks = db.prepare('SELECT * FROM tasks ORDER BY difficulty ASC, level_req ASC').all();
+
+    // 获取玩家任务进度
+    let playerTasksMap = {};
+    const playerTasks = db.prepare('SELECT * FROM player_tasks WHERE player_id = ?').all(player_id);
+    playerTasks.forEach(pt => { playerTasksMap[pt.task_id] = pt; });
+
+    // 构建返回数据
+    const list = allTasks.map(t => {
+      const pt = playerTasksMap[t.id];
+      return {
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        description: t.description,
+        category: t.category,
+        difficulty: t.difficulty,
+        level_req: t.level_req,
+        realm_req: t.realm_req,
+        icon: t.icon || '',
+        target_type: t.target_type,
+        target_id: t.target_id,
+        target_count: t.target_count,
+        rewards: JSON.parse(t.rewards || '{}'),
+        exp: t.exp || 0,
+        spirit_stones: t.spirit_stones || 0,
+        is_repeatable: t.is_repeatable === 1,
+        cooldown_minutes: t.cooldown_minutes || 0,
+        status: pt ? pt.status : null,
+        progress: pt ? pt.progress : 0,
+        completed: pt ? (pt.status === 'completed' || pt.status === 'claimed') : false,
+        claimed: pt ? (pt.status === 'claimed') : false,
+        started_at: pt ? pt.started_at : null,
+        completed_at: pt ? pt.completed_at : null,
+        claimed_at: pt ? pt.claimed_at : null
+      };
+    });
+
+    // 分类统计
+    const stats = {
+      total: list.length,
+      main: list.filter(t => t.category === 'main').length,
+      daily: list.filter(t => t.category === 'daily').length,
+      side: list.filter(t => t.category === 'side').length
+    };
+
+    res.json({ success: true, data: list, stats });
+  } catch (error) {
+    Logger.error('获取任务列表错误:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // 市场: /api/market/*
