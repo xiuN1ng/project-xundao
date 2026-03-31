@@ -291,10 +291,58 @@ router.get('/', (req, res) => {
   }
 });
 
-// GET /api/title/list — 别名
+// GET /api/title/list — 重用 GET / 的逻辑
 router.get('/list', (req, res) => {
-  req.params.playerId = req.query.playerId || req.query.userId || req.userId || '1';
-  router.handle(req, res);
+  // 复用 GET / 的处理器逻辑，避免 router.handle 循环路由
+  const userId = parseInt(req.query.playerId || req.query.userId || req.userId) || 1;
+  const database = getDb();
+
+  if (!database) {
+    return res.status(500).json({ success: false, error: '数据库不可用' });
+  }
+
+  try {
+    const playerData = getPlayerTitleData(userId);
+    const unlockedIds = getUnlockedTitleIds(userId);
+    const equippedId = getEquippedTitleId(userId);
+
+    const titles = Object.values(TITLE_DATA).map(title => {
+      const autoUnlocked = isAutoUnlocked(userId, title.id, playerData);
+      const manuallyUnlocked = unlockedIds.includes(title.id);
+      const unlocked = autoUnlocked || manuallyUnlocked;
+      if (autoUnlocked && !manuallyUnlocked) unlockTitle(userId, title.id);
+
+      return {
+        id: title.id,
+        name: title.name,
+        type: title.type,
+        rarity: title.rarity ? { id: title.rarity.id, name: title.rarity.name, color: title.rarity.color } : null,
+        description: title.description || '',
+        icon: title.icon || '',
+        attributes: title.attributes || {},
+        unlocked,
+        equipped: unlocked && equippedId === title.id,
+        isLimited: title.isLimited || false,
+        isPermanent: title.isPermanent || false,
+        validPeriod: title.validPeriod || null
+      };
+    });
+
+    const equippedBonus = calculateTitleBonus(equippedId);
+
+    res.json({
+      success: true,
+      data: {
+        titles,
+        equippedTitleId: equippedId,
+        equippedBonus,
+        equippedTitleName: equippedId ? (TITLE_DATA[equippedId]?.name || '') : ''
+      }
+    });
+  } catch (e) {
+    console.error('[Title] GET /list error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // GET /api/title/player/:playerId — 获取玩家称号详情

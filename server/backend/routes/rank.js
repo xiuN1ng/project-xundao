@@ -374,6 +374,11 @@ router.get('/:type', (req, res) => {
   const n = Math.min(parseInt(limit) || 50, 100);
   const uid = parseInt(player_id) || 0;
 
+  // player_id 校验：无效时返回错误而非空响应
+  if (player_id && uid <= 0) {
+    return res.status(400).json({ success: false, error: '无效的 player_id' });
+  }
+
   let result;
   switch (type) {
     case 'combat': result = getCombatRank(n); break;
@@ -381,10 +386,10 @@ router.get('/:type', (req, res) => {
     case 'wealth': result = getWealthRank(n); break;
     case 'chapter': result = getChapterRank(n); break;
     default:
-      return res.json({ error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
   }
 
-  // 附加当前玩家排名
+  // 附加当前玩家排名（仅当 uid > 0 时）
   if (uid > 0) {
     let myRankInfo = null;
     if (type === 'combat') myRankInfo = getPlayerCombatRank(uid);
@@ -400,10 +405,11 @@ router.get('/:type', (req, res) => {
         myRankInfo = { myRank: rank.r };
       } catch (e) {}
     }
-    return res.json({ list: result, myRank: myRankInfo });
+    return res.json({ success: true, data: result, myRank: myRankInfo });
   }
 
-  res.json(result);
+  // 无 player_id 时返回统一格式 { success: true, data: [...] }
+  res.json({ success: true, data: result });
 });
 
 // 获取玩家在指定排行榜的排名
