@@ -8894,6 +8894,15 @@ try {
   Logger.warn('⚠ 战令路由加载失败:', e.message);
 }
 
+// ==================== 境界副本路由 ====================
+try {
+  const realmDungeonRoute = require('./backend/routes/realm_dungeon');
+  app.use('/api/realm-dungeon', realmDungeonRoute);
+  Logger.info('✓ 境界副本路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 境界副本路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
