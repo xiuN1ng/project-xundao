@@ -164,6 +164,7 @@ app.use('/api/arena', require('./routes/arena'));
 app.use('/api/worldBoss', require('./routes/worldBoss'));
 app.use('/api/worldboss', require('./routes/worldBoss'));
 app.use('/api/rank', require('./routes/rank'));
+app.use('/api/ranking', require('./routes/rank'));
 
 // 其他
 app.use('/api/quest', require('./routes/quest').router);
