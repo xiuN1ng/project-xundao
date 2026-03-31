@@ -85,20 +85,26 @@
 - 截止: 2026-04-05
 - 完成: 2026-03-31 新增 /decompose /synthesize /decompose-recipes /synthesize-recipes 端点
 
-## [P1-125-2-B] Tutorial /api/tutorial/status 返回404
+## [P1-125-2-B] Tutorial /api/tutorial/status 返回404 ✅ 已完成
 - 检查 game/tutorial_api.js mount 情况并修复
+- 修复: 新增 /api/tutorial 路由挂载
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-05
+- 完成: 2026-03-31 新增 /api/tutorial 路由挂载 tutorial_api.js
 
-## [P1-125-3-B] DailyQuest /api/daily-quest/list 返回404
+## [P1-125-3-B] DailyQuest /api/daily-quest/list 返回404 ✅ 已完成
 - 检查 dailyQuest.js /list 端点并修复
+- 修复: 新增 /list 端点 + /api/daily-quest 别名路由
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-05
+- 完成: 2026-03-31 新增 /list 端点和 /api/daily-quest 别名路由
 
-## [回归-P1-B] Tasks 系统 /api/tasks 仍返回404
+## [回归-P1-B] Tasks 系统 /api/tasks 仍返回404 ✅ 已完成
 - 确认路由被覆盖问题，参考 routes_old/tasks.js 重写
+- 修复: 新建 routes/tasks.js (Express Router版) + /api/tasks 挂载
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-02
+- 完成: 2026-03-31 新建 routes/tasks.js，添加 /api/tasks 挂载
 
 ## [P2-125-1-B] 仙友助战后端
 - friend_api.js 添加借调灵兽 API（/beast-lend, /beast-borrow, /lendable-beasts）
