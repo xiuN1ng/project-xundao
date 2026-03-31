@@ -95,7 +95,7 @@ function getDamageRankingFromDB(bossId, limit = 50) {
 router.get('/', (req, res) => {
   res.json({
     hasBoss: worldBoss.status === 'alive' && worldBoss.currentBoss !== null,
-    bossList: DIFFICULTY_TIERS.flatMap(tier => 
+    bossList: DIFFICULTY_TIERS.flatMap(tier =>
       tier.bosses.map(b => ({
         id: b.id,
         name: b.name,
@@ -122,7 +122,7 @@ router.get('/', (req, res) => {
   });
 });
 
-// 世界BOSS配置（分级系统 v5.0 — 按玩家等级匹配难度）
+// 世界BOSS配置（分级系统 v5.0 - 按玩家等级匹配难度）
 const MAX_WEEKLY_KILLS = 3;
 
 // 难度等级配置
@@ -233,13 +233,81 @@ let worldBoss = {
   defenseReduction: 0,    // 全服鼓舞降低BOSS防御，每次鼓舞+5%，上限50%
   defenseReductionCount: 0,
   currentTier: null,     // 当前BOSS难度等级
+  crossedPhases: new Set(), // 已触发过的阶段阈值(如"50%","25%","5%")
 };
+
+// 全服Boss阶段阈值广播系统
+// 阶段: { phase: "50%"|"25%"|"5%", hp, maxHp, killed, time }
+let phaseAlerts = []; // 待推送给前端的历史阶段公告
+
+// 全服世界Boss每周累计伤害记录 (key: userId, value: accumulatedDamage)
+let weeklyDamageMap = {}; // { userId: { damage, name, lastAttack } }
+
+// 全服世界Boss每周排名 (按damage降序)
+function getWeeklyRankings() {
+  return Object.entries(weeklyDamageMap)
+    .map(([uid, data]) => ({ userId: parseInt(uid), ...data }))
+    .sort((a, b) => b.damage - a.damage)
+    .slice(0, 100);
+}
+
+// 检测并记录阶段阈值广播
+function checkPhaseAlert(playerId, playerName, prevHp, currHp, maxHp, killed) {
+  const prevPercent = prevHp / maxHp;
+  const currPercent = currHp / maxHp;
+  const thresholds = [
+    { pct: 0.50, label: '第二阶段', emoji: '🌪️', color: '#f59e0b' },
+    { pct: 0.25, label: '第三阶段', emoji: '🔥', color: '#ef4444' },
+    { pct: 0.05, label: '最终阶段', emoji: '💀', color: '#dc2626' },
+  ];
+
+  thresholds.forEach(t => {
+    const key = `${t.pct * 100}%`;
+    if (prevPercent > t.pct && currPercent <= t.pct && !worldBoss.crossedPhases.has(key)) {
+      worldBoss.crossedPhases.add(key);
+      const alert = {
+        phase: key,
+        label: t.label,
+        emoji: t.emoji,
+        color: t.color,
+        prevHp,
+        currHp: Math.max(0, currHp),
+        maxHp,
+        killed: killed || false,
+        triggeredBy: { userId: playerId, name: playerName },
+        time: Date.now(),
+      };
+      phaseAlerts.push(alert);
+      // 保留最近10条阶段记录
+      if (phaseAlerts.length > 10) phaseAlerts.shift();
+      console.log(`[worldBoss] ⚔️ 全服公告: ${t.emoji} BOSS进入${t.label}！血量${t.emoji} ${Math.floor(currHp)}/${maxHp}`);
+    }
+  });
+}
+
+// 重置每周数据
+function resetWeeklyData() {
+  weeklyDamageMap = {};
+  phaseAlerts = [];
+  if (worldBoss.currentBoss) {
+    worldBoss.crossedPhases = new Set();
+  }
+  console.log('[worldBoss] 每周数据已重置');
+}
+
+// 每周一凌晨重置 (通过每周一00:00触发，或BOSS击杀后超过7天)
+setInterval(() => {
+  const now = new Date();
+  if (now.getDay() === 1 && now.getHours() === 0) {
+    resetWeeklyData();
+  }
+}, 3600000); // 每小时检查一次
 
 // 获取当前BOSS状态
 router.get('/status', (req, res) => {
   const { userId } = req.query;
   const now = Date.now();
-  
+
   // 检查是否需要刷新BOSS（基于难度等级）
   if (worldBoss.status === 'dead' && now - worldBoss.lastRefresh > bossConfig.refreshInterval) {
     // 默认选一个BOSS（基于玩家等级）
@@ -264,7 +332,7 @@ router.get('/status', (req, res) => {
       currentTier: tier
     };
   }
-  
+
   // 读取玩家对当前BOSS的伤害
   let myDamage = 0;
   if (db && userId && worldBoss.currentBoss) {
@@ -273,7 +341,7 @@ router.get('/status', (req, res) => {
       if (rec) myDamage = rec.damage || 0;
     } catch (e) { /* ignore */ }
   }
-  
+
   res.json({
     boss: worldBoss.currentBoss,
     hp: worldBoss.hp,
@@ -290,7 +358,7 @@ router.get('/status', (req, res) => {
 // 攻击BOSS
 router.post('/attack', (req, res) => {
   const { userId, userName, difficulty } = req.body;
-  
+
   // 如果BOSS已死亡或不存在，可以选择难度后生成新BOSS
   if (worldBoss.status !== 'alive' || !worldBoss.currentBoss) {
     // 根据难度参数或玩家等级选择BOSS
@@ -301,7 +369,7 @@ router.post('/attack', (req, res) => {
         if (player) playerLevel = player.level || 1;
       } catch (e) { /* ignore */ }
     }
-    
+
     let tier;
     if (difficulty !== undefined) {
       // 指定难度
@@ -322,7 +390,7 @@ router.post('/attack', (req, res) => {
       currentTier: tier
     };
   }
-  
+
   // 从DB读取玩家攻击力
   let playerAttack = 100;
   let playerHp = 1000;
@@ -337,18 +405,18 @@ router.post('/attack', (req, res) => {
       console.log('[worldBoss] 读取玩家属性失败:', e.message);
     }
   }
-  
+
   // 基础伤害 = 玩家攻击 * 1.5
   let damage = Math.max(1, Math.floor(playerAttack * 1.5));
-  
+
   // 单次伤害上限：不超过玩家HP的50%
   const damageCap = Math.floor(playerHp * 0.5);
   damage = Math.min(damage, damageCap);
-  
+
   // BOSS防御减免：每次鼓舞降低BOSS防御5%，等同于玩家伤害+5%
   const defenseReduction = worldBoss.defenseReduction || 0;
   damage = Math.floor(damage * (1 + defenseReduction));
-  
+
   // 狂暴机制：BOSS血量<30%时，伤害翻倍
   const maxHp = worldBoss.currentBoss.maxHp || 1;
   const hpPercent = worldBoss.hp / maxHp;
@@ -362,7 +430,7 @@ router.post('/attack', (req, res) => {
   const existing = worldBoss.damageRecords.find(r => r.userId === userId);
   const prevTotalDamage = existing ? existing.damage : 0;
   const newTotalDamage = prevTotalDamage + damage;
-  
+
   if (existing) {
     existing.damage = newTotalDamage;
   } else {
@@ -373,19 +441,21 @@ router.post('/attack', (req, res) => {
       time: Date.now()
     });
   }
-  
+
   // 排序
   worldBoss.damageRecords.sort((a, b) => b.damage - a.damage);
-  
+
   // 限制记录数
   if (worldBoss.damageRecords.length > bossConfig.maxDamageRecords) {
     worldBoss.damageRecords = worldBoss.damageRecords.slice(0, bossConfig.maxDamageRecords);
   }
-  
+
   // 计算攻击后的剩余HP（确保非负数且为有效数字）
+  const prevHp = worldBoss.hp;
   const remainingHp = Math.max(0, Number(worldBoss.hp) - damage);
   worldBoss.hp = remainingHp;
-  
+  const totalMaxHp = worldBoss.currentBoss.maxHp || 1;
+
   // 检查是否击杀
   let killed = false;
   if (remainingHp <= 0) {
@@ -393,17 +463,33 @@ router.post('/attack', (req, res) => {
     worldBoss.lastRefresh = Date.now();
     killed = true;
   }
-  
+
+  // 阶段广播检测 (50%/25%/5%)
+  if (worldBoss.status === 'alive' && !killed) {
+    checkPhaseAlert(userId, userName, prevHp, remainingHp, totalMaxHp, false);
+  } else if (killed) {
+    // BOSS被击杀时也触发最终阶段广播
+    checkPhaseAlert(userId, userName, prevHp, 0, totalMaxHp, true);
+  }
+
+  // 累计本周伤害
+  if (!weeklyDamageMap[userId]) {
+    weeklyDamageMap[userId] = { damage: 0, name: userName || `玩家${userId}`, lastAttack: Date.now() };
+  }
+  weeklyDamageMap[userId].damage += damage;
+  weeklyDamageMap[userId].name = userName || weeklyDamageMap[userId].name;
+  weeklyDamageMap[userId].lastAttack = Date.now();
+
   // 计算排名
   const rank = worldBoss.damageRecords.findIndex(r => r.userId === userId) + 1;
-  
+
   // 魔晶奖励预览（根据本次伤害占总血量比例）
   const bossMaxHp = worldBoss.currentBoss.hp || 1;
   const damageRatio = damage / bossMaxHp;
   const mcReward = killed
     ? Math.floor(worldBoss.currentBoss.reward.magicCrystals || 0)
     : Math.floor((worldBoss.currentBoss.reward.magicCrystals || 0) * damageRatio * 0.5);
-  
+
   res.json({
     success: true,
     remainingHp,
@@ -421,15 +507,15 @@ router.post('/attack', (req, res) => {
 // 鼓舞机制：花费50灵石，降低BOSS防御5%（等同于所有玩家伤害+5%，可叠加）
 router.post('/encourage', (req, res) => {
   const { userId } = req.body;
-  
+
   if (worldBoss.status !== 'alive' || !worldBoss.currentBoss) {
     return res.json({ success: false, message: 'BOSS未刷新，请等待下次刷新' });
   }
-  
+
   const ENCOURAGE_COST = 50; // 鼓舞消耗灵石
   const DEFENSE_REDUCTION_BONUS = 0.05; // 每次鼓舞降低BOSS防御5%
   const MAX_DEFENSE_REDUCTION = 0.50; // 最多降低50%防御（10次鼓舞）
-  
+
   // 扣除灵石
   if (db) {
     try {
@@ -446,13 +532,13 @@ router.post('/encourage', (req, res) => {
       return res.status(500).json({ success: false, message: '数据库错误' });
     }
   }
-  
+
   // 增加防御减免（上限50%）
   if ((worldBoss.defenseReduction || 0) < MAX_DEFENSE_REDUCTION) {
     worldBoss.defenseReduction = Math.min(MAX_DEFENSE_REDUCTION, (worldBoss.defenseReduction || 0) + DEFENSE_REDUCTION_BONUS);
     worldBoss.defenseReductionCount = (worldBoss.defenseReductionCount || 0) + 1;
   }
-  
+
   res.json({
     success: true,
     message: `鼓舞成功！BOSS防御降低${Math.round(worldBoss.defenseReduction * 100)}%，全服玩家伤害提升`,
@@ -618,8 +704,66 @@ router.post('/refresh', (req, res) => {
     defenseReductionCount: 0,
     currentTier: tier
   };
-  
+
   res.json({ success: true, boss, tier: { tier: tier.tier, name: tier.name } });
+});
+
+// ===================== 全服世界Boss扩展接口 =====================
+
+// GET /api/worldBoss/phase-alerts - 获取最近的阶段广播
+router.get('/phase-alerts', (req, res) => {
+  const since = parseInt(req.query.since) || 0; // 只返回since之后的
+  const filtered = phaseAlerts.filter(a => a.time > since);
+  const currentPhase = worldBoss.status === 'alive' && worldBoss.maxHp > 0
+    ? { hp: worldBoss.hp, maxHp: worldBoss.maxHp, percent: Math.floor((worldBoss.hp / worldBoss.maxHp) * 100) }
+    : null;
+  res.json({
+    success: true,
+    alerts: filtered,
+    currentPhase,
+    bossName: worldBoss.currentBoss?.name || null,
+    status: worldBoss.status,
+  });
+});
+
+// GET /api/worldBoss/weekly-rankings - 获取本周全服累计伤害排名
+router.get('/weekly-rankings', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || 0;
+  const rankings = getWeeklyRankings();
+  const myRank = rankings.findIndex(r => r.userId === playerId) + 1;
+  const myData = weeklyDamageMap[playerId] || null;
+
+  // 计算阶段进度
+  let phaseProgress = null;
+  if (worldBoss.status === 'alive' && worldBoss.maxHp > 0) {
+    const percent = Math.floor((worldBoss.hp / worldBoss.maxHp) * 100);
+    if (percent <= 5) phaseProgress = '最终阶段';
+    else if (percent <= 25) phaseProgress = '第三阶段';
+    else if (percent <= 50) phaseProgress = '第二阶段';
+    else phaseProgress = '第一阶段';
+  }
+
+  res.json({
+    success: true,
+    rankings: rankings.slice(0, 50).map((r, i) => ({
+      rank: i + 1,
+      userId: r.userId,
+      name: r.name,
+      weeklyDamage: r.damage,
+      lastAttack: r.lastAttack,
+    })),
+    myRank: myRank || null,
+    myWeeklyDamage: myData?.damage || 0,
+    phaseProgress,
+    weeklyTotalDamage: rankings.reduce((sum, r) => sum + r.damage, 0),
+    participantCount: Object.keys(weeklyDamageMap).length,
+  });
+});
+
+// POST /api/worldBoss/reset-weekly - 重置每周数据(管理员)
+router.post('/reset-weekly', (req, res) => {
+  resetWeeklyData();
+  res.json({ success: true, message: '每周数据已重置' });
 });
 
 module.exports = router;
