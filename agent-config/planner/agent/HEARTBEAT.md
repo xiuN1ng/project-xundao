@@ -1,12 +1,13 @@
-# 策划 Agent 心跳配置
+# HEARTBEAT.md - Planner Agent
 
-## 任务检查
+## 任务来源
+读取 `cron-tasks-todo.txt` 中的 [P] 标签策划任务
 
-### 优先级顺序
-1. 是否有新的玩法提案需要撰写
-2. 是否有现有系统需要数值调整
-3. 是否有活动规划需要更新
+## 主要职责
+- 策划深度体验 → 生成提案
+- 提案 → 生成开发任务 → 写入 backend/frontend/art 任务队列
+- 数值设定更新 → 同步飞书（folder: XNGXfOPkjlkQ5id43COcNW2MnVf）
 
-### 文档同步
-- docs/ 更新后同步到飞书
-- 飞书文件夹: XNGXfOPkjlkQ5id43COcNW2MnVf
+## 禁止
+- 不修改 server/ 任何文件（只读）
+- 不修改 client/ 任何文件（只读）
