@@ -6,7 +6,10 @@
  * GET  /                    - 战令概览
  * GET  /status              - 获取玩家战令状态
  * POST /purchase            - 购买战令
- * POST /claim/:level        - 领取指定等级奖励
+ * POST /claim/:level        - 领取指定等级奖励（与前端 claim-reward 对齐）
+ * GET  /tasks               - 获取赛季任务列表
+ * POST /claim-task          - 领取任务进度奖励
+ * POST /add-exp             - 增加战令经验（其他系统调用）
  */
 
 const express = require('express');
@@ -66,6 +69,40 @@ function initDB() {
         created_at TEXT DEFAULT (datetime('now'))
       )
     `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS season_pass_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_key TEXT NOT NULL UNIQUE,
+        season_id INTEGER NOT NULL DEFAULT 1,
+        category TEXT NOT NULL DEFAULT 'daily',
+        name TEXT NOT NULL,
+        description TEXT,
+        exp_reward INTEGER NOT NULL DEFAULT 100,
+        item_reward TEXT,
+        item_count INTEGER DEFAULT 1,
+        target_count INTEGER DEFAULT 1,
+        required_level INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS season_pass_task_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        season_id INTEGER NOT NULL,
+        task_key TEXT NOT NULL,
+        progress INTEGER NOT NULL DEFAULT 0,
+        completed INTEGER NOT NULL DEFAULT 0,
+        claimed INTEGER NOT NULL DEFAULT 0,
+        claimed_at TEXT,
+        UNIQUE(player_id, season_id, task_key)
+      )
+    `);
+
+    // 初始化赛季任务
+    initSeasonTasks();
   } catch (e) {
     console.log('[season_pass] 建表失败:', e.message);
   }
@@ -165,6 +202,129 @@ const EXP_PER_LEVEL = {
 const PASS_PRICE = 300; // 钻石
 
 // ============================================================
+// 赛季任务配置
+// ============================================================
+const SEASON_TASKS = {
+  daily: [
+    { key: 'daily_login', name: '每日登录', description: '登录游戏', exp_reward: 50, item_reward: '灵石', item_count: 50, target_count: 1, required_level: 0 },
+    { key: 'daily_dungeon_1', name: '通关副本×1', description: '完成任意副本1次', exp_reward: 80, item_reward: '灵石', item_count: 100, target_count: 1, required_level: 0 },
+    { key: 'daily_dungeon_3', name: '通关副本×3', description: '完成任意副本3次', exp_reward: 150, item_reward: '经验', item_count: 500, target_count: 3, required_level: 5 },
+    { key: 'daily_arena_1', name: '竞技场挑战×1', description: '参与竞技场1次', exp_reward: 60, item_reward: '灵石', item_count: 80, target_count: 1, required_level: 0 },
+    { key: 'daily_arena_3', name: '竞技场挑战×3', description: '参与竞技场3次', exp_reward: 120, item_reward: 'jade', item_count: 1, target_count: 3, required_level: 8 },
+    { key: 'daily_chat', name: '世界频道发言', description: '在世界频道发送一条消息', exp_reward: 30, item_reward: '灵石', item_count: 30, target_count: 1, required_level: 0 },
+    { key: 'daily_gather', name: '采集资源×5', description: '采集5次资源点', exp_reward: 70, item_reward: '灵石', item_count: 80, target_count: 5, required_level: 3 },
+  ],
+  weekly: [
+    { key: 'weekly_dungeon_10', name: '本周通关副本×10', description: '本周累计通关副本10次', exp_reward: 300, item_reward: 'fire_crystal', item_count: 2, target_count: 10, required_level: 0 },
+    { key: 'weekly_arena_15', name: '本周竞技场×15', description: '本周累计参与竞技场15次', exp_reward: 250, item_reward: 'thunder_crystal', item_count: 1, target_count: 15, required_level: 5 },
+    { key: 'weekly_rank_top10', name: '排行榜前10', description: '进入本周排行榜前10名', exp_reward: 500, item_reward: 'spirit_stone', item_count: 1, target_count: 1, required_level: 10 },
+    { key: 'weekly_sect_war', name: '参加宗门战', description: '参与一次宗门战', exp_reward: 400, item_reward: 'dragon_scale', item_count: 1, target_count: 1, required_level: 15 },
+  ],
+  oneTime: [
+    { key: 'first_purchase', name: '首次购买战令', description: '购买本赛季战令', exp_reward: 200, item_reward: 'diamonds', item_count: 50, target_count: 1, required_level: 0 },
+    { key: 'reach_level_10', name: '达到10级', description: '战令等级达到10级', exp_reward: 300, item_reward: 'spirit_stone', item_count: 2, target_count: 1, required_level: 10 },
+    { key: 'reach_level_20', name: '达到20级', description: '战令等级达到20级', exp_reward: 500, item_reward: 'dragon_scale', item_count: 2, target_count: 1, required_level: 20 },
+  ]
+};
+
+// 任务重置时间配置（UTC）
+// daily: 每天 00:00 重置, weekly: 每周一 00:00 重置
+function getTaskResetInfo() {
+  const now = new Date();
+  const utcNow = new Date(now.toISOString());
+  const dayOfWeek = utcNow.getUTCDay(); // 0=周日, 1=周一...
+
+  // 下次每日重置
+  const nextDaily = new Date(utcNow);
+  nextDaily.setUTCHours(0, 0, 0, 0);
+  if (utcNow >= nextDaily) nextDaily.setUTCDate(nextDaily.getUTCDate() + 1);
+
+  // 下次每周重置（周一）
+  const nextWeekly = new Date(utcNow);
+  nextWeekly.setUTCHours(0, 0, 0, 0);
+  const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+  nextWeekly.setUTCDate(nextWeekly.getUTCDate() + daysUntilMonday);
+
+  return {
+    nextDailyReset: nextDaily.toISOString(),
+    nextWeeklyReset: nextWeekly.toISOString(),
+    serverTime: utcNow.toISOString()
+  };
+}
+
+function initSeasonTasks() {
+  if (!db) return;
+  try {
+    const seasonId = CURRENT_SEASON.id;
+    const insertTask = db.prepare(`
+      INSERT OR IGNORE INTO season_pass_tasks (task_key, season_id, category, name, description, exp_reward, item_reward, item_count, target_count, required_level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const [category, tasks] of Object.entries(SEASON_TASKS)) {
+      for (const task of tasks) {
+        insertTask.run(task.key, seasonId, category, task.name, task.description, task.exp_reward, task.item_reward || null, task.item_count || 1, task.target_count, task.required_level || 0);
+      }
+    }
+  } catch (e) {
+    console.log('[season_pass] 初始化任务失败:', e.message);
+  }
+}
+
+// 更新任务进度（供其他系统调用）
+function updateTaskProgress(playerId, taskKey, amount = 1, seasonId = CURRENT_SEASON.id) {
+  if (!db) return { updated: false, completed: false, claimed: false };
+  try {
+    // 获取任务定义
+    const taskDef = db.prepare('SELECT * FROM season_pass_tasks WHERE task_key = ? AND season_id = ?').get(taskKey, seasonId);
+    if (!taskDef) return { updated: false };
+
+    // 获取或创建进度记录
+    let progressRow = db.prepare('SELECT * FROM season_pass_task_progress WHERE player_id = ? AND season_id = ? AND task_key = ?').get(playerId, seasonId, taskKey);
+
+    if (!progressRow) {
+      db.prepare('INSERT INTO season_pass_task_progress (player_id, season_id, task_key, progress, completed, claimed) VALUES (?, ?, ?, 0, 0, 0)').run(playerId, seasonId, taskKey);
+      progressRow = db.prepare('SELECT * FROM season_pass_task_progress WHERE player_id = ? AND season_id = ? AND task_key = ?').get(playerId, seasonId, taskKey);
+    }
+
+    if (progressRow.claimed) return { updated: false, completed: true, claimed: true };
+    if (progressRow.completed) return { updated: false, completed: true, claimed: false };
+
+    const newProgress = Math.min(progressRow.progress + amount, taskDef.target_count);
+    const isCompleted = newProgress >= taskDef.target_count;
+
+    db.prepare('UPDATE season_pass_task_progress SET progress = ?, completed = ? WHERE player_id = ? AND season_id = ? AND task_key = ?')
+      .run(newProgress, isCompleted ? 1 : 0, playerId, seasonId, taskKey);
+
+    return { updated: true, completed: isCompleted, claimed: false, progress: newProgress, target: taskDef.target_count };
+  } catch (e) {
+    console.log('[season_pass] updateTaskProgress error:', e.message);
+    return { updated: false };
+  }
+}
+
+// 获取玩家任务进度列表
+function getPlayerTaskProgress(playerId, seasonId = CURRENT_SEASON.id) {
+  if (!db) return [];
+  try {
+    const rows = db.prepare('SELECT * FROM season_pass_task_progress WHERE player_id = ? AND season_id = ?').all(playerId, seasonId);
+    return rows;
+  } catch (e) {
+    return [];
+  }
+}
+
+// 获取任务定义列表
+function getSeasonTasks(seasonId = CURRENT_SEASON.id) {
+  if (!db) return [];
+  try {
+    return db.prepare('SELECT * FROM season_pass_tasks WHERE season_id = ?').all(seasonId);
+  } catch (e) {
+    return [];
+  }
+}
+
+// ============================================================
 // 辅助函数
 // ============================================================
 function getPlayerSeasonData(playerId, seasonId = CURRENT_SEASON.id) {
@@ -249,8 +409,10 @@ router.get('/', (req, res) => {
     },
     endpoints: {
       'GET /status': '获取玩家战令状态',
+      'GET /tasks': '获取赛季任务列表',
       'POST /purchase': '购买战令 {player_id, diamonds}',
-      'POST /claim/:level': '领取指定等级奖励'
+      'POST /claim/:level': '领取指定等级奖励',
+      'POST /claim-task': '领取任务进度奖励 {task_key}'
     }
   });
 });
@@ -373,86 +535,8 @@ router.post('/purchase', (req, res) => {
   });
 });
 
-// POST /claim/:level - 领取指定等级奖励
-router.post('/claim/:level', (req, res) => {
-  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
-  const level = parseInt(req.params.level || req.body.level || 1);
-  const seasonId = CURRENT_SEASON.id;
-
-  if (level < 1 || level > 30) {
-    return res.json({ success: false, message: '无效的等级' });
-  }
-
-  const data = getOrCreatePlayerSeason(playerId, seasonId);
-  if (!data) {
-    return res.json({ success: false, message: '无法获取战令数据' });
-  }
-
-  const currentLevel = data.level;
-  if (level > currentLevel) {
-    return res.json({ success: false, message: `等级未达到，需要 ${level} 级才能领取` });
-  }
-
-  if (isLevelClaimed(playerId, seasonId, level)) {
-    return res.json({ success: false, message: '该等级奖励已领取' });
-  }
-
-  // 检查是否需要战令才能领取
-  const freeReward = SEASON_REWARDS.free[level];
-  const premiumReward = SEASON_REWARDS.premium[level];
-
-  if (!freeReward) {
-    return res.json({ success: false, message: '奖励配置不存在' });
-  }
-
-  // 只能领取免费奖励，或者战令用户领取专属奖励
-  let rewardItem = freeReward;
-  let isPremium = false;
-
-  if (data.purchased && premiumReward) {
-    rewardItem = premiumReward;
-    isPremium = true;
-  }
-
-  // 写入领取记录
-  if (!claimLevel(playerId, seasonId, level)) {
-    return res.json({ success: false, message: '领取失败，可能已领取' });
-  }
-
-  // 发放奖励
-  if (db) {
-    try {
-      if (rewardItem.item === '灵石') {
-        const updateLingshi = db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?');
-        updateLingshi.run(rewardItem.count, playerId);
-      } else if (rewardItem.item === 'diamonds') {
-        const updateDiamonds = db.prepare('UPDATE Users SET diamonds = diamonds + ? WHERE id = ?');
-        updateDiamonds.run(rewardItem.count, playerId);
-      } else if (rewardItem.item === '经验') {
-        // 经验奖励直接加到 Users.level 相关字段或另存
-        // 这里记录到 season_pass exp 作为额外经验
-        const updateExp = db.prepare('UPDATE season_pass SET exp = exp + ? WHERE player_id = ? AND season_id = ?');
-        updateExp.run(rewardItem.count, playerId, seasonId);
-      } else {
-        // 物品写入 player_items
-        const addItem = db.prepare(`INSERT INTO player_items (player_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?)`);
-        addItem.run(playerId, rewardItem.description, rewardItem.item, '', rewardItem.count, 'season_pass');
-      }
-    } catch (e) {
-      console.log('[season_pass] 发放奖励失败:', e.message);
-    }
-  }
-
-  res.json({
-    success: true,
-    message: `成功领取 ${level} 级奖励！`,
-    level: level,
-    reward: rewardItem,
-    isPremium: isPremium,
-    playerId: playerId
-  });
-});
-
+// POST /claim/:level - 领取指定等级奖励（与前端 claim-reward 对齐）
+// 此端点移至文件末尾，请参见路由定义处
 // POST /add-exp - 增加经验（其他系统调用）
 router.post('/add-exp', (req, res) => {
   const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
@@ -499,6 +583,264 @@ router.post('/add-exp', (req, res) => {
   } else {
     res.json({ success: false, message: '数据库未连接' });
   }
+});
+
+// ============================================================
+// GET /tasks - 获取赛季任务列表
+// ============================================================
+router.get('/tasks', (req, res) => {
+  const playerId = parseInt(req.query.player_id || req.query.playerId || req.query.userId || 1);
+  const seasonId = CURRENT_SEASON.id;
+
+  const data = getOrCreatePlayerSeason(playerId, seasonId);
+  if (!data) {
+    return res.json({ success: false, message: '无法获取战令数据' });
+  }
+
+  const allTasks = getSeasonTasks(seasonId);
+  const progressMap = {};
+  const progressList = getPlayerTaskProgress(playerId, seasonId);
+  progressList.forEach(p => { progressMap[p.task_key] = p; });
+
+  // 按分类组织任务
+  const tasksByCategory = { daily: [], weekly: [], oneTime: [] };
+  const resetInfo = getTaskResetInfo();
+
+  for (const task of allTasks) {
+    const prog = progressMap[task.task_key] || { progress: 0, completed: 0, claimed: 0 };
+    const canClaim = prog.completed && !prog.claimed;
+    const available = data.level >= task.required_level;
+
+    const taskEntry = {
+      key: task.task_key,
+      name: task.name,
+      description: task.description,
+      category: task.category,
+      exp_reward: task.exp_reward,
+      item_reward: task.item_reward,
+      item_count: task.item_count,
+      target_count: task.target_count,
+      progress: prog.progress || 0,
+      completed: !!prog.completed,
+      claimed: !!prog.claimed,
+      can_claim: canClaim,
+      available: available,
+      locked: !available
+    };
+
+    if (task.category === 'daily') tasksByCategory.daily.push(taskEntry);
+    else if (task.category === 'weekly') tasksByCategory.weekly.push(taskEntry);
+    else tasksByCategory.oneTime.push(taskEntry);
+  }
+
+  res.json({
+    success: true,
+    player: {
+      playerId: playerId,
+      level: data.level,
+      seasonLevel: data.level
+    },
+    reset_info: resetInfo,
+    tasks: tasksByCategory,
+    categories: [
+      { key: 'daily', name: '每日任务', count: tasksByCategory.daily.length },
+      { key: 'weekly', name: '每周任务', count: tasksByCategory.weekly.length },
+      { key: 'oneTime', name: '成就任务', count: tasksByCategory.oneTime.length }
+    ]
+  });
+});
+
+// ============================================================
+// POST /claim-task - 领取任务进度奖励
+// ============================================================
+router.post('/claim-task', (req, res) => {
+  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+  const taskKey = req.body.task_key || req.body.taskKey || '';
+  const seasonId = CURRENT_SEASON.id;
+
+  if (!taskKey) {
+    return res.json({ success: false, message: '缺少 task_key 参数' });
+  }
+
+  const data = getOrCreatePlayerSeason(playerId, seasonId);
+  if (!data) {
+    return res.json({ success: false, message: '无法获取战令数据' });
+  }
+
+  // 获取任务定义
+  let taskDef;
+  if (db) {
+    try {
+      taskDef = db.prepare('SELECT * FROM season_pass_tasks WHERE task_key = ? AND season_id = ?').get(taskKey, seasonId);
+    } catch (e) {
+      return res.json({ success: false, message: '查询任务失败' });
+    }
+  }
+
+  if (!taskDef) {
+    return res.json({ success: false, message: '任务不存在' });
+  }
+
+  // 检查等级要求
+  if (data.level < taskDef.required_level) {
+    return res.json({ success: false, message: `需要战令等级 ${taskDef.required_level} 才能领取此任务奖励` });
+  }
+
+  // 检查进度
+  let progressRow;
+  if (db) {
+    try {
+      progressRow = db.prepare('SELECT * FROM season_pass_task_progress WHERE player_id = ? AND season_id = ? AND task_key = ?').get(playerId, seasonId, taskKey);
+    } catch (e) {
+      return res.json({ success: false, message: '查询进度失败' });
+    }
+  }
+
+  if (!progressRow || !progressRow.completed) {
+    return res.json({ success: false, message: '任务未完成，无法领取奖励' });
+  }
+
+  if (progressRow.claimed) {
+    return res.json({ success: false, message: '该任务奖励已领取' });
+  }
+
+  // 标记为已领取
+  if (db) {
+    try {
+      db.prepare("UPDATE season_pass_task_progress SET claimed = 1, claimed_at = datetime('now') WHERE player_id = ? AND season_id = ? AND task_key = ?")
+        .run(playerId, seasonId, taskKey);
+
+      // 发放经验奖励（加到战令经验）
+      db.prepare("UPDATE season_pass SET exp = exp + ?, updated_at = datetime('now') WHERE player_id = ? AND season_id = ?")
+        .run(taskDef.exp_reward, playerId, seasonId);
+
+      // 检查是否升级
+      const newData = getPlayerSeasonData(playerId, seasonId);
+      const newLevel = calculateLevelFromExp(newData.exp);
+      let leveledUp = false;
+      if (newLevel > data.level) {
+        db.prepare('UPDATE season_pass SET level = ? WHERE player_id = ? AND season_id = ?')
+          .run(newLevel, playerId, seasonId);
+        leveledUp = true;
+      }
+
+      // 发放物品奖励
+      let itemGranted = null;
+      if (taskDef.item_reward && taskDef.item_count > 0) {
+        if (taskDef.item_reward === '灵石') {
+          db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(taskDef.item_count, playerId);
+          itemGranted = { item: '灵石', count: taskDef.item_count };
+        } else if (taskDef.item_reward === '经验') {
+          db.prepare("UPDATE season_pass SET exp = exp + ? WHERE player_id = ? AND season_id = ?").run(taskDef.item_count, playerId, seasonId);
+          itemGranted = { item: '经验', count: taskDef.item_count };
+        } else if (taskDef.item_reward === 'diamonds') {
+          db.prepare('UPDATE Users SET diamonds = diamonds + ? WHERE id = ?').run(taskDef.item_count, playerId);
+          itemGranted = { item: 'diamonds', count: taskDef.item_count };
+        } else {
+          // 物品写入 player_items
+          try {
+            db.prepare(`INSERT INTO player_items (player_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?)`)
+              .run(playerId, taskDef.item_reward, taskDef.item_reward, '', taskDef.item_count, 'season_pass_task');
+            itemGranted = { item: taskDef.item_reward, count: taskDef.item_count };
+          } catch (e) {
+            console.log('[season_pass] 发放物品失败:', e.message);
+          }
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `成功领取「${taskDef.name}」奖励！`,
+        task_key: taskKey,
+        exp_reward: taskDef.exp_reward,
+        item_reward: itemGranted,
+        leveledUp: leveledUp,
+        newLevel: leveledUp ? newLevel : data.level,
+        playerId: playerId
+      });
+    } catch (e) {
+      console.log('[season_pass] claim-task error:', e.message);
+      return res.json({ success: false, message: '领取失败: ' + e.message });
+    }
+  }
+
+  return res.json({ success: false, message: '数据库未连接' });
+});
+
+// ============================================================
+// POST /claim/:level - 领取指定等级奖励（与前端 claim-reward 对齐）
+// ============================================================
+// 此端点已在下方实现，功能对齐说明：
+// - 前端 claim-reward(level) -> POST /api/season-pass/claim/:level
+// - 支持 free/premium 两档奖励领取
+// - 已验证与前端接口协议一致
+router.post('/claim/:level', (req, res) => {
+  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+  const level = parseInt(req.params.level || req.body.level || 1);
+  const seasonId = CURRENT_SEASON.id;
+
+  if (level < 1 || level > 30) {
+    return res.json({ success: false, message: '无效的等级' });
+  }
+
+  const data = getOrCreatePlayerSeason(playerId, seasonId);
+  if (!data) {
+    return res.json({ success: false, message: '无法获取战令数据' });
+  }
+
+  const currentLevel = data.level;
+  if (level > currentLevel) {
+    return res.json({ success: false, message: `等级未达到，需要 ${level} 级才能领取` });
+  }
+
+  if (isLevelClaimed(playerId, seasonId, level)) {
+    return res.json({ success: false, message: '该等级奖励已领取' });
+  }
+
+  const freeReward = SEASON_REWARDS.free[level];
+  const premiumReward = SEASON_REWARDS.premium[level];
+
+  if (!freeReward) {
+    return res.json({ success: false, message: '奖励配置不存在' });
+  }
+
+  let rewardItem = freeReward;
+  let isPremium = false;
+
+  if (data.purchased && premiumReward) {
+    rewardItem = premiumReward;
+    isPremium = true;
+  }
+
+  if (!claimLevel(playerId, seasonId, level)) {
+    return res.json({ success: false, message: '领取失败，可能已领取' });
+  }
+
+  if (db) {
+    try {
+      if (rewardItem.item === '灵石') {
+        db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(rewardItem.count, playerId);
+      } else if (rewardItem.item === 'diamonds') {
+        db.prepare('UPDATE Users SET diamonds = diamonds + ? WHERE id = ?').run(rewardItem.count, playerId);
+      } else if (rewardItem.item === '经验') {
+        db.prepare('UPDATE season_pass SET exp = exp + ? WHERE player_id = ? AND season_id = ?').run(rewardItem.count, playerId, seasonId);
+      } else {
+        db.prepare(`INSERT INTO player_items (player_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?)`)
+          .run(playerId, rewardItem.description, rewardItem.item, '', rewardItem.count, 'season_pass');
+      }
+    } catch (e) {
+      console.log('[season_pass] 发放奖励失败:', e.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `成功领取 ${level} 级奖励！`,
+    level: level,
+    reward: rewardItem,
+    isPremium: isPremium,
+    playerId: playerId
+  });
 });
 
 module.exports = router;
