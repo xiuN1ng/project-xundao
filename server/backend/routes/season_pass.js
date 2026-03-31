@@ -16,6 +16,38 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 赛季配置（必须在 initDB 之前定义，因为 initDB → initSeasonTasks 依赖它）
+const CURRENT_SEASON = {
+  id: 1,
+  name: '第一赛季·筑基篇',
+  start_time: '2026-03-01 00:00:00',
+  end_time: '2026-04-30 23:59:59'
+};
+
+// 赛季任务配置（必须在 initDB 之前定义）
+const SEASON_TASKS = {
+  daily: [
+    { key: 'daily_login', name: '每日登录', description: '登录游戏', exp_reward: 50, item_reward: '灵石', item_count: 50, target_count: 1, required_level: 0 },
+    { key: 'daily_dungeon_1', name: '通关副本×1', description: '完成任意副本1次', exp_reward: 80, item_reward: '灵石', item_count: 100, target_count: 1, required_level: 0 },
+    { key: 'daily_dungeon_3', name: '通关副本×3', description: '完成任意副本3次', exp_reward: 150, item_reward: '经验', item_count: 500, target_count: 3, required_level: 5 },
+    { key: 'daily_arena_1', name: '竞技场挑战×1', description: '参与竞技场1次', exp_reward: 60, item_reward: '灵石', item_count: 80, target_count: 1, required_level: 0 },
+    { key: 'daily_arena_3', name: '竞技场挑战×3', description: '参与竞技场3次', exp_reward: 120, item_reward: 'jade', item_count: 1, target_count: 3, required_level: 8 },
+    { key: 'daily_chat', name: '世界频道发言', description: '在世界频道发送一条消息', exp_reward: 30, item_reward: '灵石', item_count: 30, target_count: 1, required_level: 0 },
+    { key: 'daily_gather', name: '采集资源×5', description: '采集5次资源点', exp_reward: 70, item_reward: '灵石', item_count: 80, target_count: 5, required_level: 3 },
+  ],
+  weekly: [
+    { key: 'weekly_dungeon_10', name: '本周通关副本×10', description: '本周累计通关副本10次', exp_reward: 300, item_reward: 'fire_crystal', item_count: 2, target_count: 10, required_level: 0 },
+    { key: 'weekly_arena_15', name: '本周竞技场×15', description: '本周累计参与竞技场15次', exp_reward: 250, item_reward: 'thunder_crystal', item_count: 1, target_count: 15, required_level: 5 },
+    { key: 'weekly_rank_top10', name: '排行榜前10', description: '进入本周排行榜前10名', exp_reward: 500, item_reward: 'spirit_stone', item_count: 1, target_count: 1, required_level: 10 },
+    { key: 'weekly_sect_war', name: '参加宗门战', description: '参与一次宗门战', exp_reward: 400, item_reward: 'dragon_scale', item_count: 1, target_count: 1, required_level: 15 },
+  ],
+  oneTime: [
+    { key: 'first_purchase', name: '首次购买战令', description: '购买本赛季战令', exp_reward: 200, item_reward: 'diamonds', item_count: 50, target_count: 1, required_level: 0 },
+    { key: 'reach_level_10', name: '达到10级', description: '战令等级达到10级', exp_reward: 300, item_reward: 'spirit_stone', item_count: 2, target_count: 1, required_level: 10 },
+    { key: 'reach_level_20', name: '达到20级', description: '战令等级达到20级', exp_reward: 500, item_reward: 'dragon_scale', item_count: 2, target_count: 1, required_level: 20 },
+  ]
+};
+
 // 数据库连接
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
@@ -26,6 +58,31 @@ try {
   initDB();
 } catch (e) {
   console.log('[season_pass] DB连接失败:', e.message);
+}
+
+// Redis 缓存
+let getSeasonPassTasks, invalidateSeasonPassTasks;
+try {
+  const cacheMod = require('../utils/cache');
+  getSeasonPassTasks = cacheMod.getSeasonPassTasks;
+  invalidateSeasonPassTasks = cacheMod.invalidateSeasonPassTasks;
+} catch (e) {
+  console.warn('[season_pass] 加载Redis缓存模块失败:', e.message);
+  getSeasonPassTasks = null;
+  invalidateSeasonPassTasks = null;
+}
+
+// ============================================================
+// P0-1 修复：服务端鉴权中间件
+// 从 req.user.id 获取登录用户ID，禁止从 body/query 接收
+// ============================================================
+function requireAuth(req, res, next) {
+  const userId = req.user && req.user.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: '未登录或登录已过期' });
+  }
+  req.authUserId = userId;
+  next();
 }
 
 // ============================================================
@@ -107,16 +164,6 @@ function initDB() {
     console.log('[season_pass] 建表失败:', e.message);
   }
 }
-
-// ============================================================
-// 赛季配置
-// ============================================================
-const CURRENT_SEASON = {
-  id: 1,
-  name: '第一赛季·筑基篇',
-  start_time: '2026-03-01 00:00:00',
-  end_time: '2026-04-30 23:59:59'
-};
 
 // 战令等级配置 (等级 → {freeExp, premiumExp, rewards})
 const SEASON_REWARDS = {
@@ -200,32 +247,6 @@ const EXP_PER_LEVEL = {
 
 // 战令购买价格
 const PASS_PRICE = 300; // 钻石
-
-// ============================================================
-// 赛季任务配置
-// ============================================================
-const SEASON_TASKS = {
-  daily: [
-    { key: 'daily_login', name: '每日登录', description: '登录游戏', exp_reward: 50, item_reward: '灵石', item_count: 50, target_count: 1, required_level: 0 },
-    { key: 'daily_dungeon_1', name: '通关副本×1', description: '完成任意副本1次', exp_reward: 80, item_reward: '灵石', item_count: 100, target_count: 1, required_level: 0 },
-    { key: 'daily_dungeon_3', name: '通关副本×3', description: '完成任意副本3次', exp_reward: 150, item_reward: '经验', item_count: 500, target_count: 3, required_level: 5 },
-    { key: 'daily_arena_1', name: '竞技场挑战×1', description: '参与竞技场1次', exp_reward: 60, item_reward: '灵石', item_count: 80, target_count: 1, required_level: 0 },
-    { key: 'daily_arena_3', name: '竞技场挑战×3', description: '参与竞技场3次', exp_reward: 120, item_reward: 'jade', item_count: 1, target_count: 3, required_level: 8 },
-    { key: 'daily_chat', name: '世界频道发言', description: '在世界频道发送一条消息', exp_reward: 30, item_reward: '灵石', item_count: 30, target_count: 1, required_level: 0 },
-    { key: 'daily_gather', name: '采集资源×5', description: '采集5次资源点', exp_reward: 70, item_reward: '灵石', item_count: 80, target_count: 5, required_level: 3 },
-  ],
-  weekly: [
-    { key: 'weekly_dungeon_10', name: '本周通关副本×10', description: '本周累计通关副本10次', exp_reward: 300, item_reward: 'fire_crystal', item_count: 2, target_count: 10, required_level: 0 },
-    { key: 'weekly_arena_15', name: '本周竞技场×15', description: '本周累计参与竞技场15次', exp_reward: 250, item_reward: 'thunder_crystal', item_count: 1, target_count: 15, required_level: 5 },
-    { key: 'weekly_rank_top10', name: '排行榜前10', description: '进入本周排行榜前10名', exp_reward: 500, item_reward: 'spirit_stone', item_count: 1, target_count: 1, required_level: 10 },
-    { key: 'weekly_sect_war', name: '参加宗门战', description: '参与一次宗门战', exp_reward: 400, item_reward: 'dragon_scale', item_count: 1, target_count: 1, required_level: 15 },
-  ],
-  oneTime: [
-    { key: 'first_purchase', name: '首次购买战令', description: '购买本赛季战令', exp_reward: 200, item_reward: 'diamonds', item_count: 50, target_count: 1, required_level: 0 },
-    { key: 'reach_level_10', name: '达到10级', description: '战令等级达到10级', exp_reward: 300, item_reward: 'spirit_stone', item_count: 2, target_count: 1, required_level: 10 },
-    { key: 'reach_level_20', name: '达到20级', description: '战令等级达到20级', exp_reward: 500, item_reward: 'dragon_scale', item_count: 2, target_count: 1, required_level: 20 },
-  ]
-};
 
 // 任务重置时间配置（UTC）
 // daily: 每天 00:00 重置, weekly: 每周一 00:00 重置
@@ -314,7 +335,32 @@ function getPlayerTaskProgress(playerId, seasonId = CURRENT_SEASON.id) {
   }
 }
 
-// 获取任务定义列表
+// 获取任务定义列表（带缓存，TTL: 1小时）
+async function getSeasonTasksCached(seasonId = CURRENT_SEASON.id) {
+  if (getSeasonPassTasks) {
+    return getSeasonPassTasks(() =>
+      Promise.resolve(
+        (() => {
+          if (!db) return [];
+          try {
+            return db.prepare('SELECT * FROM season_pass_tasks WHERE season_id = ?').all(seasonId);
+          } catch (e) {
+            return [];
+          }
+        })()
+      )
+    );
+  }
+  // 回退：无缓存
+  if (!db) return [];
+  try {
+    return db.prepare('SELECT * FROM season_pass_tasks WHERE season_id = ?').all(seasonId);
+  } catch (e) {
+    return [];
+  }
+}
+
+// 获取任务定义列表（同步包装，供内部使用）
 function getSeasonTasks(seasonId = CURRENT_SEASON.id) {
   if (!db) return [];
   try {
@@ -418,8 +464,8 @@ router.get('/', (req, res) => {
 });
 
 // GET /status - 获取玩家战令状态
-router.get('/status', (req, res) => {
-  const playerId = parseInt(req.query.player_id || req.query.playerId || req.query.userId || 1);
+router.get('/status', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
   const seasonId = CURRENT_SEASON.id;
 
   const data = getOrCreatePlayerSeason(playerId, seasonId);
@@ -489,8 +535,8 @@ router.get('/status', (req, res) => {
 });
 
 // POST /purchase - 购买战令
-router.post('/purchase', (req, res) => {
-  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+router.post('/purchase', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
   const diamonds = parseInt(req.body.diamonds || 0);
   const seasonId = CURRENT_SEASON.id;
 
@@ -538,8 +584,8 @@ router.post('/purchase', (req, res) => {
 // POST /claim/:level - 领取指定等级奖励（与前端 claim-reward 对齐）
 // 此端点移至文件末尾，请参见路由定义处
 // POST /add-exp - 增加经验（其他系统调用）
-router.post('/add-exp', (req, res) => {
-  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+router.post('/add-exp', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
   const expGain = parseInt(req.body.exp || 0);
   const seasonId = CURRENT_SEASON.id;
 
@@ -588,8 +634,8 @@ router.post('/add-exp', (req, res) => {
 // ============================================================
 // GET /tasks - 获取赛季任务列表
 // ============================================================
-router.get('/tasks', (req, res) => {
-  const playerId = parseInt(req.query.player_id || req.query.playerId || req.query.userId || 1);
+router.get('/tasks', requireAuth, async (req, res) => {
+  const playerId = req.authUserId;
   const seasonId = CURRENT_SEASON.id;
 
   const data = getOrCreatePlayerSeason(playerId, seasonId);
@@ -597,7 +643,7 @@ router.get('/tasks', (req, res) => {
     return res.json({ success: false, message: '无法获取战令数据' });
   }
 
-  const allTasks = getSeasonTasks(seasonId);
+  const allTasks = await getSeasonTasksCached(seasonId);
   const progressMap = {};
   const progressList = getPlayerTaskProgress(playerId, seasonId);
   progressList.forEach(p => { progressMap[p.task_key] = p; });
@@ -653,8 +699,8 @@ router.get('/tasks', (req, res) => {
 // ============================================================
 // POST /claim-task - 领取任务进度奖励
 // ============================================================
-router.post('/claim-task', (req, res) => {
-  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+router.post('/claim-task', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
   const taskKey = req.body.task_key || req.body.taskKey || '';
   const seasonId = CURRENT_SEASON.id;
 
@@ -769,13 +815,10 @@ router.post('/claim-task', (req, res) => {
 
 // ============================================================
 // POST /claim/:level - 领取指定等级奖励（与前端 claim-reward 对齐）
+// P0-1: 添加鉴权，P0-3: 服务端校验等级和领取状态，P0-4: 添加事务
 // ============================================================
-// 此端点已在下方实现，功能对齐说明：
-// - 前端 claim-reward(level) -> POST /api/season-pass/claim/:level
-// - 支持 free/premium 两档奖励领取
-// - 已验证与前端接口协议一致
-router.post('/claim/:level', (req, res) => {
-  const playerId = parseInt(req.body.player_id || req.body.playerId || req.body.userId || 1);
+router.post('/claim/:level', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
   const level = parseInt(req.params.level || req.body.level || 1);
   const seasonId = CURRENT_SEASON.id;
 
@@ -812,12 +855,24 @@ router.post('/claim/:level', (req, res) => {
     isPremium = true;
   }
 
-  if (!claimLevel(playerId, seasonId, level)) {
-    return res.json({ success: false, message: '领取失败，可能已领取' });
+  // P0-4 修复：使用事务保证原子性（记录领取 + 发放奖励）
+  if (!db) {
+    return res.json({ success: false, message: '数据库未连接' });
   }
 
-  if (db) {
-    try {
+  try {
+    const transaction = db.transaction(() => {
+      // 再次检查是否已领取（事务内再查防止竞态）
+      if (isLevelClaimed(playerId, seasonId, level)) {
+        throw new Error('该等级奖励已领取');
+      }
+
+      // 标记为已领取
+      if (!claimLevel(playerId, seasonId, level)) {
+        throw new Error('领取失败，可能已领取');
+      }
+
+      // 发放奖励
       if (rewardItem.item === '灵石') {
         db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(rewardItem.count, playerId);
       } else if (rewardItem.item === 'diamonds') {
@@ -828,9 +883,11 @@ router.post('/claim/:level', (req, res) => {
         db.prepare(`INSERT INTO player_items (player_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?)`)
           .run(playerId, rewardItem.description, rewardItem.item, '', rewardItem.count, 'season_pass');
       }
-    } catch (e) {
-      console.log('[season_pass] 发放奖励失败:', e.message);
-    }
+    });
+
+    transaction();
+  } catch (err) {
+    return res.json({ success: false, message: err.message });
   }
 
   res.json({
