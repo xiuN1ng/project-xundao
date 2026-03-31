@@ -16,7 +16,7 @@ let userEquipments = [
   { userId: 1, id: 3, name: '银甲', type: 'armor', defense: 15, enhanceLevel: 3, sockets: [0], gems: ['def_gem'] }
 ];
 
-const playerResources = { 1: { spiritStones: 10000, refineStones: 50, augmentTickets: 10 } };
+const playerResources = { 1: { spiritStones: 10000, refineStones: 50, augmentTickets: 10, materials: {} } };
 const augmentHistory = [];
 const gemTypes = [
   { id: 'atk_gem', name: '攻击宝石', effect: 'attack+10' },
@@ -198,6 +198,188 @@ router.get('/augment/history/:equipId', (req, res) => {
   res.json({ success: true, history });
 });
 
+// ============================================================
+// 装备分解 & 合成系统
+// ============================================================
+
+// 分解配方：品质 -> 返还材料
+const DECOMPOSE_RECIPES = {
+  normal:    { spirit_return: 50,  material: '普通精华', mat_count: 1 },
+  good:      { spirit_return: 120, material: '精良精华', mat_count: 2 },
+  rare:      { spirit_return: 300, material: '稀有精华', mat_count: 3 },
+  epic:      { spirit_return: 800, material: '史诗精华', mat_count: 5 },
+  legendary: { spirit_return: 2000, material: '传说精华', mat_count: 10 },
+};
+
+// 合成配方：类型+品质 -> 消耗
+const SYNTHESIZE_RECIPES = {
+  weapon_normal:    { spirit: 200,  materials: { '普通精华': 3 }, attack: 20,  defense: 0,  hp: 50,  quality: 'normal' },
+  weapon_good:      { spirit: 600,  materials: { '精良精华': 3 }, attack: 45,  defense: 0,  hp: 100, quality: 'good' },
+  weapon_rare:      { spirit: 1500, materials: { '稀有精华': 3 }, attack: 90,  defense: 0,  hp: 200, quality: 'rare' },
+  weapon_epic:      { spirit: 4000, materials: { '史诗精华': 3 }, attack: 180, defense: 0,  hp: 400, quality: 'epic' },
+  weapon_legendary: { spirit: 10000, materials: { '传说精华': 3 }, attack: 350, defense: 0,  hp: 800, quality: 'legendary' },
+  armor_normal:     { spirit: 200,  materials: { '普通精华': 3 }, attack: 0,  defense: 20, hp: 80,  quality: 'normal' },
+  armor_good:       { spirit: 600,  materials: { '精良精华': 3 }, attack: 0,  defense: 45, hp: 160, quality: 'good' },
+  armor_rare:      { spirit: 1500, materials: { '稀有精华': 3 }, attack: 0,  defense: 90, hp: 320, quality: 'rare' },
+  armor_epic:      { spirit: 4000, materials: { '史诗精华': 3 }, attack: 0,  defense: 180, hp: 640, quality: 'epic' },
+  armor_legendary: { spirit: 10000, materials: { '传说精华': 3 }, attack: 0, defense: 350, hp: 1280, quality: 'legendary' },
+  helmet_normal:    { spirit: 150,  materials: { '普通精华': 2 }, attack: 5,  defense: 10, hp: 40,  quality: 'normal' },
+  helmet_good:      { spirit: 450,  materials: { '精良精华': 2 }, attack: 12, defense: 22, hp: 80,  quality: 'good' },
+  helmet_rare:      { spirit: 1200, materials: { '稀有精华': 2 }, attack: 25, defense: 45, hp: 160, quality: 'rare' },
+  helmet_epic:      { spirit: 3200, materials: { '史诗精华': 2 }, attack: 50, defense: 90, hp: 320, quality: 'epic' },
+  helmet_legendary: { spirit: 8000, materials: { '传说精华': 2 }, attack: 100, defense: 175, hp: 640, quality: 'legendary' },
+  shoes_normal:     { spirit: 150,  materials: { '普通精华': 2 }, attack: 5,  defense: 8,  hp: 30,  quality: 'normal' },
+  shoes_good:       { spirit: 450,  materials: { '精良精华': 2 }, attack: 12, defense: 18, hp: 60,  quality: 'good' },
+  shoes_rare:      { spirit: 1200, materials: { '稀有精华': 2 }, attack: 25, defense: 36, hp: 120, quality: 'rare' },
+  shoes_epic:      { spirit: 3200, materials: { '史诗精华': 2 }, attack: 50, defense: 72, hp: 240, quality: 'epic' },
+  shoes_legendary: { spirit: 8000, materials: { '传说精华': 2 }, attack: 100, defense: 145, hp: 480, quality: 'legendary' },
+  accessory_normal:    { spirit: 150,  materials: { '普通精华': 2 }, attack: 8,  defense: 8,  hp: 25,  quality: 'normal' },
+  accessory_good:      { spirit: 450,  materials: { '精良精华': 2 }, attack: 18, defense: 18, hp: 50,  quality: 'good' },
+  accessory_rare:     { spirit: 1200, materials: { '稀有精华': 2 }, attack: 36, defense: 36, hp: 100, quality: 'rare' },
+  accessory_epic:     { spirit: 3200, materials: { '史诗精华': 2 }, attack: 72, defense: 72, hp: 200, quality: 'epic' },
+  accessory_legendary: { spirit: 8000, materials: { '传说精华': 2 }, attack: 145, defense: 145, hp: 400, quality: 'legendary' },
+};
+
+// 品质名称映射
+const QUALITY_NAMES = { normal: '普通', good: '精良', rare: '稀有', epic: '史诗', legendary: '传说' };
+const TYPE_NAMES = { weapon: '剑', armor: '甲', helmet: '盔', shoes: '鞋', accessory: '饰品' };
+
+// 从装备名推断品质
+function inferQuality(name) {
+  if (!name) return 'normal';
+  if (name.includes('传说') || name.includes('Legendary')) return 'legendary';
+  if (name.includes('史诗') || name.includes('Epic')) return 'epic';
+  if (name.includes('稀有') || name.includes('Rare')) return 'rare';
+  if (name.includes('精良') || name.includes('Good')) return 'good';
+  return 'normal';
+}
+
+// 确保玩家材料数据结构存在
+function ensureMaterials(uid) {
+  if (!playerResources[uid]) {
+    playerResources[uid] = { spiritStones: 500, refineStones: 10, augmentTickets: 1, materials: {} };
+  }
+  if (!playerResources[uid].materials) playerResources[uid].materials = {};
+  return playerResources[uid];
+}
+
+/**
+ * GET /decompose-recipes - 获取分解配方
+ */
+router.get('/decompose-recipes', (req, res) => {
+  res.json({ success: true, recipes: DECOMPOSE_RECIPES });
+});
+
+/**
+ * GET /synthesize-recipes - 获取合成配方
+ */
+router.get('/synthesize-recipes', (req, res) => {
+  res.json({ success: true, recipes: SYNTHESIZE_RECIPES });
+});
+
+/**
+ * POST /decompose - 分解装备
+ * body: { userId, equipId }
+ */
+router.post('/decompose', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+  const equipId = parseInt(req.body.equipId);
+
+  if (!equipId) return res.json({ success: false, message: '缺少equipId' });
+
+  const idx = userEquipments.findIndex(e => e.id === equipId && e.userId === userId);
+  if (idx === -1) return res.json({ success: false, message: '装备不存在' });
+
+  const equip = userEquipments[idx];
+  const quality = inferQuality(equip.name);
+  const recipe = DECOMPOSE_RECIPES[quality] || DECOMPOSE_RECIPES.normal;
+
+  // 从玩家装备列表移除
+  userEquipments.splice(idx, 1);
+
+  // 返还灵石和材料
+  const resources = ensureMaterials(userId);
+  resources.spiritStones = (resources.spiritStones || 0) + recipe.spirit_return;
+  resources.materials[recipe.material] = (resources.materials[recipe.material] || 0) + recipe.mat_count;
+
+  console.log(`[equipment] 分解: userId=${userId} equipId=${equipId} quality=${quality} -> ${recipe.material}×${recipe.mat_count} + ${recipe.spirit_return}灵石`);
+
+  res.json({
+    success: true,
+    message: `分解成功！获得【${recipe.material}】×${recipe.mat_count}，返还${recipe.spirit_return}灵石`,
+    spirit_return: recipe.spirit_return,
+    material: { name: recipe.material, count: recipe.mat_count },
+    remainingSpiritStones: resources.spiritStones
+  });
+});
+
+/**
+ * POST /synthesize - 合成装备
+ * body: { userId, equipType, quality }
+ * equipType: weapon | armor | helmet | shoes | accessory
+ * quality: normal | good | rare | epic | legendary
+ */
+router.post('/synthesize', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
+  const equipType = req.body.equipType || 'weapon';
+  const quality = req.body.quality || 'normal';
+
+  const recipeKey = `${equipType}_${quality}`;
+  const recipe = SYNTHESIZE_RECIPES[recipeKey];
+  if (!recipe) return res.json({ success: false, message: `不支持的装备类型或品质: ${equipType} ${quality}` });
+
+  const resources = ensureMaterials(userId);
+
+  // 检查灵石
+  if ((resources.spiritStones || 0) < recipe.spirit) {
+    return res.json({ success: false, message: `灵石不足！需要${recipe.spirit}，当前${resources.spiritStones}`, code: 'INSUFFICIENT_SPIRIT' });
+  }
+
+  // 检查材料
+  for (const [mat, needed] of Object.entries(recipe.materials)) {
+    if ((resources.materials[mat] || 0) < needed) {
+      return res.json({ success: false, message: `材料不足！需要【${mat}】×${needed}，当前${resources.materials[mat] || 0}`, code: 'INSUFFICIENT_MATERIAL' });
+    }
+  }
+
+  // 扣除资源
+  resources.spiritStones -= recipe.spirit;
+  for (const [mat, needed] of Object.entries(recipe.materials)) {
+    resources.materials[mat] -= needed;
+  }
+
+  // 生成新装备
+  const maxId = userEquipments.reduce((m, e) => Math.max(m, e.id), 0);
+  const qualityName = QUALITY_NAMES[quality] || '普通';
+  const typeName = TYPE_NAMES[equipType] || '装';
+  const newEquip = {
+    userId,
+    id: maxId + 1,
+    name: `${qualityName}${typeName}`,
+    type: equipType,
+    quality: recipe.quality,
+    attack: recipe.attack,
+    defense: recipe.defense,
+    hp: recipe.hp,
+    enhanceLevel: 0,
+    sockets: quality === 'legendary' ? [null, null] : quality === 'epic' ? [null] : [],
+    gems: [],
+    equipped: false,
+    crafted: true
+  };
+
+  userEquipments.push(newEquip);
+
+  console.log(`[equipment] 合成: userId=${userId} type=${equipType} quality=${quality} -> ${newEquip.name}`);
+
+  res.json({
+    success: true,
+    message: `合成成功！获得【${newEquip.name}】`,
+    equip: newEquip,
+    remainingSpiritStones: resources.spiritStones
+  });
+});
+
 // POST /initialize - 新手初始装备（武器+防具各1件）
 router.post('/initialize', (req, res) => {
   const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || 1;
@@ -245,7 +427,7 @@ router.post('/initialize', (req, res) => {
 
   // 初始化玩家资源（如果不存在）
   if (!playerResources[userId]) {
-    playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1 };
+    playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1, materials: {} };
   }
 
   console.log(`[equipment] 初始装备发放: userId=${userId}, weapon=${starterWeapon.name}, armor=${starterArmor.name}`);
@@ -269,6 +451,6 @@ module.exports.initStarterEquipment = function(userId) {
     { userId, id: maxId + 1, name: '新手木剑', type: 'weapon', quality: 'common', attack: 15, defense: 0, hp: 0, enhanceLevel: 0, sockets: [], gems: [], equipped: true },
     { userId, id: maxId + 2, name: '新手布衣', type: 'armor', quality: 'common', attack: 0, defense: 10, hp: 50, enhanceLevel: 0, sockets: [], gems: [], equipped: true }
   );
-  if (!playerResources[userId]) playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1 };
+  if (!playerResources[userId]) playerResources[userId] = { spiritStones: 500, refineStones: 10, augmentTickets: 1, materials: {} };
   return userEquipments.filter(e => e.userId === userId);
 };
