@@ -7,17 +7,13 @@ const router = express.Router();
 
 // 加载依赖
 let ladderStorage;
-function loadDependencies() {
-  if (!ladderStorage) {
-    try {
-      const mod = require('./ladder_storage');
-      ladderStorage = mod.ladderStorage;
-    } catch (e) {
-      console.error('加载ladder_storage失败:', e.message);
-    }
-  }
-  return ladderStorage;
+try {
+  const mod = require('./ladder_storage');
+  ladderStorage = mod.ladderStorage;
+} catch (e) {
+  console.error('加载ladder_storage失败:', e.message);
 }
+function loadDependencies() { return ladderStorage; }
 
 // 获取玩家天梯数据
 router.get('/info', (req, res) => {
