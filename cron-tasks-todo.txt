@@ -4658,10 +4658,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   位置: line 125
   修改: 使用 Asia/Shanghai 本地时间替代 toISOString()
 
-- [B-119-3] 修复 canClaim 与 reward 逻辑矛盾
-  文件: /root/.openclaw/workspace/xundao-client/server/services/welfare_api.js
-  位置: /daily 路由
-  修改: canClaim=false 时 amount=0
+- [B-119-3] 修复 canClaim 与 reward 逻辑矛盾  # 完成 | 2026-03-31 f63d5294
+  文件: /root/.openclaw/workspace/xundao-server/server/game/welfare_api.js
+  位置: /daily 路由 GET 端点
+  修改: canClaim=false 时 amount=0，name="已领取"
 
 ### P0 — Daily Dungeon 时间限制修复
 - [B-119-4] 评估并修复 Daily Dungeon 时间窗口限制  # 完成 | 2026-03-31 c16fb079
