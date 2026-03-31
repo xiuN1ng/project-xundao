@@ -4595,9 +4595,11 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 关联文件: server/server.js | 截止: 2026-04-01
 - 完成: 2026-03-31 | 3e43a854
 
-## [P2-118-1-B] auction.js 成交广播 — 2026-04-10
-- 单笔成交≥10000灵石 → io.emit('auction:broadcast', {...}) 全服广播
-- 同一买家1分钟内只广播1次防刷屏
+## [P2-118-1-B] auction.js 成交广播 — 完成 | 2026-03-31 3d2b59b6
+- 新增 auction_broadcasts 表存储高价值成交广播
+- recordAuctionBroadcast(): 单笔≥10000灵石自动记录，同买家1分钟内仅广播1次防刷屏
+- GET /api/auction/broadcasts 端点返回最近广播(含相对时间)
+- 广播消息格式: 【材料】寒冰之泪 以 12,000 灵石成交！买家 xxx 抱得宝贝归~
 - 关联文件: server/backend/routes/auction.js
 
 ## [P0-119-1-B] 世界BOSS分级系统 ← 2026-03-31-morning # 完成 | 2026-03-31 06:29 | 7ba04671
@@ -4673,3 +4675,38 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
   2. 后端: sweepMode 逻辑 (services/daily_dungeon.js)
   3. 定时任务: 每小时检查玩家扫荡卷可用性
 
+
+## 2026-03-31 上午任务 [B] — 第120轮
+
+### P0 — Auction router.handle() 错误
+- [P0-120-B1] 删除 auction.js 中错误的 router.post('/list') 端点
+  文件: server/backend/routes/auction.js line 136-140
+  问题: router.handle() 不是Express有效方法，导致POST /api/auction/list永远失败
+  方案: 删除该端点，或改为直接调用 router.get('/', ...) 的逻辑
+  截止: 2026-04-01
+
+### P1 — WorldBoss伤害强制封顶500
+- [P1-120-B1] 移除 worldboss.js 的 damageCap=500 限制
+  文件: server/game/worldboss.js attack路由
+  问题: 无论玩家多强，伤害永远500，战力提升无意义
+  方案: 改为真实伤害计算（damage - bossDefense），按难度等级缩放
+  截止: 2026-04-03
+
+### P1 — Ranking API补充
+- [P1-120-B2] ranking.js 补充缺失的API端点
+  文件: server/backend/routes/ranking.js
+  需添加: GET /api/ranking/:type, GET /api/ranking/:type/me
+  类型: combat_power, realm, wealth, beast
+  截止: 2026-04-05
+
+### P1 — 封魔秘境后端
+- [P1-120-B3] 确认/创建 sealed_realm 后端路由
+  检查: server.js 中是否有 sealed_realm 注册
+  如无: 参考 dungeon.js 创建基础封魔秘境后端
+  截止: 2026-04-10
+
+### P2 — 通天塔无尽模式
+- [P2-120-B1] tower_system.js 添加无尽模式后端逻辑
+  功能: 100层后解锁无尽模式，每10层难度+50%递增
+  数据: player_tower_data 添加 maxUnlimitedFloor 字段
+  截止: 2026-04-12
