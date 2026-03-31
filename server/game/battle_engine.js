@@ -332,17 +332,22 @@ class BattleEngine {
   calculateRewards(battle) {
     const { player, enemy, winner } = battle;
     
-    if (winner !== 'player') {
-      return { exp: 0, gold: 0, items: [] };
-    }
+    // 章节加成系数（基于敌人等级/章节）
+    const chapterBonus = 1 + (enemy.level || 1) * 0.1;
+    // 灵石倍率
+    const goldMultiplier = 50;
+    
+    const isWinner = winner === 'player';
+    const expMultiplier = isWinner ? 1.0 : 0.2;
+    const goldMultiplierFinal = isWinner ? 1.0 : 0.0;
 
+    // 基础奖励 = 敌人等级 * 倍率
     const baseExp = (enemy.level || 1) * 100;
-    const baseGold = (enemy.level || 1) * 50;
-    const realmBonus = (player.level || 1) > (enemy.level || 1) ? 1 + ((player.level || 1) - (enemy.level || 1)) * 0.1 : 1;
+    const baseGold = (enemy.level || 1) * goldMultiplier;
     
     return {
-      exp: Math.floor(baseExp * realmBonus),
-      gold: Math.floor(baseGold * realmBonus),
+      exp: Math.floor(baseExp * chapterBonus * expMultiplier),
+      gold: Math.floor(baseGold * chapterBonus * goldMultiplierFinal),
       items: []
     };
   }

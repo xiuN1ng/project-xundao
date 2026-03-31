@@ -57,11 +57,11 @@ router.post('/start', (req, res) => {
 
     const result = engine.startBattle(player, enemyData);
 
-    if (result.winner === 'player' && result.rewards) {
+    if (result.rewards) {
       grantRewards(userId, result.rewards, database);
     }
 
-    console.log(`[Battle] 玩家${userId} vs ${enemyData.name} - ${result.winner}胜利 (${result.rounds}回合)`);
+    console.log(`[Battle] 玩家${userId} vs ${enemyData.name} - ${result.winner}胜利 (${result.rounds}回合) | 奖励: exp+${result.rewards?.exp || 0} gold+${result.rewards?.gold || 0}`);
 
     res.json({
       success: true,
@@ -97,7 +97,7 @@ router.post('/quick', (req, res) => {
 
     const result = engine.startBattle(player, enemyData);
 
-    if (result.winner === 'player' && result.rewards) {
+    if (result.rewards) {
       grantRewards(userId, result.rewards, database);
     }
 
