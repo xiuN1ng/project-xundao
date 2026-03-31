@@ -3,9 +3,9 @@
  * 提供全面的输入验证和清理，防止注入攻击和无效数据
  */
 
-const logger = require('../logger') || {
-  warn: (...args) => console.warn('[WARN]', ...args),
-  error: (...args) => console.error('[ERROR]', ...args)
+const logger = {
+  warn: (...args) => console.warn('[Validation:WARN]', ...args),
+  error: (...args) => console.error('[Validation:ERROR]', ...args)
 };
 
 // ==================== 工具函数 ====================

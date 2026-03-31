@@ -15,6 +15,18 @@ try {
   db = null;
 }
 
+// Redis 缓存
+let getWorldBossStatus, invalidateWorldBossStatus;
+try {
+  const cacheMod = require('../utils/cache');
+  getWorldBossStatus = cacheMod.getWorldBossStatus;
+  invalidateWorldBossStatus = cacheMod.invalidateWorldBossStatus;
+} catch (e) {
+  console.warn('[worldBoss] 加载Redis缓存模块失败:', e.message);
+  getWorldBossStatus = null;
+  invalidateWorldBossStatus = null;
+}
+
 function initWorldBossTables() {
   if (!db) return;
   try {
@@ -304,13 +316,12 @@ setInterval(() => {
 }, 3600000); // 每小时检查一次
 
 // 获取当前BOSS状态
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   const { userId } = req.query;
   const now = Date.now();
 
   // 检查是否需要刷新BOSS（基于难度等级）
   if (worldBoss.status === 'dead' && now - worldBoss.lastRefresh > bossConfig.refreshInterval) {
-    // 默认选一个BOSS（基于玩家等级）
     let playerLevel = 1;
     if (db && userId) {
       try {
@@ -331,6 +342,8 @@ router.get('/status', (req, res) => {
       defenseReductionCount: 0,
       currentTier: tier
     };
+    // 刷新后失效缓存
+    if (invalidateWorldBossStatus) await invalidateWorldBossStatus();
   }
 
   // 读取玩家对当前BOSS的伤害
@@ -342,7 +355,8 @@ router.get('/status', (req, res) => {
     } catch (e) { /* ignore */ }
   }
 
-  res.json({
+  // 构造共享的缓存数据（不含 myDamage）
+  const sharedStatus = {
     boss: worldBoss.currentBoss,
     hp: worldBoss.hp,
     maxHp: worldBoss.maxHp,
@@ -350,9 +364,25 @@ router.get('/status', (req, res) => {
     defenseReduction: worldBoss.defenseReduction,
     defenseReductionCount: worldBoss.defenseReductionCount,
     currentTier: worldBoss.currentTier ? { tier: worldBoss.currentTier.tier, name: worldBoss.currentTier.name } : null,
-    myDamage,
     difficultyTiers: DIFFICULTY_TIERS.map(t => ({ tier: t.tier, name: t.name, minLevel: t.minLevel, maxLevel: t.maxLevel })),
-  });
+  };
+
+  // 如果没有 userId，直接返回缓存的共享状态
+  if (!userId) {
+    return res.json(sharedStatus);
+  }
+
+  // 有 userId 时：尝试缓存共享状态，myDamage 单独查
+  if (getWorldBossStatus) {
+    try {
+      const cached = await getWorldBossStatus(async () => sharedStatus);
+      return res.json({ ...cached, myDamage });
+    } catch (e) {
+      console.warn('[worldBoss] 缓存获取失败，使用实时数据:', e.message);
+    }
+  }
+
+  res.json({ ...sharedStatus, myDamage });
 });
 
 // 攻击BOSS
@@ -487,6 +517,9 @@ router.post('/attack', (req, res) => {
     ? Math.floor(worldBoss.currentBoss.reward.magicCrystals || 0)
     : Math.floor((worldBoss.currentBoss.reward.magicCrystals || 0) * damageRatio * 0.5);
 
+  // 攻击后失效缓存（Boss血量/状态变化）
+  if (invalidateWorldBossStatus) invalidateWorldBossStatus().catch(() => {});
+
   res.json({
     success: true,
     remainingHp,
@@ -534,6 +567,9 @@ router.post('/encourage', (req, res) => {
     worldBoss.defenseReduction = Math.min(MAX_DEFENSE_REDUCTION, (worldBoss.defenseReduction || 0) + DEFENSE_REDUCTION_BONUS);
     worldBoss.defenseReductionCount = (worldBoss.defenseReductionCount || 0) + 1;
   }
+
+  // 鼓舞后失效缓存（防御减免变化）
+  if (invalidateWorldBossStatus) invalidateWorldBossStatus().catch(() => {});
 
   res.json({
     success: true,

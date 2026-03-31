@@ -94,6 +94,41 @@ function getPlayerId(req) {
   return parseInt(req.headers['x-player-id'] || req.query.player_id || req.body?.player_id || 1);
 }
 
+// GET /api/sect-activity/tasks?player_id=X — 获取宗门活跃任务列表
+router.get('/tasks', (req, res) => {
+  const playerId = getPlayerId(req);
+  const db = getDb();
+  try {
+    // 初始化活跃数据
+    const today = new Date().toISOString().slice(0, 10);
+    const weekKey = getWeekKey();
+    db.prepare(`INSERT OR IGNORE INTO sect_activity (player_id, daily_score, weekly_score, total_score, last_daily_reset, last_weekly_reset) VALUES (?,0,0,0,?,?)`).run(playerId, today, weekKey);
+
+    const activity = db.prepare('SELECT * FROM sect_activity WHERE player_id=?').get(playerId);
+    const logRows = db.prepare('SELECT * FROM sect_activity_log WHERE player_id=? ORDER BY id DESC LIMIT 50').all(playerId);
+
+    const completedKeys = new Set(logRows.map(r => r.activity_key));
+
+    const tasks = ACTIVITY_TASKS.map(task => ({
+      ...task,
+      completed: completedKeys.has(task.key),
+      progress: completedKeys.has(task.key) ? task.target : 0
+    }));
+
+    res.json({ success: true, data: {
+      player_id: playerId,
+      daily_score: activity?.daily_score || 0,
+      weekly_score: activity?.weekly_score || 0,
+      total_score: activity?.total_score || 0,
+      tasks
+    }});
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  } finally {
+    db.close();
+  }
+});
+
 // GET /api/sect-activity/info?player_id=X
 router.get('/info', (req, res) => {
   const playerId = getPlayerId(req);

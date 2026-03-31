@@ -294,14 +294,45 @@ const dungeonStorage = {
 // GET /api/dungeons - 获取副本列表
 router.get('/', async (req, res) => {
   try {
-    // 获取所有可用副本
-    const dungeons = await dungeonStorage.getAllDungeons();
-    
+    // 尝试从数据库获取副本
+    let dungeons;
+    try {
+      dungeons = await dungeonStorage.getAllDungeons();
+    } catch (dbErr) {
+      // 数据库表不存在时，使用静态配置数据
+      dungeons = [];
+    }
+
+    // 如果数据库没有数据，使用静态DUNGEON_DATA
+    if (!dungeons || dungeons.length === 0) {
+      const staticDungeons = Object.values(DUNGEON_DATA);
+      return res.json({
+        success: true,
+        data: staticDungeons.map(d => ({
+          dungeon_id: d.id,
+          name: d.name,
+          type: d.type,
+          description: d.description,
+          icon: d.icon,
+          difficulty: d.difficulty,
+          realm_req: d.realm_req,
+          level_req: d.level_req,
+          recommended_power: d.recommended_power,
+          stages: d.stages,
+          time_limit: d.time_limit,
+          entry_cost: d.entry_cost,
+          rewards: d.rewards,
+          monster_count: d.monsters ? d.monsters.length : 0,
+          is_available: d.is_available === 1
+        }))
+      });
+    }
+
     // 转换为更简洁的列表格式
     const result = dungeons.map(dungeon => {
       const rewards = JSON.parse(dungeon.rewards || '{}');
       const monsters = JSON.parse(dungeon.monsters || '[]');
-      
+
       return {
         dungeon_id: dungeon.id,
         name: dungeon.name,
@@ -324,7 +355,7 @@ router.get('/', async (req, res) => {
         is_available: dungeon.is_available === 1
       };
     });
-    
+
     res.json({
       success: true,
       data: result

@@ -148,9 +148,11 @@ router.post('/buy',
     quantity: { type: 'int', min: 1, max: 9999, required: false }
   }),
   (req, res) => {
-  const userId = parseInt(req.body.playerId, 10);
-  let itemId = req.body.itemId;
-  const count = parseInt(req.body.quantity || 1, 10);
+  // 使用校验后的数据（支持多种参数名）
+  const data = req.sanitizedBody || req.body;
+  const userId = parseInt(data.playerId || data.player_id || req.body.playerId || 1, 10);
+  let itemId = data.itemId || data.item_id;
+  const count = parseInt(data.quantity || data.count || 1, 10);
 
   // 前端时装商品ID映射 (前端ID → 后端shop商品ID)
   const FRONTEND_FASHION_ID_MAP = {

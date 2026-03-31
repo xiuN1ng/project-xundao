@@ -3255,8 +3255,25 @@ try {
   const arenaApi = require('./backend/routes/arena');
   app.use('/api/arena', arenaApi);
   Logger.info('✅ 竞技场系统 API 已加载 (routes/arena.js)');
+  // 新战斗系统 API (基于战斗引擎)
+  try {
+    const battleApi = require('./game/battle_api');
+    app.use('/api/battle', battleApi);
+    Logger.info('✅ 新战斗系统 API 已加载 (game/battle_api.js)');
+  } catch (e) {
+    Logger.info('新战斗API不可用:', e.message);
+  }
 } catch (e) {
   Logger.info('竞技场API不可用:', e.message);
+}
+
+// ============ 副本系统 API ============
+try {
+  const dungeonApi = require('./game/dungeon_api');
+  app.use('/api/dungeon', dungeonApi);
+  Logger.info('✅ 副本系统 API 已加载 (game/dungeon_api.js)');
+} catch (e) {
+  Logger.warn('⚠ 副本API不可用:', e.message);
 }
 
 // 仙盟系统 API (SQLite持久化版本)
@@ -3432,6 +3449,15 @@ try {
   console.log('器灵API不可用:', e.message);
 }
 
+// ============ 器灵数据 API (spirit_system) ============
+try {
+  const spiritRoute = require('./backend/routes/spirit');
+  app.use('/api/spirit', spiritRoute);
+  console.log('✅ 器灵数据 API 已加载 (backend/routes/spirit.js)');
+} catch (e) {
+  console.log('器灵数据API不可用:', e.message);
+}
+
 // ============ 天梯系统 API ============
 try {
   const ladderApi = require('./game/ladder_api');
@@ -3439,6 +3465,15 @@ try {
   console.log('✅ 天梯系统 API 已加载');
 } catch (e) {
   console.log('天梯API不可用:', e.message);
+}
+
+// ============ 天梯赛季系统 API ============
+try {
+  const ladderSeasonRoute = require('./backend/routes/ladder_season');
+  app.use('/api/ladder-season', ladderSeasonRoute);
+  console.log('✅ 天梯赛季系统 API 已加载');
+} catch (e) {
+  console.log('天梯赛季API不可用:', e.message);
 }
 
 // ============ 封神榜系统 API ============
@@ -8826,7 +8861,7 @@ try {
 
 try {
   const questRoute = require('./backend/routes/quest');
-  app.use('/api/quest', questRoute);
+  app.use('/api/quest', questRoute.router);
   Logger.info('✓ 任务系统路由已加载');
 } catch (e) {
   Logger.warn('⚠ 任务路由加载失败:', e.message);
@@ -8911,6 +8946,33 @@ try {
   Logger.info('✓ 境界副本路由已加载');
 } catch (e) {
   Logger.warn('⚠ 境界副本路由加载失败:', e.message);
+}
+
+// ============ 每日试炼路由 ============
+try {
+  const dailyTrialRoute = require('./backend/routes/daily-trial');
+  app.use('/api/daily-trial', dailyTrialRoute);
+  Logger.info('✅ 每日试炼路由已加载 (backend/routes/daily-trial.js)');
+} catch (e) {
+  Logger.warn('⚠ 每日试炼路由加载失败:', e.message);
+}
+
+// ============ 宗门活跃路由 ============
+try {
+  const sectActivityRoute = require('./backend/routes/sect-activity');
+  app.use('/api/sect-activity', sectActivityRoute);
+  Logger.info('✅ 宗门活跃路由已加载 (backend/routes/sect-activity.js)');
+} catch (e) {
+  Logger.warn('⚠ 宗门活跃路由加载失败:', e.message);
+}
+
+// ============ 洞府路由 ============
+try {
+  const caveRoute = require('./backend/routes/cave');
+  app.use('/api/cave', caveRoute);
+  Logger.info('✅ 洞府路由已加载 (backend/routes/cave.js)');
+} catch (e) {
+  Logger.warn('⚠ 洞府路由加载失败:', e.message);
 }
 
 // 404处理 - 统一错误响应（必须放在所有路由之后）

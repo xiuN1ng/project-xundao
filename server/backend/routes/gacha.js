@@ -19,6 +19,19 @@ try {
   console.error('[gacha] Failed to load better-sqlite3:', e.message);
 }
 
+// ============================================================
+// P0-1 修复：服务端鉴权中间件
+// 从 req.user.id 获取登录用户ID，禁止从 body/query 接收
+// ============================================================
+function requireAuth(req, res, next) {
+  const userId = req.user && req.user.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: '未登录或登录已过期' });
+  }
+  req.authUserId = userId;
+  next();
+}
+
 // ==================== 数据库初始化 ====================
 
 function initGachaTables() {
@@ -86,7 +99,8 @@ function insertDefaultPools() {
     { key: 'spirit_beast_egg', name: '灵兽蛋(绿)', rarity: 'green', weight: 1.5 },
     { key: 'high_tonic', name: '上品丹药', rarity: 'purple', weight: 0.4 },
     { key: 'rare_beast_egg', name: '灵兽蛋(紫)', rarity: 'purple', weight: 0.09 },
-    { key: 'myth_beast_egg', name: '混沌灵兽蛋', rarity: 'orange', weight: 0.01 },
+    { key: 'myth_beast_egg', name: '混沌灵兽蛋', rarity: 'orange', weight: 0.08 },
+    { key: 'destiny_beast_egg', name: '天命灵兽蛋', rarity: 'red', weight: 0.01 },
   ];
 
   // 高级奖池
@@ -98,6 +112,7 @@ function insertDefaultPools() {
     { key: 'rare_beast_egg', name: '灵兽蛋(紫)', rarity: 'purple', weight: 10 },
     { key: 'legend_tonic', name: '极品丹药', rarity: 'purple', weight: 4 },
     { key: 'myth_beast_egg', name: '混沌灵兽蛋', rarity: 'orange', weight: 1 },
+    { key: 'destiny_beast_egg', name: '天命灵兽蛋', rarity: 'red', weight: 0.05 },
   ];
 
   // 装备奖池
@@ -108,6 +123,8 @@ function insertDefaultPools() {
     { key: 'armor_rare', name: '仙袍(紫)', rarity: 'purple', weight: 3 },
     { key: 'weapon_legend', name: '仙剑(金)', rarity: 'orange', weight: 0.5 },
     { key: 'armor_legend', name: '仙袍(金)', rarity: 'orange', weight: 0.5 },
+    { key: 'weapon_destiny', name: '天命仙剑', rarity: 'red', weight: 0.1 },
+    { key: 'armor_destiny', name: '天命仙袍', rarity: 'red', weight: 0.1 },
   ];
 
   const pools = [
@@ -148,6 +165,21 @@ function insertDefaultPools() {
   for (const p of pools) {
     insert.run(p.pool_key, p.name, p.description, p.cost_single, p.cost_ten, p.is_premium, JSON.stringify(p.items));
   }
+}
+
+// ==================== 稀有度映射 ====================
+// 统一稀有度: N(白) R(绿) SR(蓝) SSR(紫) UR(橙) DR(红)
+const RARITY_MAP = {
+  white: 'N',
+  green: 'R',
+  blue: 'SR',
+  purple: 'SSR',
+  orange: 'UR',
+  red: 'DR'
+};
+
+function toFrontendRarity(r) {
+  return RARITY_MAP[r] || 'N';
 }
 
 // ==================== 工具函数 ====================
@@ -303,7 +335,7 @@ router.get('/pools/:poolKey', (req, res) => {
         costSingle: pool.cost_single,
         costTen: pool.cost_ten,
         isPremium: pool.is_premium === 1,
-        items: items,
+        items: items.map(i => ({ ...i, rarity: toFrontendRarity(i.rarity) })),
       }
     });
   } catch (e) {
@@ -313,135 +345,163 @@ router.get('/pools/:poolKey', (req, res) => {
 });
 
 // POST /api/gacha/draw - 单抽
-router.post('/draw', (req, res) => {
+// P0-1: 添加鉴权，P0-4: 事务保证原子性
+router.post('/draw', requireAuth, (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
 
-  const userId = req.body.user_id ?? req.body.userId ?? 1;
+  const userId = req.authUserId;
   const poolKey = req.body.pool_key ?? req.body.poolKey ?? 'standard';
 
-  try {
-    const pool = db.prepare('SELECT * FROM gacha_pools WHERE pool_key = ?').get(poolKey);
-    if (!pool) return res.status(404).json({ success: false, error: '奖池不存在' });
+  const pool = db.prepare('SELECT * FROM gacha_pools WHERE pool_key = ?').get(poolKey);
+  if (!pool) return res.status(404).json({ success: false, error: '奖池不存在' });
 
-    const cost = pool.cost_single;
-    if (!deductCost(userId, cost)) {
+  const cost = pool.cost_single;
+  const items = JSON.parse(pool.items || '[]');
+  const pityRecord = getPityRecord(userId, poolKey);
+  let pityCount = pityRecord.non_premium_count;
+
+  let item;
+  if (pool.is_premium === 1 && pityCount >= 89) {
+    // 保底：必出紫色或橙色
+    const guaranteed = items.filter(i => i.rarity === 'purple' || i.rarity === 'orange');
+    item = weightedRandom(guaranteed.length > 0 ? guaranteed : items);
+  } else {
+    item = weightedRandom(items);
+  }
+
+  const newPityCount = (item.rarity !== 'purple' && item.rarity !== 'orange') ? pityCount + 1 : 0;
+
+  // P0-4 修复：事务保证原子性（扣费 + 更新保底 + 发奖 + 记录）
+  try {
+    const transaction = db.transaction(() => {
+      // 扣灵石
+      const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+      if (!player || player.lingshi < cost) {
+        throw new Error('灵石不足');
+      }
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost, userId);
+
+      // 更新保底计数
+      updatePityRecord(userId, poolKey, newPityCount);
+
+      // 发放物品
+      awardItem(userId, item, 1);
+
+      // 记录抽卡历史
+      recordDraw(userId, poolKey, 'single', item, cost, pityCount);
+    });
+
+    transaction();
+  } catch (err) {
+    if (err.message === '灵石不足') {
       return res.json({ success: false, error: '灵石不足', required: cost });
     }
-
-    const items = JSON.parse(pool.items || '[]');
-    const pityRecord = getPityRecord(userId, poolKey);
-    const pityCount = pityRecord.non_premium_count;
-
-    let item;
-    if (pool.is_premium === 1 && pityCount >= 89) {
-      // 保底：必出紫色或橙色
-      const guaranteed = items.filter(i => i.rarity === 'purple' || i.rarity === 'orange');
-      item = weightedRandom(guaranteed.length > 0 ? guaranteed : items);
-      updatePityRecord(userId, poolKey, 0);
-    } else {
-      item = weightedRandom(items);
-      // 更新保底计数（非紫色/橙色才计数）
-      if (item.rarity !== 'purple' && item.rarity !== 'orange') {
-        updatePityRecord(userId, poolKey, pityCount + 1);
-      } else {
-        updatePityRecord(userId, poolKey, 0);
-      }
-    }
-
-    awardItem(userId, item, 1);
-    recordDraw(userId, poolKey, 'single', item, cost, pityCount);
-
-    res.json({
-      success: true,
-      item: { key: item.key, name: item.name, rarity: item.rarity },
-      pityCount: item.rarity === 'purple' || item.rarity === 'orange' ? 0 : pityCount + 1,
-      cost,
-      remainingPity: pool.is_premium === 1 ? Math.max(0, 90 - (item.rarity === 'purple' || item.rarity === 'orange' ? 0 : pityCount + 1)) : null,
-    });
-  } catch (e) {
-    console.error('[gacha/draw] error:', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    console.error('[gacha/draw] error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
   }
+
+  res.json({
+    success: true,
+    item: { key: item.key, name: item.name, rarity: toFrontendRarity(item.rarity) },
+    pityCount: newPityCount,
+    cost,
+    remainingPity: pool.is_premium === 1 ? Math.max(0, 90 - newPityCount) : null,
+  });
 });
 
 // POST /api/gacha/draw-ten - 十连抽
-router.post('/draw-ten', (req, res) => {
+// P0-1: 添加鉴权，P0-4: 事务保证原子性
+router.post('/draw-ten', requireAuth, (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
 
-  const userId = req.body.user_id ?? req.body.userId ?? 1;
+  const userId = req.authUserId;
   const poolKey = req.body.pool_key ?? req.body.poolKey ?? 'standard';
 
-  try {
-    const pool = db.prepare('SELECT * FROM gacha_pools WHERE pool_key = ?').get(poolKey);
-    if (!pool) return res.status(404).json({ success: false, error: '奖池不存在' });
+  const pool = db.prepare('SELECT * FROM gacha_pools WHERE pool_key = ?').get(poolKey);
+  if (!pool) return res.status(404).json({ success: false, error: '奖池不存在' });
 
-    const cost = pool.cost_ten;
-    if (!deductCost(userId, cost)) {
-      return res.json({ success: false, error: '灵石不足', required: cost });
-    }
+  const cost = pool.cost_ten;
+  const items = JSON.parse(pool.items || '[]');
+  const pityRecord = getPityRecord(userId, poolKey);
+  let pityCount = pityRecord.non_premium_count;
 
-    const items = JSON.parse(pool.items || '[]');
-    const pityRecord = getPityRecord(userId, poolKey);
-    let pityCount = pityRecord.non_premium_count;
+  const drawnItems = [];
+  let guaranteedPurple = false;
 
-    const drawnItems = [];
-    let guaranteedPurple = false;
-
-    // 十连：第10抽有保底
-    for (let i = 0; i < 9; i++) {
-      if (pool.is_premium === 1 && pityCount >= 89) {
-        const guaranteed = items.filter(it => it.rarity === 'purple' || it.rarity === 'orange');
-        const item = weightedRandom(guaranteed.length > 0 ? guaranteed : items);
-        drawnItems.push(item);
-        pityCount = 0;
+  // 十连前9抽
+  for (let i = 0; i < 9; i++) {
+    if (pool.is_premium === 1 && pityCount >= 89) {
+      const guaranteed = items.filter(it => it.rarity === 'purple' || it.rarity === 'orange');
+      const item = weightedRandom(guaranteed.length > 0 ? guaranteed : items);
+      drawnItems.push(item);
+      pityCount = 0;
+    } else {
+      const item = weightedRandom(items);
+      drawnItems.push(item);
+      if (item.rarity !== 'purple' && item.rarity !== 'orange') {
+        pityCount++;
       } else {
-        const item = weightedRandom(items);
-        drawnItems.push(item);
-        if (item.rarity !== 'purple' && item.rarity !== 'orange') {
-          pityCount++;
-        } else {
-          pityCount = 0;
-          if (item.rarity === 'purple' || item.rarity === 'orange') guaranteedPurple = true;
-        }
+        pityCount = 0;
+        if (item.rarity === 'purple' || item.rarity === 'orange') guaranteedPurple = true;
       }
     }
-
-    // 第10抽：保底紫色或橙色
-    const guaranteedPool = items.filter(it => it.rarity === 'purple' || it.rarity === 'orange');
-    const lastItem = pool.is_premium === 1 && !guaranteedPurple
-      ? weightedRandom(guaranteedPool.length > 0 ? guaranteedPool : items)
-      : weightedRandom(items);
-    drawnItems.push(lastItem);
-
-    updatePityRecord(userId, poolKey, 0);
-
-    let totalCost = cost;
-    for (const item of drawnItems) {
-      awardItem(userId, item, 1);
-      recordDraw(userId, poolKey, 'ten', item, Math.floor(totalCost / 10), pityCount);
-    }
-
-    // 按稀有度排序展示
-    const rarityOrder = { orange: 0, purple: 1, blue: 2, green: 3, white: 4 };
-    drawnItems.sort((a, b) => (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5));
-
-    res.json({
-      success: true,
-      items: drawnItems.map(item => ({ key: item.key, name: item.name, rarity: item.rarity })),
-      cost: totalCost,
-      isGuaranteed: guaranteedPurple || lastItem.rarity === 'purple' || lastItem.rarity === 'orange',
-    });
-  } catch (e) {
-    console.error('[gacha/draw-ten] error:', e.message);
-    res.status(500).json({ success: false, error: e.message });
   }
+
+  // 第10抽：保底紫色或橙色
+  const guaranteedPool = items.filter(it => it.rarity === 'purple' || it.rarity === 'orange');
+  const lastItem = pool.is_premium === 1 && !guaranteedPurple
+    ? weightedRandom(guaranteedPool.length > 0 ? guaranteedPool : items)
+    : weightedRandom(items);
+  drawnItems.push(lastItem);
+
+  const newPityCount = 0;
+
+  // P0-4 修复：事务保证原子性（扣费 + 更新保底 + 发奖 + 记录）
+  try {
+    const transaction = db.transaction(() => {
+      // 扣灵石
+      const player = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+      if (!player || player.lingshi < cost) {
+        throw new Error('灵石不足');
+      }
+      db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost, userId);
+
+      // 更新保底计数
+      updatePityRecord(userId, poolKey, newPityCount);
+
+      // 发放所有物品并记录历史
+      for (const item of drawnItems) {
+        awardItem(userId, item, 1);
+        recordDraw(userId, poolKey, 'ten', item, Math.floor(cost / 10), pityCount);
+      }
+    });
+
+    transaction();
+  } catch (err) {
+    if (err.message === '灵石不足') {
+      return res.json({ success: false, error: '灵石不足', required: cost });
+    }
+    console.error('[gacha/draw-ten] error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+
+  // 按稀有度排序展示（统一格式：DR > UR > SSR > SR > R > N）
+  const rarityOrder = { red: 0, orange: 1, purple: 2, blue: 3, green: 4, white: 5 };
+  drawnItems.sort((a, b) => (rarityOrder[a.rarity] || 6) - (rarityOrder[b.rarity] || 6));
+
+  res.json({
+    success: true,
+    items: drawnItems.map(item => ({ key: item.key, name: item.name, rarity: toFrontendRarity(item.rarity) })),
+    cost: cost,
+    isGuaranteed: guaranteedPurple || lastItem.rarity === 'purple' || lastItem.rarity === 'orange',
+  });
 });
 
 // GET /api/gacha/history - 获取抽卡历史
-router.get('/history', (req, res) => {
+router.get('/history', requireAuth, (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
 
-  const userId = parseInt(req.query.user_id ?? req.query.userId ?? 1);
+  const userId = req.authUserId;
   const poolKey = req.query.pool_key ?? req.query.poolKey;
   const limit = Math.min(parseInt(req.query.limit ?? 20), 100);
 
@@ -468,7 +528,7 @@ router.get('/history', (req, res) => {
       history: history.map(h => ({
         itemKey: h.item_key,
         itemName: h.item_name,
-        rarity: h.rarity,
+        rarity: toFrontendRarity(h.rarity),
         poolKey: h.pool_key,
         poolName: h.pool_name,
         drawType: h.draw_type,
@@ -484,10 +544,10 @@ router.get('/history', (req, res) => {
 });
 
 // GET /api/gacha/pity - 获取保底状态
-router.get('/pity', (req, res) => {
+router.get('/pity', requireAuth, (req, res) => {
   if (!db) return res.status(500).json({ success: false, error: '数据库未初始化' });
 
-  const userId = parseInt(req.query.user_id ?? req.query.userId ?? 1);
+  const userId = req.authUserId;
   const poolKey = req.query.pool_key ?? req.query.poolKey ?? 'standard';
 
   try {
