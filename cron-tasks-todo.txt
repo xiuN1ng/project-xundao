@@ -4732,8 +4732,10 @@ kill -HUP 608782 或 pkill -f "node server.js" && cd /root/.openclaw/workspace/x
 - 来源: 提案 2026-03-31 第122轮
 - 截止: 2026-04-03
 
-## [P1-122-1-B] 邮件附件领取奖励发放
+## [P1-122-1-B] 邮件附件领取奖励发放 # 完成 | 2026-03-31 10:44 | 7e8a99ef
 - mail.js /claim 路由: 解析附件名称，发放实际灵石/物品到玩家账户
+- mail.js 完全重写: DB持久化 (mail_messages + mail_attachments 表), /claim 端点真实发放灵石奖励
+- 测试: 领取灵石×100附件 → lingshi 28326→28426 ✓
 - 关联: server/backend/routes/mail.js line 7
 - 来源: 提案 2026-03-31 第122轮
 - 截止: 2026-04-03
