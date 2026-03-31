@@ -406,12 +406,9 @@ router.post('/attack', (req, res) => {
     }
   }
 
-  // 基础伤害 = 玩家攻击 * 1.5
-  let damage = Math.max(1, Math.floor(playerAttack * 1.5));
-
-  // 单次伤害上限：不超过玩家HP的50%
-  const damageCap = Math.floor(playerHp * 0.5);
-  damage = Math.min(damage, damageCap);
+  // BOSS防御减免：使用boss.baseAtk的30%作为BOSS防御力
+  const bossDefense = Math.floor((worldBoss.currentBoss.baseAtk || 0) * 0.3);
+  let damage = Math.max(1, Math.floor(playerAttack * 1.5 - bossDefense));
 
   // BOSS防御减免：每次鼓舞降低BOSS防御5%，等同于玩家伤害+5%
   const defenseReduction = worldBoss.defenseReduction || 0;
@@ -497,7 +494,6 @@ router.post('/attack', (req, res) => {
     totalDamage: newTotalDamage,
     killed,
     furyMultiplier,
-    damageCap,
     defenseReduction: worldBoss.defenseReduction || 0,
     bossRewards: killed ? worldBoss.currentBoss.reward : null,
     magicCrystalPreview: Math.max(1, mcReward),
