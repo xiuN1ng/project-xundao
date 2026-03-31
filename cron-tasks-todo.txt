@@ -71,11 +71,12 @@
 
 # === 来自: 提案 2026-03-31 第125轮 ===
 
-## [P0-125-1-B] Alchemy 整个路由返回404
+## [P0-125-1-B] Alchemy 整个路由返回404 ✅ 已完成
 - 原因排查: alchemy_api.js mount 重复 + 路由栈冲突
 - 修复: 移除重复 mount + 添加 /info /refine /learn /upgrade 端点
 - 来源: 提案 2026-03-31 第125轮
 - 截止: 2026-04-02
+- 完成: 2026-03-31 新增 /backend/routes/alchemy.js，添加 /info /refine /learn /furnace/upgrade 端点，修复404问题
 
 ## [P1-125-1-B] 装备分解/合成端点不存在
 - backend/routes/equipment.js 添加 POST /decompose 和 /synthesize
