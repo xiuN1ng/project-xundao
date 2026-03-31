@@ -156,6 +156,7 @@ app.use('/api/hotupdate', require('./routes/hotupdate'));
 
 // 新功能
 app.use('/api/dailyQuest', require('./routes/dailyQuest'));
+app.use('/api/daily-quest', require('./routes/dailyQuest'));
 app.use('/api/achievement', require('./routes/achievement'));
 app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/guild', require('./routes/guild'));
@@ -166,6 +167,7 @@ app.use('/api/rank', require('./routes/rank'));
 
 // 其他
 app.use('/api/quest', require('./routes/quest').router);
+app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/mail', require('./routes/mail'));
 app.use('/api/activity', require('./routes/activity'));
 app.use('/api/lottery', require('./routes/lottery'));
@@ -217,6 +219,14 @@ try {
   console.log('✓ 引导系统路由已加载');
 } catch(e) {
   console.log('[guide] 引导路由加载失败:', e.message);
+}
+
+// 新手引导系统
+try {
+  app.use('/api/tutorial', require('../game/tutorial_api'));
+  console.log('✓ 新手引导系统路由已加载');
+} catch(e) {
+  console.log('[tutorial] 新手引导路由加载失败:', e.message);
 }
 
 // AFK挂机系统

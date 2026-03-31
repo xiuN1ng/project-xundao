@@ -343,6 +343,56 @@ function extractUserId(req) {
   return parseInt(req.query.userId) || parseInt(req.query.player_id) || parseInt(req.params.userId) || 1;
 }
 
+// 获取每日任务列表（/list 端点，供前端统一调用）
+router.get('/list', (req, res) => {
+  const userId = extractUserId(req);
+  const data = initDailyQuests(userId);
+
+  // 从DB实时读取今日进度
+  const today = getShanghaiDate();
+  let dbProgress = {};
+  if (db) {
+    try {
+      const rows = db.prepare('SELECT quest_id, progress, completed, claimed FROM daily_quest_progress WHERE user_id = ? AND quest_date = ?').all(userId, today);
+      rows.forEach(row => {
+        dbProgress[row.quest_id] = {
+          progress: row.progress,
+          completed: !!row.completed,
+          claimed: !!row.claimed
+        };
+      });
+    } catch (e) {
+      console.warn('[dailyQuest] /list DB查询失败:', e.message);
+    }
+  }
+
+  const quests = questTemplates.map(quest => {
+    const userQ = dbProgress[quest.id] || { progress: 0, completed: false, claimed: false };
+    return {
+      ...quest,
+      progress: userQ.progress,
+      completed: userQ.completed,
+      claimed: userQ.claimed
+    };
+  });
+
+  const daily = quests.filter(q => q.difficulty === 1);
+  const weekly = quests.filter(q => q.difficulty === 2);
+  const challenge = quests.filter(q => q.difficulty === 3);
+
+  res.json({
+    success: true,
+    data: {
+      date: today,
+      daily,
+      weekly,
+      challenge,
+      totalProgress: Math.round(quests.filter(q => q.completed).length / quests.length * 100),
+      totalQuests: quests.length
+    }
+  });
+});
+
 // 获取每日任务概览（根路径）- 合并DB进度
 router.get('/', (req, res) => {
   const userId = extractUserId(req);
