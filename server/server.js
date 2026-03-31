@@ -3476,6 +3476,15 @@ try {
   console.log('天梯赛季API不可用:', e.message);
 }
 
+// ============ 灵石兑换系统 API ============
+try {
+  const spiritStoneExchange = require('./game/spirit_stone_exchange');
+  app.use('/api/spirit-stone', spiritStoneExchange);
+  console.log('✅ 灵石兑换系统 API 已加载');
+} catch (e) {
+  console.log('灵石兑换API不可用:', e.message);
+}
+
 // ============ 封神榜系统 API ============
 try {
   const deityListApi = require('./game/deity_list_api');
