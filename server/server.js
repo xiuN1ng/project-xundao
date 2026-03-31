@@ -67,6 +67,16 @@ if (!fs.existsSync(dataDir)) {
 app.use(cors());
 app.use(bodyParser.json());
 
+// API 输入校验中间件
+try {
+  const { sqlInjectionProtection, rateLimitMark } = require('./middleware/api_validator');
+  app.use(sqlInjectionProtection);  // SQL注入防护
+  app.use(rateLimitMark);          // 速率限制标记
+  console.log('[Middleware] API校验中间件加载成功');
+} catch (e) {
+  console.warn('[Middleware] API校验中间件加载失败:', e.message);
+}
+
 // 静态文件服务 - 提供前端页面
 app.use(express.static(path.join(__dirname, 'src')));
 app.use(express.static(path.join(__dirname, 'src/css')));

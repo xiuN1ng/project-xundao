@@ -130,11 +130,12 @@
 # ========== 从策划提案分发 — 2026-03-31 第126轮 ==========
 # 分发时间: 2026-03-31 12:57
 
-## [P0-126-1-B] realm_dungeon 路由挂载（最高优先级）
+## [P0-126-1-B] realm_dungeon 路由挂载（最高优先级） ✅ 已完成
 - server/server.js 添加: app.use('/api/realm-dungeon', require('./backend/routes/realm_dungeon'));
 - 确认 backend/routes/realm_dungeon.js 中 REALM_DUNGEON_DATA 引用路径正确
 - 关联: server/server.js, server/backend/routes/realm_dungeon.js
 - 截止: 2026-04-02
+- 完成: 2026-03-31 在 server.js 添加 /api/realm-dungeon 路由挂载
 
 ## [P1-126-1-B] daily-quest 路径别名
 - server/server.js 添加: app.use('/api/daily-quest', require('./backend/routes/dailyQuest'));

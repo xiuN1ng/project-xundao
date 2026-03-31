@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 输入校验
+const { validate, PRESETS } = require('../../middleware/api_validator');
+
 // 数据库路径 (统一使用 backend/data/game.db)
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
@@ -230,18 +233,22 @@ router.get('/my', (req, res) => {
 });
 
 // POST /api/market/list - 上架物品
-router.post('/list', (req, res) => {
+router.post('/list',
+  validate({
+    itemKey: { type: 'string', min: 1, max: 100, required: true },
+    itemName: { type: 'string', min: 1, max: 100, required: true },
+    price: { type: 'int', min: 1, max: 999999999, required: true },
+    itemType: { type: 'string', max: 50, required: false },
+    icon: { type: 'string', max: 10, required: false },
+    description: { type: 'string', max: 500, required: false },
+    durationDays: { type: 'int', min: 1, max: 30, required: false }
+  }),
+  (req, res) => {
   if (!db) return res.status(503).json({ success: false, message: '数据库未连接' });
   try {
     const userId = getUserId(req);
-    const { itemKey, itemName, itemType, icon, price, description, durationDays } = req.body;
+    const { itemKey, itemName, itemType, icon, price, description, durationDays } = req.sanitizedBody || req.body;
 
-    if (!itemKey || !itemName) {
-      return res.status(400).json({ success: false, message: '缺少必要参数(itemKey/itemName)' });
-    }
-    if (!price || price < 1) {
-      return res.status(400).json({ success: false, message: '价格必须大于0' });
-    }
     if (price > 999999999) {
       return res.status(400).json({ success: false, message: '价格超出上限(9.99亿)' });
     }
@@ -350,12 +357,20 @@ router.post('/cancel/:listingId', (req, res) => {
 });
 
 // POST /api/market/buy/:listingId - 购买物品（支持数量）
-router.post('/buy/:listingId', (req, res) => {
+router.post('/buy/:listingId',
+  validate({
+    quantity: { type: 'int', min: 1, max: 9999, required: false }
+  }, { source: 'body' }),
+  (req, res) => {
   if (!db) return res.status(503).json({ success: false, message: '数据库未连接' });
   try {
     const buyerId = getUserId(req);
-    const listingId = parseInt(req.params.listingId);
-    let quantity = parseInt(req.body.quantity) || 1;
+    const listingId = parseInt(req.params.listingId, 10);
+    let quantity = parseInt(req.body.quantity || 1, 10);
+
+    if (isNaN(listingId) || listingId < 1) {
+      return res.status(400).json({ success: false, message: '无效的商品ID' });
+    }
 
     const listing = db.prepare("SELECT * FROM market_listings WHERE id = ? AND status='active'").get(listingId);
     if (!listing) {

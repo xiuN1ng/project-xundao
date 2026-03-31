@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 输入校验
+const { validate, PRESETS, commonSchemas } = require('../../middleware/api_validator');
+
 // 每日任务集成
 let dailyQuestRouter;
 try {
@@ -137,10 +140,17 @@ router.get('/items', (req, res) => {
   res.json({ success: true, items });
 });
 
-router.post('/buy', (req, res) => {
-  const userId = req.body.userId ?? req.body.player_id ?? 1;
-  let itemId = req.body.itemId ?? req.body.item_id;
-  const count = req.body.count ?? req.body.quantity ?? 1;
+router.post('/buy',
+  // 输入校验
+  validate({
+    playerId: { type: 'playerId', required: true },
+    itemId: { type: 'string', max: 100, required: true },
+    quantity: { type: 'int', min: 1, max: 9999, required: false }
+  }),
+  (req, res) => {
+  const userId = parseInt(req.body.playerId, 10);
+  let itemId = req.body.itemId;
+  const count = parseInt(req.body.quantity || 1, 10);
 
   // 前端时装商品ID映射 (前端ID → 后端shop商品ID)
   const FRONTEND_FASHION_ID_MAP = {

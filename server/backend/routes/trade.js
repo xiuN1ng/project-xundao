@@ -7,6 +7,9 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
+// 输入校验
+const { validate } = require('../../middleware/api_validator');
+
 // 数据库连接 - 延迟加载
 let db = null;
 
@@ -135,19 +138,20 @@ router.get('/market', (req, res) => {
 
 // ============ 上架物品 ============
 // POST /api/trade/list
-router.post('/list', (req, res) => {
+router.post('/list',
+  validate({
+    player_id: { type: 'playerId', required: true },
+    item_id: { type: 'string', min: 1, max: 100, required: true },
+    price: { type: 'int', min: 1, max: 999999999, required: true },
+    category: { type: 'string', max: 50, required: false },
+    item_name: { type: 'string', max: 100, required: false },
+    item_icon: { type: 'string', max: 10, required: false }
+  }),
+  (req, res) => {
   try {
-    const { player_id, item_id, price, category, item_name, item_icon, item_data, icon } = req.body;
+    const { player_id, item_id, price, category, item_name, item_icon, icon } = req.sanitizedBody || req.body;
     const finalIcon = item_icon || icon || '📦';
     const finalName = item_name || '物品';
-
-    if (!player_id || !item_id || !price) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
-    }
-
-    if (price <= 0) {
-      return res.status(400).json({ success: false, error: '价格必须大于0' });
-    }
 
     const database = getDb();
 
@@ -183,13 +187,14 @@ router.post('/list', (req, res) => {
 
 // ============ 购买物品 ============
 // POST /api/trade/buy
-router.post('/buy', (req, res) => {
+router.post('/buy',
+  validate({
+    player_id: { type: 'playerId', required: true },
+    listing_id: { type: 'int', min: 1, max: 999999999, required: true }
+  }),
+  (req, res) => {
   try {
-    const { player_id, listing_id } = req.body;
-
-    if (!player_id || !listing_id) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
-    }
+    const { player_id, listing_id } = req.sanitizedBody || req.body;
 
     const database = getDb();
 
