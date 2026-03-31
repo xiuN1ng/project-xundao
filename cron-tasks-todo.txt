@@ -38,3 +38,30 @@
 # [P2] [A] 世界BOSS立绘 - 生成BOSS原画 1024x1024 妖兽boss
 
 # === 已完成 ===
+
+# === 来自: 提案 2026-03-31 第124轮 ===
+
+## [P0-124-1-B] SeasonPass 新增 /claim-task 端点 ✅ 已完成
+- POST /api/season-pass/claim-task — 领取任务进度奖励
+- POST /api/season-pass/claim/:level — 确认与前端 claim-reward 对齐
+- 来源: 提案 2026-03-31 第124轮
+- 截止: 2026-04-02
+- 完成: 2026-03-31 新增 /tasks + /claim-task + 对齐 /claim/:level
+
+## [P1-124-1-B] Title系统错误处理修复
+- title.js 所有端点无认证时返回空响应的问题
+- 添加降级 JSON 响应（success: true, data: []）
+- 来源: 提案 2026-03-31 第124轮
+- 截止: 2026-04-05
+
+## [P1-124-2-B] Rank系统错误处理修复
+- rank.js /:type 端点无认证时返回空响应
+- 添加 player_id 校验和错误响应
+- 来源: 提案 2026-03-31 第124轮
+- 截止: 2026-04-05
+
+## [P2-124-1-B] 宗门试炼赛后端
+- sect_trial.js — 赛季管理+积分系统+奖励发放 API
+- 表: sect_trial_seasons, sect_trial_scores, sect_trial_rewards
+- 来源: 提案 2026-03-31 第124轮
+- 截止: 2026-04-20
