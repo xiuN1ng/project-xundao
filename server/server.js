@@ -3304,7 +3304,7 @@ try {
 
   // 仙侠奇遇系统 API
   try {
-    const adventureRoute = require('./routes/adventure');
+    const adventureRoute = require('./backend/routes/adventure');
     adventureRoute(app, db, authenticateToken, Logger);
     Logger.info('✅ 奇遇系统 API 已加载');
   } catch (e) {

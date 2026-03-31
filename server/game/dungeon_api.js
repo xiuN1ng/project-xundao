@@ -291,7 +291,7 @@ const dungeonStorage = {
 
 // ============ API 路由 ============
 
-// GET /api/dungeons - 获取副本列表
+// GET /api/dungeons - 获取副本列表（数据库优先，回退到静态数据）
 router.get('/', async (req, res) => {
   try {
     // 尝试从数据库获取副本
@@ -368,6 +368,31 @@ router.get('/', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// GET /api/dungeons/list - 获取副本列表（静态数据，无需MySQL）
+router.get('/list', (req, res) => {
+  const staticDungeons = Object.values(DUNGEON_DATA);
+  res.json({
+    success: true,
+    data: staticDungeons.map(d => ({
+      dungeon_id: d.id,
+      name: d.name,
+      type: d.type,
+      description: d.description,
+      icon: d.icon,
+      difficulty: d.difficulty,
+      realm_req: d.realm_req,
+      level_req: d.level_req,
+      recommended_power: d.recommended_power,
+      stages: d.stages,
+      time_limit: d.time_limit,
+      entry_cost: d.entry_cost,
+      rewards: d.rewards,
+      monster_count: d.monsters ? d.monsters.length : 0,
+      is_available: d.is_available === 1
+    }))
+  });
 });
 
 // GET /api/dungeons/:player_id - 获取玩家副本次数

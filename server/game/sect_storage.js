@@ -12,17 +12,12 @@ try {
 } catch (e) {
   console.log('批量查询模块未加载');
 }
-try {
-  // 尝试从server.js导入db实例
-  const server = require('../server');
-  db = server.db || server;
-} catch {
-  // 如果导入失败，使用独立的数据库连接
-  const Database = require('better-sqlite3');
-  const path = require('path');
-  const dbPath = path.join(__dirname, '..', 'data', 'game.db');
-  db = new Database(dbPath);
-}
+
+// 直接创建独立的数据库连接，避免循环依赖
+const Database = require('better-sqlite3');
+const path = require('path');
+const dbPath = path.join(__dirname, '..', 'data', 'game.db');
+db = new Database(dbPath);
 
 // MySQL pool兼容层 - 将SQLite调用转换为Promise形式
 const pool = {
@@ -117,10 +112,12 @@ function initSectTables() {
       balance_before INTEGER NOT NULL,
       balance_after INTEGER NOT NULL,
       details TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_player_lingshi_logs (player_id, created_at)
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // 创建索引
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_player_lingshi_logs ON player_lingshi_logs (player_id, created_at)`);
 
   console.log('✅ 宗门系统数据库表初始化完成');
 
