@@ -7,6 +7,13 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('./database');
 
+// 安全解析 JSON（MySQL json列返回对象，静态数据是字符串）
+function safeJsonParse(val, fallback) {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(val); } catch { return fallback; }
+}
+
 // ============ 副本配置数据 ============
 
 const DUNGEON_DATA = {
@@ -196,11 +203,17 @@ const dungeonStorage = {
 
   // 获取单个副本
   async getDungeon(dungeonId) {
-    const [rows] = await pool.execute(
-      'SELECT * FROM dungeons WHERE id = ?',
-      [dungeonId]
-    );
-    return rows[0] || null;
+    try {
+      const [rows] = await pool.execute(
+        'SELECT * FROM dungeons WHERE id = ?',
+        [dungeonId]
+      );
+      if (rows[0]) return rows[0];
+    } catch (e) {
+      // MySQL dungeons表不存在时，静默降级到静态数据
+    }
+    // 降级：从 DUNGEON_DATA 查找
+    return DUNGEON_DATA[dungeonId] || null;
   },
 
   // 获取玩家副本次数记录
@@ -330,8 +343,8 @@ router.get('/', async (req, res) => {
 
     // 转换为更简洁的列表格式
     const result = dungeons.map(dungeon => {
-      const rewards = JSON.parse(dungeon.rewards || '{}');
-      const monsters = JSON.parse(dungeon.monsters || '[]');
+      const rewards = safeJsonParse(dungeon.rewards, {});
+      const monsters = safeJsonParse(dungeon.monsters, []);
 
       return {
         dungeon_id: dungeon.id,
@@ -345,7 +358,7 @@ router.get('/', async (req, res) => {
         recommended_power: dungeon.recommended_power,
         stages: dungeon.stages,
         time_limit: dungeon.time_limit,
-        entry_cost: JSON.parse(dungeon.entry_cost || '{}'),
+        entry_cost: safeJsonParse(dungeon.entry_cost, {}),
         rewards: {
           exp: rewards.exp || 0,
           spirit_stones: rewards.spirit_stones || 0,
@@ -509,7 +522,7 @@ router.post('/:dungeon_id/enter', async (req, res) => {
     }
     
     // 检查进入消耗
-    const entryCost = JSON.parse(dungeon.entry_cost || '{}');
+    const entryCost = safeJsonParse(dungeon.entry_cost, {});
     if (entryCost.spirit_stones && entryCost.spirit_stones > 0) {
       const playerStorage = require('./storage').playerStorage;
       const hasEnough = await playerStorage.hasEnoughSpiritStones(player_id, entryCost.spirit_stones);
@@ -533,7 +546,7 @@ router.post('/:dungeon_id/enter', async (req, res) => {
     await dungeonStorage.startChallenge(player_id, dungeon_id, 1, baseHp);
     
     // 返回副本信息和初始状态
-    const monsters = JSON.parse(dungeon.monsters || '[]');
+    const monsters = safeJsonParse(dungeon.monsters, []);
     const firstMonster = monsters[0] || { name: '怪物', hp: 100, atk: 10, exp: 10 };
     
     res.json({
@@ -549,7 +562,7 @@ router.post('/:dungeon_id/enter', async (req, res) => {
         current_hp: baseHp,
         max_hp: baseHp,
         monster: firstMonster,
-        rewards: JSON.parse(dungeon.rewards || '{}'),
+        rewards: safeJsonParse(dungeon.rewards, {}),
         time_limit: dungeon.time_limit,
         entry_cost: entryCost
       }
@@ -607,7 +620,7 @@ router.get('/:dungeon_id/reward', async (req, res) => {
     };
     
     if (isSuccess) {
-      const baseRewards = JSON.parse(dungeon.rewards || '{}');
+      const baseRewards = safeJsonParse(dungeon.rewards, {});
       
       // 根据完成的关卡数计算奖励
       const stageMultiplier = completedStage / dungeon.stages;
@@ -715,7 +728,7 @@ router.post('/:dungeon_id/battle', async (req, res) => {
     };
     
     if (isSuccess) {
-      const baseRewards = JSON.parse(dungeon.rewards || '{}');
+      const baseRewards = safeJsonParse(dungeon.rewards, {});
       
       // 根据完成的关卡数计算奖励
       const stageMultiplier = completedStage / dungeon.stages;
