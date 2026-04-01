@@ -8988,16 +8988,7 @@ try {
   Logger.warn('⚠ 洞府路由加载失败:', e.message);
 }
 
-// 404处理 - 统一错误响应（必须放在所有路由之后）
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'API端点不存在',
-    path: req.path,
-    method: req.method,
-    hint: '请检查API路径是否正确'
-  });
-});
+// 404处理 - 移至文件末尾（在所有路由注册之后）
 
 // ==================== 模块化路由加载 ====================
 // 尝试加载模块化路由（可选）
@@ -9027,6 +9018,17 @@ try {
 } catch (e) {
   Logger.warn('⚠ 引导路由加载失败:', e.message);
 }
+
+// 404处理 - 统一错误响应（必须在所有路由注册之后）
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'API端点不存在',
+    path: req.path,
+    method: req.method,
+    hint: '请检查API路径是否正确'
+  });
+});
 
 // 导出db实例供其他模块使用
 module.exports = app;
