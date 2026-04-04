@@ -26,6 +26,234 @@ try {
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
+// ============================================================
+// 首充礼包系统 (First Charge System)
+// ============================================================
+
+// 首充礼包配置
+const FIRST_CHARGE_TIERS = [
+  {
+    id: 'first_charge_6',
+    name: '初入道途·入门礼包',
+    icon: '🌟',
+    price: 6,         // 价格（元）
+    price_lingshi: 300, // 基础灵石数量
+    double_bonus: 600,  // 首充双倍后
+    description: '首次充值特惠！获得双倍灵石',
+    sort: 1,
+    // 专属奖励
+    exclusive_rewards: {
+      title: '初入道途',
+      avatar_frame: 'first_charge_frame',
+      fashion_id: 8  // 青云弟子服
+    }
+  },
+  {
+    id: 'first_charge_30',
+    name: '初入道途·进阶礼包',
+    icon: '💎',
+    price: 30,
+    price_lingshi: 1800,
+    double_bonus: 3600,
+    description: '首次充值特惠！获得双倍灵石',
+    sort: 2,
+    exclusive_rewards: {
+      title: '初入道途',
+      avatar_frame: 'first_charge_frame',
+      fashion_id: 8
+    }
+  },
+  {
+    id: 'first_charge_98',
+    name: '初入道途·豪华礼包',
+    icon: '👑',
+    price: 98,
+    price_lingshi: 6000,
+    double_bonus: 12000,
+    description: '首次充值特惠！获得双倍灵石',
+    sort: 3,
+    exclusive_rewards: {
+      title: '初入道途',
+      avatar_frame: 'first_charge_frame',
+      fashion_id: 8
+    }
+  },
+  {
+    id: 'first_charge_328',
+    name: '初入道途·尊享礼包',
+    icon: '🌈',
+    price: 328,
+    price_lingshi: 20000,
+    double_bonus: 40000,
+    description: '首次充值特惠！获得双倍灵石',
+    sort: 4,
+    exclusive_rewards: {
+      title: '初入道途',
+      avatar_frame: 'first_charge_frame',
+      fashion_id: 8
+    }
+  }
+];
+
+// 首充礼包表初始化
+function initFirstChargeTables(dbInstance) {
+  if (!dbInstance) return;
+  try {
+    // 首充购买记录表
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS player_first_charge (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        tier_id TEXT NOT NULL,
+        purchased_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+        lingshi_awarded INTEGER NOT NULL,
+        is_first_charge INTEGER DEFAULT 1,
+        UNIQUE(user_id, tier_id)
+      )
+    `);
+    // 首充专属奖励记录表
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS player_first_charge_rewards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        reward_type TEXT NOT NULL,
+        reward_value TEXT NOT NULL,
+        awarded_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+        UNIQUE(user_id, reward_type)
+      )
+    `);
+    // 头像框表
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS player_avatar_frames (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        frame_id TEXT NOT NULL,
+        frame_name TEXT NOT NULL,
+        icon TEXT DEFAULT '🔮',
+        equipped INTEGER DEFAULT 0,
+        acquired_at DATETIME DEFAULT (datetime('now', '+8 hours')),
+        UNIQUE(user_id, frame_id)
+      )
+    `);
+    console.log('[首充] 数据库表初始化完成');
+  } catch (e) {
+    console.error('[首充] 表初始化失败:', e.message);
+  }
+}
+
+// 检查玩家是否已购买过首充礼包
+function hasPurchasedFirstCharge(dbInstance, userId) {
+  if (!dbInstance) return false;
+  try {
+    const row = dbInstance.prepare(
+      'SELECT COUNT(*) as c FROM player_first_charge WHERE user_id = ?'
+    ).get(userId);
+    return (row?.c || 0) > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 检查玩家是否已购买特定档位的首充礼包
+function hasPurchasedTier(dbInstance, userId, tierId) {
+  if (!dbInstance) return false;
+  try {
+    const row = dbInstance.prepare(
+      'SELECT id FROM player_first_charge WHERE user_id = ? AND tier_id = ?'
+    ).get(userId, tierId);
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 发放首充专属奖励
+function deliverFirstChargeRewards(dbInstance, userId, rewards) {
+  if (!dbInstance || !rewards) return;
+  try {
+    // 1. 发放称号
+    if (rewards.title) {
+      // 直接给玩家设置称号（Users.title 字段）
+      dbInstance.prepare('UPDATE Users SET title = ? WHERE id = ?').run(rewards.title, userId);
+      // 也写入 player_titles 表
+      dbInstance.prepare(`
+        INSERT OR IGNORE INTO player_titles (player_id, title_id, unlocked_at)
+        VALUES (?, ?, datetime('now', '+8 hours'))
+      `).run(userId, rewards.title);
+      console.log(`[首充] 玩家 ${userId} 获得称号: ${rewards.title}`);
+    }
+    // 2. 发放头像框
+    if (rewards.avatar_frame) {
+      dbInstance.prepare(`
+        INSERT OR IGNORE INTO player_avatar_frames (user_id, frame_id, frame_name, icon, equipped)
+        VALUES (?, ?, ?, '🔮', 0)
+      `).run(userId, rewards.avatar_frame, '首充限定头像框');
+      console.log(`[首充] 玩家 ${userId} 获得头像框: ${rewards.avatar_frame}`);
+    }
+    // 3. 发放时装 (青云弟子服 fashion_id: 8)
+    if (rewards.fashion_id) {
+      if (addFashionToPlayer) {
+        addFashionToPlayer(userId, rewards.fashion_id);
+        console.log(`[首充] 玩家 ${userId} 获得时装: 青云弟子服 (fashion_id: ${rewards.fashion_id})`);
+      }
+    }
+  } catch (e) {
+    console.error('[首充] 奖励发放失败:', e.message);
+  }
+}
+
+// 写入首充购买记录
+function recordFirstChargePurchase(dbInstance, userId, tier, lingshiAwarded) {
+  if (!dbInstance) return;
+  try {
+    dbInstance.prepare(`
+      INSERT OR IGNORE INTO player_first_charge (user_id, tier_id, lingshi_awarded, is_first_charge)
+      VALUES (?, ?, ?, 1)
+    `).run(userId, tier.id, lingshiAwarded);
+  } catch (e) {
+    console.error('[首充] 购买记录写入失败:', e.message);
+  }
+}
+
+// 获取玩家首充礼包状态
+function getFirstChargeStatus(dbInstance, userId) {
+  const purchasedTiers = new Set();
+  const purchasedRecords = [];
+  if (dbInstance) {
+    try {
+      const rows = dbInstance.prepare(
+        'SELECT tier_id, lingshi_awarded FROM player_first_charge WHERE user_id = ?'
+      ).all(userId);
+      rows.forEach(row => {
+        purchasedTiers.add(row.tier_id);
+        purchasedRecords.push({ tier_id: row.tier_id, lingshi: row.lingshi_awarded });
+      });
+    } catch (e) {
+      console.error('[首充] 查询购买记录失败:', e.message);
+    }
+  }
+
+  // 检查是否已获得专属奖励
+  const exclusiveRewarded = new Set();
+  if (dbInstance) {
+    try {
+      const rewardRows = dbInstance.prepare(
+        'SELECT reward_type, reward_value FROM player_first_charge_rewards WHERE user_id = ?'
+      ).all(userId);
+      rewardRows.forEach(row => exclusiveRewarded.add(row.reward_type));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return {
+    purchasedTiers: Array.from(purchasedTiers),
+    purchasedRecords,
+    exclusiveRewarded: Array.from(exclusiveRewarded),
+    hasPurchasedAny: purchasedTiers.size > 0
+  };
+}
+
 // 共享数据库实例（用于表初始化，路由操作优先使用 req.app.locals.db）
 let sharedDb = null;
 try {
@@ -95,6 +323,8 @@ try {
     }
     console.log('[shop] 18件商品初始化完成（含时装）');
   }
+  // 在数据库初始化完成后创建首充表
+  initFirstChargeTables(sharedDb);
 } catch (err) {
   console.log('[shop] 数据库连接失败:', err.message);
   sharedDb = null;
@@ -547,86 +777,44 @@ function deliverPackage(db, userId, pkg) {
   return rewards;
 }
 
-// GET /api/shop/daily-packages — 礼包列表（含玩家购买状态）
-router.get('/daily-packages', (req, res) => {
-  const userId = req.query.userId || req.query.player_id || 1;
+// POST /api/shop/buy-package — 前端礼包购买接口（支持前端礼包ID）
+const ID_MAP = {
+  'daily-1': 'spirit_daily',
+  'daily-2': 'cultivation_daily',
+  'daily-3': 'realm_daily',
+  'monthly-card': 'monthly_card_spirit',
+  'battle-pass': 'battle_pass_s1',
+  'direct-1': 'direct_fudu_s1',
+  'direct-2': 'direct_fudu_s2',
+  'direct-3': 'direct_fudu_s3',
+};
+
+router.post('/buy-package', (req, res) => {
+  const userId = req.body.player_id || req.body.userId || 1;
+  const rawPackageId = req.body.package_id || req.body.packageId;
+  if (!rawPackageId) {
+    return res.status(400).json({ success: false, error: '缺少 package_id 参数' });
+  }
+  const packageId = ID_MAP[rawPackageId] || rawPackageId;
   const db = getDb(req);
-  if (!db) {
-    return res.status(500).json({ success: false, error: '数据库不可用' });
-  }
-
-  // 初始化表
+  if (!db) return res.status(500).json({ success: false, error: '数据库不可用' });
   initDailyPackageTables(db);
-
-  // 获取玩家信息（等级/VIP）
-  const user = db.prepare('SELECT id, level, vipLevel, lingshi FROM Users WHERE id = ?').get(userId);
-  if (!user) {
-    return res.status(404).json({ success: false, error: '玩家不存在' });
+  const pkg = DAILY_PACKAGE_DEFINITIONS.find(p => p.id === packageId);
+  if (!pkg) {
+    return res.status(404).json({ success: false, error: '礼包不存在' });
   }
-
-  const today = getShanghaiDateStr();
-  const weekStart = getShanghaiWeekStr();
-  const packages = DAILY_PACKAGE_DEFINITIONS.map(pkg => {
-    // 检查购买状态
-    let purchased = false;
-    let remaining = null;
-
-    if (pkg.limit_type === 'permanent') {
-      const row = db.prepare('SELECT id FROM daily_package_purchases WHERE user_id=? AND package_id=? AND active=1').get(userId, pkg.id);
-      purchased = !!row;
-    } else if (pkg.limit_type === 'daily') {
-      const row = db.prepare("SELECT id FROM daily_package_logs WHERE user_id=? AND package_id=? AND purchased_at >= ?").get(userId, pkg.id, today + ' 00:00:00');
-      purchased = !!row;
-      remaining = purchased ? 0 : 1;
-    } else if (pkg.limit_type === 'weekly') {
-      const row = db.prepare("SELECT id FROM daily_package_logs WHERE user_id=? AND package_id=? AND purchased_at >= ?").get(userId, pkg.id, weekStart + ' 00:00:00');
-      purchased = !!row;
-      remaining = purchased ? 0 : 1;
-    }
-
-    // 月卡状态
-    let monthlyCardStatus = null;
-    if (pkg.is_monthly_card) {
-      const card = db.prepare('SELECT expire_at, last_claim_at FROM player_monthly_cards WHERE user_id=? AND card_type=? AND active=1').get(userId, pkg.card_type);
-      if (card) {
-        const expired = card.expire_at && card.expire_at < today;
-        const canClaimToday = !card.last_claim_at || card.last_claim_at < today + ' 00:00:00';
-        monthlyCardStatus = { active: !expired, expired, canClaimToday, expireAt: card.expire_at };
-        purchased = !expired;
-      }
-    }
-
-    // 战令状态
-    let battlePassStatus = null;
-    if (pkg.is_battle_pass) {
-      const bp = db.prepare('SELECT level, exp FROM player_battle_passes WHERE user_id=? AND season=? AND active=1').get(userId, pkg.season || 1);
-      if (bp) {
-        battlePassStatus = { level: bp.level, exp: bp.exp };
-        purchased = true;
-      }
-    }
-
-    return {
-      id: pkg.id,
-      name: pkg.name,
-      icon: pkg.icon,
-      price: pkg.price,
-      price_diamond: pkg.price_diamond,
-      category: pkg.category,
-      description: pkg.description,
-      contents: pkg.contents,
-      limit_type: pkg.limit_type,
-      remaining,
-      purchased,
-      monthlyCardStatus,
-      battlePassStatus,
-      level_required: pkg.level_required,
-      vip_required: pkg.vip_required,
-      canBuy: canPurchasePackage(db, userId, pkg, user).ok,
-    };
-  });
-
-  res.json({ success: true, packages, playerLevel: user.level, playerVip: user.vipLevel || 0 });
+  const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ success: false, error: '玩家不存在' });
+  const check = canPurchasePackage(db, userId, pkg, user);
+  if (!check.ok) return res.status(400).json({ success: false, error: check.reason });
+  const cost = pkg.price;
+  if ((user.lingshi || 0) < cost) return res.status(400).json({ success: false, error: '灵石不足' });
+  db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost, userId);
+  const rewards = deliverPackage(db, userId, pkg);
+  if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+    dailyQuestRouter.updateDailyQuestProgress(userId, 'shop', cost);
+  }
+  res.json({ success: true, package: pkg.name, cost, rewards });
 });
 
 // POST /api/shop/daily-packages/buy — 购买礼包
@@ -723,15 +911,6 @@ router.get('/daily-packages/claim/:cardType', (req, res) => {
 
   res.json({ success: true, message: `领取成功！获得${amount}灵石`, amount, currency: '灵石' });
 });
-
-// 辅助函数：获取本周一
-function getShanghaiWeekStr() {
-  const now = new Date(Date.now() + 8 * 3600 * 1000);
-  const day = now.getUTCDay() || 7;
-  const monday = new Date(now);
-  monday.setUTCDate(monday.getUTCDate() - day + 1);
-  return monday.toISOString().slice(0, 10);
-}
 
 // ============================================================
 // 灵石直购礼包系统
@@ -910,6 +1089,321 @@ router.post('/direct-buy', (req, res) => {
     package: { packageId: pkg.id, name: pkg.name, icon: pkg.icon, price: pkg.price },
     items: insertedItems,
     remainingLingshi: (player.lingshi - pkg.price) + pkg.items.filter(i => i.isCurrency).reduce((s, i) => s + i.count, 0)
+  });
+});
+
+// ============================================================
+// 首充礼包 API 路由
+// ============================================================
+
+// GET /api/shop/first-charge — 获取首充礼包信息
+router.get('/first-charge', (req, res) => {
+  const userId = parseInt(req.query.userId || req.query.player_id || 1);
+  const db = getDb(req);
+  initFirstChargeTables(db);
+
+  const status = getFirstChargeStatus(db, userId);
+  const tiers = FIRST_CHARGE_TIERS.map(tier => {
+    const purchased = status.purchasedTiers.includes(tier.id);
+    // 计算下一档解锁进度
+    const currentIndex = FIRST_CHARGE_TIERS.findIndex(t => t.id === tier.id);
+    const prevTier = currentIndex > 0 ? FIRST_CHARGE_TIERS[currentIndex - 1] : null;
+    const prevPurchased = prevTier ? status.purchasedTiers.includes(prevTier.id) : true;
+
+    return {
+      id: tier.id,
+      name: tier.name,
+      icon: tier.icon,
+      price: tier.price,
+      price_lingshi: tier.price_lingshi,
+      double_bonus: tier.double_bonus,
+      description: tier.description,
+      sort: tier.sort,
+      purchased,
+      // 专属奖励展示
+      exclusive_rewards: {
+        title: tier.exclusive_rewards.title,
+        avatar_frame: tier.exclusive_rewards.avatar_frame,
+        fashion_id: tier.exclusive_rewards.fashion_id,
+        fashion_name: '青云弟子装',
+        fashion_icon: '⚪'
+      },
+      // 进度信息
+      progress: {
+        prev_tier_unlocked: prevPurchased,
+        current_tier: tier.sort,
+        total_tiers: FIRST_CHARGE_TIERS.length,
+        next_tier: currentIndex < FIRST_CHARGE_TIERS.length - 1
+          ? FIRST_CHARGE_TIERS[currentIndex + 1].name
+          : null,
+        next_tier_price: currentIndex < FIRST_CHARGE_TIERS.length - 1
+          ? FIRST_CHARGE_TIERS[currentIndex + 1].price
+          : null
+      }
+    };
+  });
+
+  res.json({
+    success: true,
+    first_charge_active: !status.hasPurchasedAny, // 未购买过任何档位则首充礼包激活
+    has_purchased_any: status.hasPurchasedAny,
+    purchased_tiers: status.purchasedTiers,
+    exclusive_rewards_awarded: status.exclusiveRewarded,
+    tiers,
+    message: status.hasPurchasedAny
+      ? '您已享受首充特惠，但各档位礼包仍可购买'
+      : '首次充值，双倍灵石！专属奖励等你拿！'
+  });
+});
+
+// GET /api/shop/first-charge/popup — 获取首充弹窗信息（首次登录引导用）
+router.get('/first-charge/popup', (req, res) => {
+  const userId = parseInt(req.query.userId || req.query.player_id || 1);
+  const db = getDb(req);
+  initFirstChargeTables(db);
+
+  const status = getFirstChargeStatus(db, userId);
+
+  // 找出下一个未购买的档位
+  const nextUnpurchasedTier = FIRST_CHARGE_TIERS.find(t => !status.purchasedTiers.includes(t.id));
+
+  if (!nextUnpurchasedTier) {
+    return res.json({
+      success: true,
+      show_popup: false,
+      message: '已购买所有首充礼包'
+    });
+  }
+
+  // 计算所有未购买档位的最低价格
+  const unpurchasedTiers = FIRST_CHARGE_TIERS.filter(t => !status.purchasedTiers.includes(t.id));
+  const minPrice = Math.min(...unpurchasedTiers.map(t => t.price));
+
+  res.json({
+    success: true,
+    show_popup: true,
+    has_first_charge_bonus: true, // 首充双倍标识
+    tiers: unpurchasedTiers.map(t => ({
+      id: t.id,
+      name: t.name,
+      icon: t.icon,
+      price: t.price,
+      double_bonus: t.double_bonus,
+      description: t.description
+    })),
+    recommended_tier: nextUnpurchasedTier,
+    min_price: minPrice,
+    exclusive_rewards: {
+      title: '初入道途',
+      title_icon: '🎖️',
+      avatar_frame: '首充限定头像框',
+      avatar_frame_icon: '🔮',
+      fashion_name: '青云弟子装',
+      fashion_icon: '⚪'
+    },
+   限时特惠: true,
+    首充双倍提示: '首次充值灵石双倍！'
+  });
+});
+
+// POST /api/shop/first-charge/buy — 购买首充礼包
+router.post('/first-charge/buy', (req, res) => {
+  const userId = parseInt(req.body.userId || req.body.player_id || 1);
+  const tierId = req.body.tierId || req.body.tier_id;
+  const payWith = req.body.payWith || 'spirit_stones'; // spirit_stones | diamond
+
+  if (!tierId) {
+    return res.status(400).json({ success: false, error: '缺少 tierId 参数' });
+  }
+
+  const db = getDb(req);
+  if (!db) {
+    return res.status(500).json({ success: false, error: '数据库不可用' });
+  }
+  initFirstChargeTables(db);
+
+  // 查找礼包配置
+  const tier = FIRST_CHARGE_TIERS.find(t => t.id === tierId);
+  if (!tier) {
+    return res.status(404).json({ success: false, error: '首充礼包不存在' });
+  }
+
+  // 获取玩家
+  const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+  if (!user) {
+    return res.status(404).json({ success: false, error: '玩家不存在' });
+  }
+
+  // 检查是否已购买此档位
+  if (hasPurchasedTier(db, userId, tierId)) {
+    return res.status(400).json({ success: false, error: `您已购买过「${tier.name}」，每个档位限购买1次` });
+  }
+
+  // 检查是否满足解锁条件（前一个档位必须已购买，或者这是第一档）
+  const currentIndex = FIRST_CHARGE_TIERS.findIndex(t => t.id === tierId);
+  if (currentIndex > 0) {
+    const prevTier = FIRST_CHARGE_TIERS[currentIndex - 1];
+    if (!hasPurchasedTier(db, userId, prevTier.id)) {
+      return res.status(400).json({
+        success: false,
+        error: `需要先购买「${prevTier.name}」才能购买此档位`,
+        required_tier: prevTier.id,
+        required_tier_name: prevTier.name
+      });
+    }
+  }
+
+  // 扣款
+  const cost = payWith === 'diamond' ? tier.price * 10 : tier.price_lingshi; // 钻石按1元=10钻折算
+  if (payWith === 'diamond') {
+    const diamondBalance = user.diamonds || 0;
+    if (diamondBalance < cost) {
+      return res.status(400).json({ success: false, error: '钻石不足' });
+    }
+    db.prepare('UPDATE Users SET diamonds = diamonds - ? WHERE id = ?').run(cost, userId);
+  } else {
+    const stoneBalance = user.lingshi || 0;
+    if (stoneBalance < cost) {
+      return res.status(400).json({ success: false, error: `灵石不足，需要${cost}灵石，当前${stoneBalance}灵石` });
+    }
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost, userId);
+  }
+
+  // 发放双倍灵石
+  const lingshiAwarded = tier.double_bonus; // 首充双倍
+  db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(lingshiAwarded, userId);
+
+  // 记录购买
+  recordFirstChargePurchase(db, userId, tier, lingshiAwarded);
+
+  // 发放专属奖励（只发放一次）
+  const status = getFirstChargeStatus(db, userId);
+  const rewardKey = `first_charge_${tierId}`;
+  if (!status.exclusiveRewarded.includes(rewardKey) && !status.exclusiveRewarded.includes('all')) {
+    deliverFirstChargeRewards(db, userId, tier.exclusive_rewards);
+    // 标记奖励已发放
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO player_first_charge_rewards (user_id, reward_type, reward_value)
+        VALUES (?, ?, ?)
+      `).run(userId, rewardKey, JSON.stringify(tier.exclusive_rewards));
+    } catch (e) {
+      console.error('[首充] 奖励记录写入失败:', e.message);
+    }
+  }
+
+  // 更新玩家灵石余额
+  const updatedUser = db.prepare('SELECT lingshi, diamonds FROM Users WHERE id = ?').get(userId);
+
+  // 触发每日任务（消费灵石）
+  if (dailyQuestRouter && dailyQuestRouter.updateDailyQuestProgress) {
+    dailyQuestRouter.updateDailyQuestProgress(userId, 'first_charge', cost);
+  }
+
+  res.json({
+    success: true,
+    message: `首充成功！获得${lingshiAwarded}灵石（首充双倍）`,
+    tier: {
+      id: tier.id,
+      name: tier.name,
+      icon: tier.icon,
+      price: tier.price
+    },
+    rewards: {
+      lingshi: lingshiAwarded,
+      is_first_charge_double: true,
+      exclusive: tier.exclusive_rewards
+    },
+    cost,
+    cost_type: payWith,
+    remaining_lingshi: updatedUser?.lingshi || 0,
+    remaining_diamonds: updatedUser?.diamonds || 0
+  });
+});
+
+// GET /api/shop/first-charge/exclusive — 获取首充专属奖励列表
+router.get('/first-charge/exclusive', (req, res) => {
+  const userId = parseInt(req.query.userId || req.query.player_id || 1);
+  const db = getDb(req);
+  initFirstChargeTables(db);
+
+  const status = getFirstChargeStatus(db, userId);
+
+  const exclusiveRewards = [
+    {
+      type: 'title',
+      id: 'first_charge_title',
+      name: '初入道途',
+      icon: '🎖️',
+      description: '首次充值专属称号',
+      awarded: status.exclusiveRewarded.includes('first_charge_6') ||
+                status.exclusiveRewarded.includes('first_charge_30') ||
+                status.exclusiveRewarded.includes('first_charge_98') ||
+                status.exclusiveRewarded.includes('first_charge_328') ||
+                status.exclusiveRewarded.includes('all')
+    },
+    {
+      type: 'avatar_frame',
+      id: 'first_charge_frame',
+      name: '首充限定头像框',
+      icon: '🔮',
+      description: '首次充值专属头像框',
+      awarded: status.exclusiveRewarded.includes('first_charge_6') ||
+                status.exclusiveRewarded.includes('first_charge_30') ||
+                status.exclusiveRewarded.includes('first_charge_98') ||
+                status.exclusiveRewarded.includes('first_charge_328') ||
+                status.exclusiveRewarded.includes('all')
+    },
+    {
+      type: 'fashion',
+      id: 'fashion_8',
+      name: '青云弟子装',
+      icon: '⚪',
+      description: '首次充值专属时装',
+      awarded: status.exclusiveRewarded.includes('first_charge_6') ||
+                status.exclusiveRewarded.includes('first_charge_30') ||
+                status.exclusiveRewarded.includes('first_charge_98') ||
+                status.exclusiveRewarded.includes('first_charge_328') ||
+                status.exclusiveRewarded.includes('all')
+    }
+  ];
+
+  res.json({
+    success: true,
+    exclusive_rewards: exclusiveRewards,
+    has_all_rewards: exclusiveRewards.every(r => r.awarded),
+    player_id: userId
+  });
+});
+
+// POST /api/shop/first-charge/equip-frame — 装备头像框
+router.post('/first-charge/equip-frame', (req, res) => {
+  const userId = parseInt(req.body.userId || req.body.player_id || 1);
+  const frameId = req.body.frameId || req.body.frame_id || 'first_charge_frame';
+  const db = getDb(req);
+
+  if (!db) {
+    return res.status(500).json({ success: false, error: '数据库不可用' });
+  }
+  initFirstChargeTables(db);
+
+  // 检查是否拥有该头像框
+  const owned = db.prepare(
+    'SELECT * FROM player_avatar_frames WHERE user_id = ? AND frame_id = ?'
+  ).get(userId, frameId);
+
+  if (!owned) {
+    return res.status(400).json({ success: false, error: '未拥有该头像框' });
+  }
+
+  // 装备头像框（先卸下其他）
+  db.prepare('UPDATE player_avatar_frames SET equipped = 0 WHERE user_id = ?').run(userId);
+  db.prepare('UPDATE player_avatar_frames SET equipped = 1 WHERE user_id = ? AND frame_id = ?').run(userId, frameId);
+
+  res.json({
+    success: true,
+    message: `已装备头像框「${owned.frame_name}」`,
+    frame_id: frameId
   });
 });
 
