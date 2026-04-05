@@ -412,54 +412,115 @@ export default {
   color: #aaa;
 }
 
-/* 伤害数字动画 */
+/* 伤害数字动画 - 优化版 */
 .damage-floating {
   position: absolute;
-  font-size: 28px;
+  font-family: 'KaiTi', 'STKaiti', 'SimSun', serif;
   font-weight: bold;
-  color: var(--dmg-color);
-  text-shadow: 0 0 10px var(--dmg-color), 2px 2px 4px rgba(0, 0, 0, 0.5);
-  animation: damageBounce var(--duration) ease-out forwards;
+  text-shadow: 0 0 8px currentColor, 0 0 16px currentColor, 2px 2px 4px rgba(0, 0, 0, 0.8);
   pointer-events: none;
   transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+}
+
+.damage-floating.normal {
+  font-size: 24px;
+  color: var(--dmg-color);
+  animation: damageFloatUp var(--duration, 1.2s) cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .damage-floating.crit {
   font-size: 36px;
+  color: var(--dmg-color);
+  text-shadow: 0 0 12px var(--dmg-color), 0 0 24px #ff8c00, 0 0 48px #ff4500, 3px 3px 6px rgba(0, 0, 0, 0.9);
+  animation: damageCrit 1.0s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 .damage-floating.heal {
+  font-size: 28px;
   color: var(--dmg-color);
+  text-shadow: 0 0 10px var(--dmg-color), 0 0 20px #00fa9a, 0 0 40px #00ff7f, 2px 2px 4px rgba(0, 0, 0, 0.7);
+  animation: damageHeal 1.4s ease-out forwards;
+}
+
+.damage-floating.miss {
+  font-size: 20px;
+  color: var(--dmg-color);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  animation: damageMiss 1.0s ease-out forwards;
+}
+
+.damage-floating.dodge {
+  font-size: 18px;
+  color: var(--dmg-color);
+  text-shadow: 0 0 8px var(--dmg-color), 1px 1px 3px rgba(0, 0, 0, 0.8);
+  animation: damageDodge 0.9s ease-out forwards;
+}
+
+.damage-floating.block {
+  font-size: 20px;
+  color: var(--dmg-color);
+  text-shadow: 0 0 8px var(--dmg-color), 1px 1px 3px rgba(0, 0, 0, 0.8);
+  animation: damageBlock 1.1s ease-out forwards;
+}
+
+@keyframes damageFloatUp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) translateY(0); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) translateY(-10px); }
+  30% { transform: translate(-50%, -50%) scale(1) translateY(-30px); }
+  60% { transform: translate(-50%, -50%) scale(0.95) translateY(-60px); opacity: 0.9; }
+  85% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8) translateY(-100px); }
+}
+
+@keyframes damageCrit {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(-20deg); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1.8) rotate(10deg); }
+  20% { transform: translate(-50%, -50%) scale(0.9) rotate(-5deg) translateY(-15px); }
+  35% { transform: translate(-50%, -50%) scale(1.1) rotate(3deg) translateY(-40px); }
+  55% { transform: translate(-50%, -50%) scale(1) rotate(0deg) translateY(-70px); opacity: 0.9; }
+  80% { opacity: 0.4; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.7) rotate(0deg) translateY(-120px); }
+}
+
+@keyframes damageHeal {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) translateY(0); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2) translateY(-20px); }
+  40% { transform: translate(-50%, -50%) scale(1) translateY(-45px); }
+  70% { opacity: 0.8; transform: translate(-50%, -50%) scale(1) translateY(-80px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9) translateY(-130px); }
+}
+
+@keyframes damageMiss {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) translateY(0) translateX(-20px); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) translateY(-15px) translateX(10px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9) translateY(-50px) translateX(30px); }
+}
+
+@keyframes damageDodge {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8) translateX(-30px); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1) translateX(0) translateY(-10px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8) translateX(50px) translateY(-60px); }
+}
+
+@keyframes damageBlock {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6) translateY(10px); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) translateY(-5px); }
+  40% { transform: translate(-50%, -50%) scale(0.95) translateY(-25px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.85) translateY(-70px); }
 }
 
 .combo-count {
+  display: inline-block;
+  margin-left: 6px;
   font-size: 14px;
   color: #ff6b6b;
-  margin-left: 4px;
+  font-weight: bold;
+  animation: comboPulse 0.5s ease-out infinite;
 }
 
-@keyframes damageBounce {
-  0% {
-    transform: translate(-50%, -50%) scale(0) rotate(calc(-1 * var(--rotation)));
-    opacity: 0;
-  }
-  10% {
-    transform: translate(-50%, calc(-50% - var(--bounce) * 0.3)) scale(var(--scale)) rotate(0deg);
-    opacity: 1;
-  }
-  25% {
-    transform: translate(-50%, calc(-50% - var(--bounce) * 0.8)) scale(calc(var(--scale) * 0.9)) rotate(calc(var(--rotation) * 0.3));
-  }
-  50% {
-    transform: translate(-50%, calc(-50% - var(--bounce))) scale(1) rotate(0deg);
-  }
-  75% {
-    transform: translate(-50%, calc(-50% - var(--bounce) * 0.6)) scale(0.95);
-    opacity: 0.8;
-  }
-  100% {
-    transform: translate(-50%, calc(-50% - var(--bounce) * 1.2)) scale(0.8);
-    opacity: 0;
-  }
+@keyframes comboPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 </style>

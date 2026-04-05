@@ -363,36 +363,73 @@ export default {
   position: absolute;
   font-size: 24px;
   font-weight: bold;
-  animation: damageFloat 1.5s ease-out forwards;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  will-change: transform, opacity;
 }
 
 .damage-number.normal {
   color: #fff;
+  animation: damageFloatUp 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .damage-number.crit {
   color: #ffd700;
   font-size: 32px;
+  text-shadow: 0 0 10px #ffd700, 0 0 20px #ff8c00;
+  animation: damageCrit 1.0s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 .damage-number.miss {
   color: #888;
+  animation: damageMiss 1.0s ease-out forwards;
 }
 
-@keyframes damageFloat {
-  0% {
-    transform: translateY(0) scale(0.5);
-    opacity: 0;
-  }
-  20% {
-    transform: translateY(-20px) scale(1.2);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-80px) scale(1);
-    opacity: 0;
-  }
+@keyframes damageFloatUp {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) translateY(0); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) translateY(-10px); }
+  30% { transform: translate(-50%, -50%) scale(1) translateY(-30px); }
+  60% { transform: translate(-50%, -50%) scale(0.95) translateY(-60px); opacity: 0.9; }
+  85% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8) translateY(-100px); }
+}
+
+@keyframes damageCrit {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(-20deg); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1.8) rotate(10deg); }
+  20% { transform: translate(-50%, -50%) scale(0.9) rotate(-5deg) translateY(-15px); }
+  35% { transform: translate(-50%, -50%) scale(1.1) rotate(3deg) translateY(-40px); }
+  55% { transform: translate(-50%, -50%) scale(1) rotate(0deg) translateY(-70px); opacity: 0.9; }
+  80% { opacity: 0.4; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.7) rotate(0deg) translateY(-120px); }
+}
+
+@keyframes damageMiss {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) translateY(0) translateX(-20px); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) translateY(-15px) translateX(10px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9) translateY(-50px) translateX(30px); }
+}
+
+.screen-shake {
+  animation: screenShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+}
+
+@keyframes screenShake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-8px, -5px) rotate(-1deg); }
+  20% { transform: translate(7px, 4px) rotate(1deg); }
+  30% { transform: translate(-6px, 3px) rotate(-0.5deg); }
+  40% { transform: translate(5px, -4px) rotate(0.5deg); }
+  50% { transform: translate(-4px, 2px) rotate(-0.3deg); }
+  60% { transform: translate(3px, -2px) rotate(0.3deg); }
+  70% { transform: translate(-2px, 2px) rotate(-0.2deg); }
+  80% { transform: translate(2px, -1px) rotate(0.2deg); }
+  90% { transform: translate(-1px, 1px) rotate(0deg); }
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .buff-list {
