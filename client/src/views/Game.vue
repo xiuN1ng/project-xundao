@@ -7,6 +7,7 @@
       </div>
       <div class="resources">
         <span>灵石: {{ player?.lingshi || 0 }}</span>
+        <button class="guide-btn" @click="showGuide = true" title="新手引导">🌟</button>
       </div>
     </header>
     
@@ -43,6 +44,11 @@
       <EquipmentEnhancePanel v-if="activeTab === 'equipment-enhance'" />
     </main>
 
+    <!-- 新手引导浮层 -->
+    <div v-if="showGuide" class="guide-overlay">
+      <GuidePanel @close="showGuide = false" />
+    </div>
+
     <!-- 全局动画组件 -->
     <UpgradeAnimation />
     <EquipmentAnimation />
@@ -76,10 +82,12 @@ import AdventurePanel from '../components/AdventurePanel.vue'
 import AbyssDungeonPanel from '../components/AbyssDungeonPanel.vue'
 import ClanPanel from '../components/ClanPanel.vue'
 import EquipmentEnhancePanel from '../components/EquipmentEnhancePanel.vue'
+import GuidePanel from '../components/GuidePanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
 const activeTab = ref('cultivation')
+const showGuide = ref(false)
 
 const tabs = [
   { id: 'cultivation', name: '修炼', icon: '🧘' },
@@ -118,4 +126,7 @@ const tabs = [
 .game-nav button { padding: 8px 15px; background: transparent; border: 1px solid rgba(102,126,234,0.3); color: #fff; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 13px; }
 .game-nav button.active { background: linear-gradient(90deg, #667eea, #764ba2); border-color: transparent; }
 .game-content { padding: 15px; }
+.guide-btn { background: rgba(201,169,110,0.2); border: 1px solid rgba(201,169,110,0.4); color: #c9a96e; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; margin-left: 8px; }
+.guide-btn:hover { background: rgba(201,169,110,0.3); }
+.guide-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; overflow-y: auto; }
 </style>
