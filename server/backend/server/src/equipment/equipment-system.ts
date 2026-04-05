@@ -31,6 +31,9 @@ export interface Equipment {
   // 绑定状态
   bindStatus: 'unbound' | 'bind_on_equip' | 'bound'
   
+  // 套装ID
+  suitId?: string
+  
   // 时间戳
   createdAt: number
   updatedAt: number
@@ -78,6 +81,9 @@ export interface EquipmentTemplate {
   quality: EquipmentQuality
   level: number           // 装备等级需求
   position: EquipmentPosition
+  
+  // 套装ID（可选）
+  suitId?: string
   
   baseAttributes: Record<string, number>
   
@@ -873,6 +879,16 @@ export class EquipmentSystem {
       }
     }
     
+    // 套装效果属性加成（基于装备基础属性总和的百分比）
+    const suitCounts = this.getEquippedSuitCounts(playerId)
+    for (const [suitId, count] of Object.entries(suitCounts)) {
+      if (count < 2) continue
+      const suitBonus = this.calculateSuitBonus(suitId, count, result)
+      for (const [attr, value] of Object.entries(suitBonus)) {
+        result[attr] = (result[attr] || 0) + value
+      }
+    }
+    
     return result
   }
   
@@ -902,6 +918,7 @@ export class EquipmentSystem {
       baseAttributes: { ...template.baseAttributes },
       additionalAttributes: {},
       bindStatus: 'unbound',
+      suitId: template.suitId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
@@ -930,4 +947,141 @@ export class EquipmentSystem {
   }
   
   // 卸下装备
-  unequipItem(playerId: string, position: EquipmentPosition): { success
+  unequipItem(playerId: string, position: EquipmentPosition): { success: boolean; message: string } {
+    const data = this.getPlayerData(playerId)
+    const equipment = this.getEquipmentByPosition(playerId, position)
+    
+    if (!equipment) {
+      return { success: false, message: '该位置没有装备' }
+    }
+    
+    return { success: true, message: '卸下成功' }
+  }
+  
+  // 获取玩家已穿戴装备的套装计数
+  getEquippedSuitCounts(playerId: string): Record<string, number> {
+    const counts: Record<string, number> = {}
+    const equipments = this.getPlayerEquipments(playerId)
+    
+    for (const equip of equipments) {
+      if (equip.suitId) {
+        counts[equip.suitId] = (counts[equip.suitId] || 0) + 1
+      }
+    }
+    
+    return counts
+  }
+  
+  // 计算指定套装的属性加成
+  calculateSuitBonus(
+    suitId: string,
+    count: number,
+    baseAttributes: Record<string, number>
+  ): Record<string, number> {
+    const result: Record<string, number> = {}
+    if (count < 2) return result
+    
+    for (const tier of [2, 3, 4] as const) {
+      if (count < tier) continue
+      
+      let bonusStats: Record<string, number> | null = null
+      
+      if (suitId === 'flame_set') {
+        if (tier === 2) bonusStats = { fire_dmg: 15 }
+        else if (tier === 4) bonusStats = { fire_dmg: 50, crit_dmg: 25 }
+      } else if (suitId === 'thunder_set') {
+        if (tier === 2) bonusStats = { speed: 20, dodge: 10 }
+        else if (tier === 4) bonusStats = { crit_rate: 30, crit_dmg: 50 }
+      } else if (suitId === 'ice_set') {
+        if (tier === 2) bonusStats = { damage_reduction: 10, hp_regen: 5 }
+        else if (tier === 4) bonusStats = { frost_dmg: 15, def: 30 }
+      } else if (suitId === 'dragon_set') {
+        if (tier === 2) bonusStats = { hp: 30, damage_reduction: 15 }
+        else if (tier === 4) bonusStats = { all_stats: 15, damage_reduction: 20 }
+      } else if (suitId === 'shadow_set') {
+        if (tier === 2) bonusStats = { dodge: 25, speed: 15 }
+        else if (tier === 4) bonusStats = { atk: 40, crit_rate: 15 }
+      } else if (suitId === 'immortal_set') {
+        if (tier === 2) bonusStats = { spirit_regen: 50, speed: 20 }
+        else if (tier === 4) bonusStats = { all_stats: 25, hp_regen: 3 }
+      }
+      
+      if (!bonusStats) continue
+      
+      for (const [attr, percent] of Object.entries(bonusStats)) {
+        if (attr === 'all_stats') {
+          const allAttrs = ['attack', 'defense', 'hp', 'crit', 'dodge', 'speed']
+          for (const key of allAttrs) {
+            const baseVal = baseAttributes[key] || 0
+            result[key] = (result[key] || 0) + Math.floor(baseVal * percent / 100)
+          }
+        } else if (attr === 'atk' || attr === 'def' || attr === 'hp') {
+          const keyMap: Record<string, string> = { atk: 'attack', def: 'defense', hp: 'hp' }
+          const key = keyMap[attr]
+          const baseVal = baseAttributes[key] || 0
+          result[key] = (result[key] || 0) + Math.floor(baseVal * percent / 100)
+        } else {
+          result[attr] = (result[attr] || 0) + percent
+        }
+      }
+    }
+    
+    return result
+  }
+  
+  // 获取玩家当前激活的套装效果列表
+  getActiveSuitEffects(playerId: string): {
+    suitId: string
+    nameCN: string
+    icon: string
+    count: number
+    activeBonuses: number[]
+    bonuses: { tier: number; name: string; description: string; stats: Record<string, number> }[]
+  }[] {
+    const suitCounts = this.getEquippedSuitCounts(playerId)
+    const results: {
+      suitId: string
+      nameCN: string
+      icon: string
+      count: number
+      activeBonuses: number[]
+      bonuses: { tier: number; name: string; description: string; stats: Record<string, number> }[]
+    }[] = []
+    
+    const suitMeta: Record<string, { nameCN: string; icon: string; bonuses: Record<number, { name: string; description: string; stats: Record<string, number> }> }> = {
+      flame_set: { nameCN: '烈焰套装', icon: '🔥', bonuses: { 2: { name: '烈焰之心', description: '攻击时附加15%火焰伤害', stats: { fire_dmg: 15 } }, 4: { name: '焚天灭世', description: '火焰伤害提升50%，暴击伤害+25%', stats: { fire_dmg: 50, crit_dmg: 25 } } } },
+      thunder_set: { nameCN: '雷霆套装', icon: '⚡', bonuses: { 2: { name: '雷鸣之力', description: '攻击速度+20%，闪避率+10%', stats: { speed: 20, dodge: 10 } }, 4: { name: '天罚降临', description: '暴击率+30%，暴击伤害+50%', stats: { crit_rate: 30, crit_dmg: 50 } } } },
+      ice_set: { nameCN: '寒冰套装', icon: '❄️', bonuses: { 2: { name: '冰封护体', description: '受到伤害-10%，生命回复+5%/秒', stats: { damage_reduction: 10, hp_regen: 5 } }, 4: { name: '绝对零度', description: '冰冻几率+15%，防御+30%', stats: { frost_dmg: 15, def: 30 } } } },
+      dragon_set: { nameCN: '龙鳞套装', icon: '🐉', bonuses: { 2: { name: '龙之守护', description: '生命上限+30%，伤害减免+15%', stats: { hp: 30, damage_reduction: 15 } }, 4: { name: '龙威降临', description: '全属性+15%，受到致命伤害时有20%几率无敌1秒', stats: { all_stats: 15, damage_reduction: 20 } } } },
+      shadow_set: { nameCN: '暗影套装', icon: '🌑', bonuses: { 2: { name: '暗影步伐', description: '闪避率+25%，攻击速度+15%', stats: { dodge: 25, speed: 15 } }, 4: { name: '影分身术', description: '击杀目标后生成一个影子分身协助作战', stats: { atk: 40, crit_rate: 15 } } } },
+      immortal_set: { nameCN: '仙风套装', icon: '☁️', bonuses: { 2: { name: '仙气缭绕', description: '灵气回复+50%，技能冷却-20%', stats: { spirit_regen: 50, speed: 20 } }, 4: { name: '天人合一', description: '全属性+25%，每次攻击回复生命+3%', stats: { all_stats: 25, hp_regen: 3 } } } },
+    }
+    
+    for (const [suitId, count] of Object.entries(suitCounts)) {
+      if (count < 2) continue
+      const meta = suitMeta[suitId]
+      if (!meta) continue
+      
+      const activeBonuses: number[] = []
+      const bonusList: { tier: number; name: string; description: string; stats: Record<string, number> }[] = []
+      
+      for (const tier of [2, 3, 4] as const) {
+        if (count >= tier && meta.bonuses[tier]) {
+          activeBonuses.push(tier)
+          bonusList.push(meta.bonuses[tier])
+        }
+      }
+      
+      results.push({
+        suitId,
+        nameCN: meta.nameCN,
+        icon: meta.icon,
+        count,
+        activeBonuses,
+        bonuses: bonusList,
+      })
+    }
+    
+    return results
+  }
+}

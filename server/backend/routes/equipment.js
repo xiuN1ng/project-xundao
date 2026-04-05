@@ -10,10 +10,155 @@ try {
   achievementTrigger = null;
 }
 
+// ==================== 套装配置 ====================
+const EQUIPMENT_SUIT_CONFIGS = {
+  flame_set: {
+    id: 'flame_set', name: '烈焰套装', icon: '🔥', rarity: 4,
+    description: '传说中驾驭烈焰的勇者所穿戴的套装，激活后可召唤火焰之力。',
+    pieces: { weapon: 'flame_sword', armor: 'flame_armor', helmet: 'flame_helm', accessory: 'flame_ring' },
+    bonuses: {
+      2: { name: '烈焰之心', description: '攻击时附加15%火焰伤害', stats: { fire_dmg: 15 } },
+      4: { name: '焚天灭世', description: '火焰伤害提升50%，暴击伤害+25%', stats: { fire_dmg: 50, crit_dmg: 25 } },
+    },
+  },
+  thunder_set: {
+    id: 'thunder_set', name: '雷霆套装', icon: '⚡', rarity: 5,
+    description: '汇聚九天雷霆之威，佩戴者可引雷入体，威力无边。',
+    pieces: { weapon: 'thunder_blade', armor: 'thunder_armor', helmet: 'thunder_crown', accessory: 'thunder_brace' },
+    bonuses: {
+      2: { name: '雷鸣之力', description: '攻击速度+20%，闪避率+10%', stats: { speed: 20, dodge: 10 } },
+      4: { name: '天罚降临', description: '暴击率+30%，暴击伤害+50%', stats: { crit_rate: 30, crit_dmg: 50 } },
+    },
+  },
+  ice_set: {
+    id: 'ice_set', name: '寒冰套装', icon: '❄️', rarity: 3,
+    description: '取自万年寒冰精炼而成，佩戴者身法如风寒冰彻骨。',
+    pieces: { weapon: 'ice_sword', armor: 'ice_armor', helmet: 'ice_helm', accessory: 'ice_amulet' },
+    bonuses: {
+      2: { name: '冰封护体', description: '受到伤害-10%，生命回复+5%/秒', stats: { damage_reduction: 10, hp_regen: 5 } },
+      4: { name: '绝对零度', description: '冰冻几率+15%，防御+30%', stats: { frost_dmg: 15, def: 30 } },
+    },
+  },
+  dragon_set: {
+    id: 'dragon_set', name: '龙鳞套装', icon: '🐉', rarity: 5,
+    description: '以真龙鳞片铸就，传说穿戴者可获龙之守护。',
+    pieces: { weapon: 'dragon_blade', armor: 'dragon_armor', helmet: 'dragon_helm', accessory: 'dragon_pendant' },
+    bonuses: {
+      2: { name: '龙之守护', description: '生命上限+30%，伤害减免+15%', stats: { hp: 30, damage_reduction: 15 } },
+      4: { name: '龙威降临', description: '全属性+15%，受到致命伤害时有20%几率无敌1秒', stats: { all_stats: 15, damage_reduction: 20 } },
+    },
+  },
+  shadow_set: {
+    id: 'shadow_set', name: '暗影套装', icon: '🌑', rarity: 4,
+    description: '源自幽冥深处的暗影之力，适合刺客类修士。',
+    pieces: { weapon: 'shadow_dagger', armor: 'shadow_cloak', helmet: 'shadow_hood', accessory: 'shadow_ring' },
+    bonuses: {
+      2: { name: '暗影步伐', description: '闪避率+25%，攻击速度+15%', stats: { dodge: 25, speed: 15 } },
+      4: { name: '影分身术', description: '击杀目标后生成一个影子分身协助作战', stats: { atk: 40, crit_rate: 15 } },
+    },
+  },
+  immortal_set: {
+    id: 'immortal_set', name: '仙风套装', icon: '☁️', rarity: 5,
+    description: '飞升成仙者遗留的套装，蕴含天道法则之力。',
+    pieces: { weapon: 'immortal_sword', armor: 'immortal_robe', helmet: 'immortal_crown', accessory: 'immortal_jade' },
+    bonuses: {
+      2: { name: '仙气缭绕', description: '灵气回复+50%，技能冷却-20%', stats: { spirit_regen: 50, speed: 20 } },
+      4: { name: '天人合一', description: '全属性+25%，每次攻击回复生命+3%', stats: { all_stats: 25, hp_regen: 3 } },
+    },
+  },
+};
+
+// 计算套装属性加成
+function calculateSuitBonusAttributes(suitId, count, baseAttrs) {
+  const result = {};
+  if (count < 2) return result;
+  const suit = EQUIPMENT_SUIT_CONFIGS[suitId];
+  if (!suit) return result;
+  
+  for (const tier of [2, 3, 4]) {
+    if (count < tier) continue;
+    const bonus = suit.bonuses[tier];
+    if (!bonus) continue;
+    
+    for (const [attr, percent] of Object.entries(bonus.stats)) {
+      if (attr === 'all_stats') {
+        ['attack', 'defense', 'hp', 'crit', 'dodge', 'speed'].forEach(key => {
+          const baseVal = baseAttrs[key] || 0;
+          result[key] = (result[key] || 0) + Math.floor(baseVal * percent / 100);
+        });
+      } else if (attr === 'atk' || attr === 'def' || attr === 'hp') {
+        const keyMap = { atk: 'attack', def: 'defense', hp: 'hp' };
+        const key = keyMap[attr];
+        const baseVal = baseAttrs[key] || 0;
+        result[key] = (result[key] || 0) + Math.floor(baseVal * percent / 100);
+      } else {
+        result[attr] = (result[attr] || 0) + percent;
+      }
+    }
+  }
+  return result;
+}
+
+// 获取玩家已穿戴装备的套装计数
+function getEquippedSuitCounts(userId) {
+  const counts = {};
+  const equipped = userEquipments.filter(e => e.userId === userId && e.equipped);
+  for (const equip of equipped) {
+    if (equip.set_id) {
+      counts[equip.set_id] = (counts[equip.set_id] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+// 获取玩家激活的套装效果
+function getActiveSuitEffects(userId) {
+  const counts = getEquippedSuitCounts(userId);
+  const results = [];
+  
+  for (const [suitId, count] of Object.entries(counts)) {
+    if (count < 2) continue;
+    const suit = EQUIPMENT_SUIT_CONFIGS[suitId];
+    if (!suit) continue;
+    
+    const activeBonuses = [];
+    const bonusList = [];
+    for (const tier of [2, 3, 4]) {
+      if (count >= tier && suit.bonuses[tier]) {
+        activeBonuses.push(tier);
+        bonusList.push(suit.bonuses[tier]);
+      }
+    }
+    
+    results.push({
+      suitId,
+      nameCN: suit.name,
+      icon: suit.icon,
+      count,
+      activeBonuses,
+      bonuses: bonusList,
+    });
+  }
+  return results;
+}
+
 let userEquipments = [
-  { userId: 1, id: 1, name: '铁剑', type: 'weapon', attack: 10, enhanceLevel: 0, sockets: [], gems: [] },
-  { userId: 1, id: 2, name: '布衣', type: 'armor', defense: 5, enhanceLevel: 0, sockets: [], gems: [] },
-  { userId: 1, id: 3, name: '银甲', type: 'armor', defense: 15, enhanceLevel: 3, sockets: [0], gems: ['def_gem'] }
+  { userId: 1, id: 1, name: '铁剑', type: 'weapon', attack: 10, enhanceLevel: 0, sockets: [], gems: [], set_id: null },
+  { userId: 1, id: 2, name: '布衣', type: 'armor', defense: 5, enhanceLevel: 0, sockets: [], gems: [], set_id: null },
+  { userId: 1, id: 3, name: '银甲', type: 'armor', defense: 15, enhanceLevel: 3, sockets: [0], gems: ['def_gem'], set_id: null },
+  // 烈焰套装
+  { userId: 1, id: 4, name: '烈焰剑', type: 'weapon', attack: 80, crit: 5, enhanceLevel: 0, quality: 'epic', rarity: 4, set_id: 'flame_set', icon: '🔥', base_stats: { attack: 80, crit: 5 } },
+  { userId: 1, id: 5, name: '烈焰甲', type: 'armor', defense: 50, hp: 150, enhanceLevel: 0, quality: 'epic', rarity: 4, set_id: 'flame_set', icon: '🔥', base_stats: { defense: 50, hp: 150 } },
+  { userId: 1, id: 6, name: '烈焰盔', type: 'helmet', defense: 25, hp: 80, enhanceLevel: 0, quality: 'epic', rarity: 4, set_id: 'flame_set', icon: '🔥', base_stats: { defense: 25, hp: 80 } },
+  { userId: 1, id: 7, name: '烈焰戒', type: 'ring', attack: 30, crit: 3, enhanceLevel: 0, quality: 'epic', rarity: 4, set_id: 'flame_set', icon: '🔥', base_stats: { attack: 30, crit: 3 } },
+  // 雷霆套装
+  { userId: 1, id: 8, name: '惊雷刀', type: 'weapon', attack: 150, crit: 8, enhanceLevel: 0, quality: 'legendary', rarity: 5, set_id: 'thunder_set', icon: '⚡', base_stats: { attack: 150, crit: 8 } },
+  { userId: 1, id: 9, name: '雷霆甲', type: 'armor', defense: 80, hp: 300, enhanceLevel: 0, quality: 'legendary', rarity: 5, set_id: 'thunder_set', icon: '⚡', base_stats: { defense: 80, hp: 300 } },
+  { userId: 1, id: 10, name: '雷冠', type: 'helmet', defense: 40, hp: 150, enhanceLevel: 0, quality: 'legendary', rarity: 5, set_id: 'thunder_set', icon: '⚡', base_stats: { defense: 40, hp: 150 } },
+  { userId: 1, id: 11, name: '雷镯', type: 'bracelet', defense: 30, hp: 120, enhanceLevel: 0, quality: 'legendary', rarity: 5, set_id: 'thunder_set', icon: '⚡', base_stats: { defense: 30, hp: 120 } },
+  // 寒冰套装
+  { userId: 1, id: 12, name: '寒冰剑', type: 'weapon', attack: 45, crit: 3, enhanceLevel: 0, quality: 'rare', rarity: 3, set_id: 'ice_set', icon: '❄️', base_stats: { attack: 45, crit: 3 } },
+  { userId: 1, id: 13, name: '寒冰甲', type: 'armor', defense: 30, hp: 100, enhanceLevel: 0, quality: 'rare', rarity: 3, set_id: 'ice_set', icon: '❄️', base_stats: { defense: 30, hp: 100 } },
 ];
 
 const playerResources = { 1: { spiritStones: 10000, refineStones: 50, augmentTickets: 10, materials: {} } };
@@ -196,6 +341,31 @@ router.get('/augment/history/:equipId', (req, res) => {
   const equipId = parseInt(req.params.equipId);
   const history = augmentHistory.filter(h => h.equipId === equipId);
   res.json({ success: true, history });
+});
+
+// ==================== 套装系统 API ====================
+
+// GET /sets/config/all - 获取所有套装配置
+router.get('/sets/config/all', (req, res) => {
+  const suits = Object.values(EQUIPMENT_SUIT_CONFIGS).map(suit => ({
+    id: suit.id,
+    name: suit.name,
+    nameCN: suit.name,
+    icon: suit.icon,
+    rarity: suit.rarity,
+    description: suit.description,
+    pieces: suit.pieces,
+    bonuses: suit.bonuses,
+  }));
+  res.json({ success: true, data: suits });
+});
+
+// GET /sets/:userId - 获取玩家套装信息
+router.get('/sets/:userId', (req, res) => {
+  const userId = parseInt(req.params.userId) || 1;
+  const activeEffects = getActiveSuitEffects(userId);
+  const suitCounts = getEquippedSuitCounts(userId);
+  res.json({ success: true, data: { activeEffects, suitCounts } });
 });
 
 // ============================================================

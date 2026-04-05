@@ -6,6 +6,7 @@
 import express, { Request, Response } from 'express';
 import { SkillSystem, SKILL_TEMPLATES, Skill } from './skill/skill-system';
 import { EquipmentSystem, EQUIPMENT_TEMPLATES, Equipment, EQUIPMENT_STRENGTHEN_CONFIG } from './equipment/equipment-system';
+import { EQUIPMENT_SUIT_CONFIGS } from './equipment/equipment-suit';
 import { MasterDiscipleSystem, MASTER_TASKS } from './social/master-disciple-system';
 import { MasterContributionShop, CONTRIBUTION_SHOP_ITEMS } from './social/master-contribution-shop';
 import { WingSystem, WING_TEMPLATES } from './wing/wing-system';
@@ -405,6 +406,53 @@ router.get('/equipment/stats', (req: Request, res: Response) => {
         playerId: player_id,
         attributes: stats
       }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// GET /api/equipment/sets/config/all - 获取所有套装配置
+router.get('/equipment/sets/config/all', (req: Request, res: Response) => {
+  try {
+    const suits = Object.values(EQUIPMENT_SUIT_CONFIGS).map(suit => ({
+      id: suit.suitId,
+      name: suit.name,
+      nameCN: suit.nameCN,
+      icon: suit.icon,
+      rarity: suit.rarity,
+      description: suit.description,
+      pieces: suit.pieces,
+      bonuses: suit.bonuses,
+    }));
+    
+    res.json({
+      success: true,
+      data: suits,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// GET /api/equipment/sets/active/:playerId - 获取玩家激活的套装效果
+router.get('/equipment/sets/active/:playerId', (req: Request, res: Response) => {
+  try {
+    const { playerId } = req.params;
+    
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: '缺少 playerId 参数' });
+    }
+    
+    const activeEffects = equipmentSystem.getActiveSuitEffects(playerId);
+    const suitCounts = equipmentSystem.getEquippedSuitCounts(playerId);
+    
+    res.json({
+      success: true,
+      data: {
+        activeEffects,
+        suitCounts,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
