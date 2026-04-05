@@ -1277,4 +1277,226 @@ router.get('/campfire/members/:sectId', (req, res) => {
   }
 });
 
+
+// =============================================
+// 宗门科技树系统
+// =============================================
+
+// 创建 sect_techs 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_techs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sect_id INTEGER NOT NULL UNIQUE,
+      tech_levels TEXT DEFAULT '{}',
+      last_research_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  console.log('[sect] sect_techs 表检查完成');
+} catch(e) {}
+
+// 科技树定义
+const SECT_TECHS = {
+  attack: {
+    name: '攻击研究',
+    icon: '⚔️',
+    color: '#e8a87c',
+    tiers: [
+      { level: 1, name: '基础攻击', cost: 1000, bonus: { attack: 10 }, desc: '全员攻击+10' },
+      { level: 2, name: '攻击强化', cost: 3000, bonus: { attack: 25 }, desc: '全员攻击+25' },
+      { level: 3, name: '攻击精通', cost: 8000, bonus: { attack: 50 }, desc: '全员攻击+50' },
+      { level: 4, name: '攻击极致', cost: 20000, bonus: { attack: 100 }, desc: '全员攻击+100' },
+      { level: 5, name: '天剑之境', cost: 50000, bonus: { attack: 200 }, desc: '全员攻击+200' },
+    ]
+  },
+  defense: {
+    name: '防御研究',
+    icon: '🛡️',
+    color: '#6ec6ca',
+    tiers: [
+      { level: 1, name: '基础防御', cost: 1000, bonus: { defense: 10 }, desc: '全员防御+10' },
+      { level: 2, name: '防御强化', cost: 3000, bonus: { defense: 25 }, desc: '全员防御+25' },
+      { level: 3, name: '防御精通', cost: 8000, bonus: { defense: 50 }, desc: '全员防御+50' },
+      { level: 4, name: '防御极致', cost: 20000, bonus: { defense: 100 }, desc: '全员防御+100' },
+      { level: 5, name: '不动如山', cost: 50000, bonus: { defense: 200 }, desc: '全员防御+200' },
+    ]
+  },
+  cultivation: {
+    name: '修炼研究',
+    icon: '🧘',
+    color: '#c9a96e',
+    tiers: [
+      { level: 1, name: '聚灵阵', cost: 1000, bonus: { cultivation_speed: 5 }, desc: '修炼效率+5%' },
+      { level: 2, name: '聚灵阵·大', cost: 3000, bonus: { cultivation_speed: 12 }, desc: '修炼效率+12%' },
+      { level: 3, name: '聚灵阵·极', cost: 8000, bonus: { cultivation_speed: 25 }, desc: '修炼效率+25%' },
+      { level: 4, name: '万灵归元', cost: 20000, bonus: { cultivation_speed: 40 }, desc: '修炼效率+40%' },
+      { level: 5, name: '天道感悟', cost: 50000, bonus: { cultivation_speed: 60 }, desc: '修炼效率+60%' },
+    ]
+  },
+  resource: {
+    name: '资源研究',
+    icon: '💎',
+    color: '#7ec8e3',
+    tiers: [
+      { level: 1, name: '灵石探测', cost: 1000, bonus: { spirit_stone_rate: 5 }, desc: '灵石收益+5%' },
+      { level: 2, name: '灵石精炼', cost: 3000, bonus: { spirit_stone_rate: 12 }, desc: '灵石收益+12%' },
+      { level: 3, name: '灵石聚拢', cost: 8000, bonus: { spirit_stone_rate: 25 }, desc: '灵石收益+25%' },
+      { level: 4, name: '灵石通天', cost: 20000, bonus: { spirit_stone_rate: 40 }, desc: '灵石收益+40%' },
+      { level: 5, name: '点石成金', cost: 50000, bonus: { spirit_stone_rate: 60 }, desc: '灵石收益+60%' },
+    ]
+  },
+  luck: {
+    name: '气运研究',
+    icon: '🍀',
+    color: '#a8e6cf',
+    tiers: [
+      { level: 1, name: '小吉', cost: 1000, bonus: { crit_rate: 3 }, desc: '暴击率+3%' },
+      { level: 2, name: '中吉', cost: 3000, bonus: { crit_rate: 7 }, desc: '暴击率+7%' },
+      { level: 3, name: '大吉', cost: 8000, bonus: { crit_rate: 12 }, desc: '暴击率+12%' },
+      { level: 4, name: '大吉·极', cost: 20000, bonus: { crit_rate: 20 }, desc: '暴击率+20%' },
+      { level: 5, name: '天命所归', cost: 50000, bonus: { crit_rate: 30 }, desc: '暴击率+30%' },
+    ]
+  },
+  dungeon: {
+    name: '副本研究',
+    icon: '🏰',
+    color: '#dda0dd',
+    tiers: [
+      { level: 1, name: '副本入门', cost: 1000, bonus: { dungeon_drop: 5 }, desc: '副本奖励+5%' },
+      { level: 2, name: '副本精通', cost: 3000, bonus: { dungeon_drop: 12 }, desc: '副本奖励+12%' },
+      { level: 3, name: '副本大师', cost: 8000, bonus: { dungeon_drop: 25 }, desc: '副本奖励+25%' },
+      { level: 4, name: '副本宗师', cost: 20000, bonus: { dungeon_drop: 40 }, desc: '副本奖励+40%' },
+      { level: 5, name: '副本主宰', cost: 50000, bonus: { dungeon_drop: 60 }, desc: '副本奖励+60%' },
+    ]
+  }
+};
+
+// 初始化宗门科技记录
+function ensureSectTech(sectId) {
+  try {
+    const existing = db.prepare('SELECT * FROM sect_techs WHERE sect_id = ?').get(sectId);
+    if (!existing) {
+      db.prepare('INSERT INTO sect_techs (sect_id, tech_levels) VALUES (?, ?)').run(sectId, JSON.stringify({}));
+    }
+  } catch(e) {}
+}
+
+// 获取宗门科技状态
+function getSectTechLevels(sectId) {
+  try {
+    const row = db.prepare('SELECT tech_levels FROM sect_techs WHERE sect_id = ?').get(sectId);
+    return row ? JSON.parse(row.tech_levels || '{}') : {};
+  } catch(e) { return {}; }
+}
+
+// 获取宗门科技提供的全员加成
+function getSectTechBonuses(sectId) {
+  const levels = getSectTechLevels(sectId);
+  const bonuses = { attack: 0, defense: 0, cultivation_speed: 0, spirit_stone_rate: 0, crit_rate: 0, dungeon_drop: 0 };
+  
+  for (const [category, level] of Object.entries(levels)) {
+    const tech = SECT_TECHS[category];
+    if (!tech || level < 1) continue;
+    const tier = tech.tiers[level - 1];
+    if (!tier) continue;
+    for (const [stat, value] of Object.entries(tier.bonus)) {
+      if (bonuses.hasOwnProperty(stat)) bonuses[stat] += value;
+    }
+  }
+  return bonuses;
+}
+
+// 科技树列表
+router.get('/tech', (req, res) => {
+  const { sectId } = req.query;
+  if (!sectId) return res.json({ success: false, message: '缺少宗门ID' });
+  
+  ensureSectTech(sectId);
+  const levels = getSectTechLevels(sectId);
+  const bonuses = getSectTechBonuses(sectId);
+  
+  // 组装前端需要的格式
+  const techTree = Object.entries(SECT_TECHS).map(([key, cat]) => {
+    const currentLevel = levels[key] || 0;
+    const nextTier = cat.tiers[currentLevel];
+    const canResearch = nextTier ? { ...nextTier } : null;
+    
+    return {
+      category: key,
+      name: cat.name,
+      icon: cat.icon,
+      color: cat.color,
+      currentLevel,
+      maxLevel: cat.tiers.length,
+      currentBonus: currentLevel > 0 ? cat.tiers[currentLevel - 1].bonus : {},
+      nextTier,
+      isMaxed: currentLevel >= cat.tiers.length
+    };
+  });
+  
+  res.json({ success: true, techTree, totalBonuses: bonuses });
+});
+
+// 研究科技
+router.post('/tech/research', (req, res) => {
+  const { sectId, playerId, category } = req.body;
+  if (!sectId || !playerId || !category) {
+    return res.json({ success: false, message: '参数不完整' });
+  }
+  
+  const tech = SECT_TECHS[category];
+  if (!tech) return res.json({ success: false, message: '科技类别不存在' });
+  
+  ensureSectTech(sectId);
+  const levels = getSectTechLevels(sectId);
+  const currentLevel = levels[category] || 0;
+  
+  if (currentLevel >= tech.tiers.length) {
+    return res.json({ success: false, message: '科技已满级' });
+  }
+  
+  const nextTier = tech.tiers[currentLevel];
+  
+  // 检查玩家是否是宗门掌门（简化：掌门或长老）
+  const sect = db.prepare('SELECT leaderId FROM sects WHERE id = ?').get(sectId);
+  if (!sect) return res.json({ success: false, message: '宗门不存在' });
+  if (sect.leaderId !== parseInt(playerId)) {
+    return res.json({ success: false, message: '只有掌门才能研究科技' });
+  }
+  
+  // 检查宗门资金（灵石）是否足够
+  const sectData = db.prepare('SELECT funds FROM sects WHERE id = ?').get(sectId);
+  if (!sectData || sectData.funds < nextTier.cost) {
+    return res.json({ success: false, message: `宗门资金不足（需要${nextTier.cost}灵石）` });
+  }
+  
+  // 扣除资金并升级科技
+  db.prepare('UPDATE sects SET funds = funds - ? WHERE id = ?').run(nextTier.cost, sectId);
+  levels[category] = currentLevel + 1;
+  db.prepare('UPDATE sect_techs SET tech_levels = ?, updated_at = CURRENT_TIMESTAMP WHERE sect_id = ?').run(JSON.stringify(levels), sectId);
+  
+  res.json({
+    success: true,
+    newLevel: currentLevel + 1,
+    cost: nextTier.cost,
+    bonus: nextTier.bonus,
+    totalBonuses: getSectTechBonuses(sectId),
+    remainingFunds: sectData.funds - nextTier.cost
+  });
+});
+
+// 获取宗门成员科技加成
+router.get('/tech/bonuses', (req, res) => {
+  const { sectId } = req.query;
+  if (!sectId) return res.json({ success: false, message: '缺少宗门ID' });
+  
+  ensureSectTech(sectId);
+  const bonuses = getSectTechBonuses(sectId);
+  const levels = getSectTechLevels(sectId);
+  
+  res.json({ success: true, bonuses, techLevels: levels });
+});
+
 module.exports = router;
