@@ -9,6 +9,7 @@
       <div class="resources">
         <span class="resource">💰 {{ lingshi }}</span>
         <span class="resource">💎 {{ diamonds }}</span>
+        <button class="guide-btn" @click="showGuide = true" title="新手引导">🌟</button>
       </div>
     </header>
     
@@ -21,6 +22,9 @@
       </router-view>
     </main>
     
+    <!-- 新手引导浮层 -->
+    <GuidePanel v-if="showGuide" @close="showGuide = false" />
+
     <!-- 底部导航 -->
     <BottomNav />
   </div>
@@ -29,11 +33,13 @@
 <script setup>
 import { ref } from 'vue'
 import BottomNav from './BottomNav.vue'
+import GuidePanel from './GuidePanel.vue'
 
 const username = ref('修仙者')
 const level = ref(5)
 const lingshi = ref(125680)
 const diamonds = ref(520)
+const showGuide = ref(false)
 </script>
 
 <style scoped>
@@ -114,5 +120,24 @@ const diamonds = ref(520)
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 新手引导按钮 */
+.guide-btn {
+  background: rgba(201,169,110,0.2);
+  border: 1px solid rgba(201,169,110,0.4);
+  color: #c9a96e;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+.guide-btn:hover {
+  background: rgba(201,169,110,0.3);
 }
 </style>
