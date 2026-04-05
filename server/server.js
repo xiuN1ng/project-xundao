@@ -4708,8 +4708,36 @@ app.get('/api/ranking/:type', (req, res) => {
       } catch(e) {
         ranking = [];
       }
+    } else if (type === 'realm') {
+      ranking = db.prepare(`
+        SELECT id, username as name, level, realm_level as realm,
+               realm_level as value, spirit_stones as lingshi
+        FROM player WHERE id > 0
+        ORDER BY realm_level DESC, level DESC LIMIT ?
+      `).all(n);
+    } else if (type === 'sect_contrib') {
+      ranking = db.prepare(`
+        SELECT p.id, p.username as name, p.level, p.realm_level,
+               COALESCE(sm.contribution, 0) as value,
+               p.spirit_stones as lingshi
+        FROM player p
+        LEFT JOIN sect_members sm ON p.id = sm.player_id
+        WHERE p.id > 0
+        ORDER BY value DESC LIMIT ?
+      `).all(n);
+    } else if (type === 'total_recharge') {
+      ranking = db.prepare(`
+        SELECT p.id, p.username as name, p.level, p.realm_level,
+               COALESCE(SUM(po.amount), 0) as value,
+               p.spirit_stones as lingshi
+        FROM player p
+        LEFT JOIN payment_orders po ON p.id = po.player_id AND po.status = 'paid'
+        WHERE p.id > 0
+        GROUP BY p.id
+        ORDER BY value DESC LIMIT ?
+      `).all(n);
     } else {
-      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter', 'realm', 'sect_contrib', 'total_recharge'] });
     }
 
     const list = ranking.map((p, i) => ({
@@ -4734,6 +4762,18 @@ app.get('/api/ranking/:type', (req, res) => {
         myRankInfo = { myRank: rank ? rank.r : 0 };
       } else if (type === 'wealth') {
         const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND spirit_stones > (SELECT spirit_stones FROM player WHERE id = ?)`).get(uid);
+        myRankInfo = { myRank: rank ? rank.r : 0 };
+      } else if (type === 'realm') {
+        const me = db.prepare(`SELECT realm_level FROM player WHERE id = ?`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND realm_level > ?`).get(me ? me.realm_level : 0);
+        myRankInfo = { myRank: rank ? rank.r : 0 };
+      } else if (type === 'sect_contrib') {
+        const me = db.prepare(`SELECT COALESCE(sm.contribution, 0) as v FROM player p LEFT JOIN sect_members sm ON p.id = sm.player_id WHERE p.id = ?`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player p LEFT JOIN sect_members sm ON p.id = sm.player_id WHERE p.id > 0 AND COALESCE(sm.contribution, 0) > ?`).get(me ? me.v : 0);
+        myRankInfo = { myRank: rank ? rank.r : 0 };
+      } else if (type === 'total_recharge') {
+        const me = db.prepare(`SELECT COALESCE(SUM(amount), 0) as v FROM player p LEFT JOIN payment_orders po ON p.id = po.player_id AND po.status = 'paid' WHERE p.id = ? GROUP BY p.id`).get(uid);
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player p LEFT JOIN payment_orders po ON p.id = po.player_id AND po.status = 'paid' WHERE p.id > 0 GROUP BY p.id HAVING COALESCE(SUM(amount), 0) > ?`).get(me ? me.v : 0);
         myRankInfo = { myRank: rank ? rank.r : 0 };
       }
       return res.json({ success: true, list, myRank: myRankInfo });
@@ -4772,6 +4812,21 @@ app.get('/api/ranking/:type/me', (req, res) => {
       const me = db.prepare(`SELECT id, username as name, spirit_stones as lingshi FROM player WHERE id = ?`).get(uid);
       if (!me) return res.json({ success: false, error: '玩家不存在' });
       const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND spirit_stones > ?`).get(me.lingshi);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else if (type === 'realm') {
+      const me = db.prepare(`SELECT id, username as name, level, realm_level FROM player WHERE id = ?`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND realm_level > ?`).get(me.realm_level);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else if (type === 'sect_contrib') {
+      const me = db.prepare(`SELECT p.id, p.username as name, COALESCE(sm.contribution, 0) as v FROM player p LEFT JOIN sect_members sm ON p.id = sm.player_id WHERE p.id = ?`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player p LEFT JOIN sect_members sm ON p.id = sm.player_id WHERE p.id > 0 AND COALESCE(sm.contribution, 0) > ?`).get(me.v);
+      res.json({ success: true, myRank: rank.r, player: me });
+    } else if (type === 'total_recharge') {
+      const me = db.prepare(`SELECT p.id, p.username as name, COALESCE(SUM(po.amount), 0) as v FROM player p LEFT JOIN payment_orders po ON p.id = po.player_id AND po.status = 'paid' WHERE p.id = ? GROUP BY p.id`).get(uid);
+      if (!me) return res.json({ success: false, error: '玩家不存在' });
+      const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player p LEFT JOIN payment_orders po ON p.id = po.player_id AND po.status = 'paid' WHERE p.id > 0 GROUP BY p.id HAVING COALESCE(SUM(amount), 0) > ?`).get(me.v);
       res.json({ success: true, myRank: rank.r, player: me });
     } else {
       res.json({ success: false, error: '未知排行榜类型' });
