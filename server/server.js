@@ -8956,6 +8956,7 @@ try {
 try {
   const realmDungeonRoute = require('./backend/routes/realm_dungeon');
   app.use('/api/realm-dungeon', realmDungeonRoute);
+  app.use('/api/realm_dungeon', realmDungeonRoute);
   Logger.info('✓ 境界副本路由已加载');
 } catch (e) {
   Logger.warn('⚠ 境界副本路由加载失败:', e.message);
