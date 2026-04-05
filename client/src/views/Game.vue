@@ -38,6 +38,7 @@
       <DeityPanel v-if="activeTab === 'deity'" />
       <TribulationPanel v-if="activeTab === 'tribulation'" />
       <AdventurePanel v-if="activeTab === 'adventure'" />
+      <RealmDungeonPanel v-if="activeTab === 'realm-dungeon'" />
       <AbyssDungeonPanel v-if="activeTab === 'abyss'" />
       <ClanPanel v-if="activeTab === 'clan'" />
       <EquipmentEnhancePanel v-if="activeTab === 'equipment-enhance'" />
@@ -73,6 +74,7 @@ import TribulationPanel from '../components/TribulationPanel.vue'
 import UpgradeAnimation from '../components/UpgradeAnimation.vue'
 import EquipmentAnimation from '../components/EquipmentAnimation.vue'
 import AdventurePanel from '../components/AdventurePanel.vue'
+import RealmDungeonPanel from '../components/RealmDungeonPanel.vue'
 import AbyssDungeonPanel from '../components/AbyssDungeonPanel.vue'
 import ClanPanel from '../components/ClanPanel.vue'
 import EquipmentEnhancePanel from '../components/EquipmentEnhancePanel.vue'
@@ -91,6 +93,7 @@ const tabs = [
   { id: 'equipment-enhance', name: '强化', icon: '⚔️' },
   { id: 'adventure', name: '奇遇', icon: '✨' },
   { id: 'abyss', name: '深渊', icon: '🌀' },
+  { id: 'realm-dungeon', name: '境界副本', icon: '🏔️' },
   { id: 'spirit-artifact', name: '器灵', icon: '🔮' },
   { id: 'gongfa-effects', name: '功法', icon: '📚' },
   { id: 'arena', name: '竞技', icon: '⚔️' },
