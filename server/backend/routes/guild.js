@@ -477,9 +477,266 @@ router.get('/members/:guildId', (req, res) => {
   if (!db) return res.json({ success: false, message: '数据库未连接' });
   const guildId = parseInt(req.params.guildId);
   const members = db.prepare(
-    'SELECT player_id, player_name, role, contribution, joined_at FROM guild_members WHERE guild_id = ? ORDER BY role DESC, contribution DESC'
+    'SELECT player_id as id, player_name as name, role, contribution, joined_at as joinTime FROM guild_members WHERE guild_id = ? ORDER BY role DESC, contribution DESC'
   ).all(guildId);
-  res.json({ success: true, members });
+
+  // 计算个人排名
+  const sorted = [...members].sort((a, b) => b.contribution - a.contribution);
+  const ranked = sorted.map((m, idx) => ({ ...m, rank: idx + 1 }));
+
+  // 补充贡献度百分比 (相对于排名第一)
+  const topContrib = ranked.length > 0 ? ranked[0].contribution : 1;
+  const enriched = ranked.map(m => ({
+    ...m,
+    contributionPercent: topContrib > 0 ? Math.round((m.contribution / topContrib) * 100) : 0
+  }));
+
+  res.json({ success: true, members: enriched });
+});
+
+// 获取仙盟日志
+router.get('/logs/:guildId', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const guildId = parseInt(req.params.guildId);
+  const logs = db.prepare(
+    'SELECT id, player_id, player_name, action, detail, created_at as time FROM guild_logs WHERE guild_id = ? ORDER BY id DESC LIMIT 50'
+  ).all(guildId);
+  res.json({ success: true, logs });
+});
+
+// 获取玩家仙盟信息（含 hasGuild 标志）
+router.get('/info', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const userId = parseInt(req.query.userId) || parseInt(req.body?.userId);
+  if (!userId) return res.json({ success: false, message: '缺少 userId' });
+
+  const member = db.prepare('SELECT * FROM guild_members WHERE player_id = ?').get(userId);
+  if (!member) return res.json({ success: false, hasGuild: false, guild: null });
+
+  const guild = db.prepare('SELECT * FROM guilds WHERE id = ?').get(member.guild_id);
+  if (!guild) return res.json({ success: false, hasGuild: false, guild: null });
+
+  // 获取建筑信息
+  const buildings = db.prepare('SELECT building_key, level FROM guild_buildings WHERE guild_id = ?').all(guild.id);
+  const buildingMap = {};
+  for (const b of buildings) { buildingMap[b.building_key] = b.level; }
+
+  // 获取我的贡献信息
+  const myContrib = member.contribution || 0;
+  const totalContrib = db.prepare('SELECT SUM(contribution) as total FROM guild_members WHERE guild_id = ?').get(guild.id);
+  const guildRank = db.prepare('SELECT COUNT(*) as rank FROM guild_members WHERE guild_id = ? AND contribution > ?').get(guild.id, myContrib);
+
+  res.json({
+    success: true,
+    hasGuild: true,
+    guild: {
+      id: guild.id,
+      name: guild.name,
+      level: guild.level,
+      exp: guild.experience || guild.exp,
+      notice: guild.notice,
+      icon: guild.icon || '🏛️',
+      resources: { gold: guild.fund || 0, contribution: myContrib },
+      memberCount: guild.member_count,
+      maxMembers: guild.member_capacity,
+      myRole: member.role,
+      myContribution: myContrib,
+      myRank: (guildRank?.rank || 0) + 1,
+      totalMembers: guild.member_count,
+      buildings: buildingMap
+    }
+  });
+});
+
+// 捐献灵石/资源
+router.post('/contribute', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const { userId, userName, guildId, amount, type } = req.body;
+
+  if (!userId || !guildId || !amount) {
+    return res.json({ success: false, message: '参数不完整' });
+  }
+  if (amount <= 0) return res.json({ success: false, message: '捐献数量必须大于0' });
+
+  const guild = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId);
+  if (!guild) return res.json({ success: false, message: '仙盟不存在' });
+
+  const member = db.prepare('SELECT * FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+  if (!member) return res.json({ success: false, message: '您不是该仙盟成员' });
+
+  try {
+    // 更新成员贡献
+    db.prepare('UPDATE guild_members SET contribution = contribution + ?, daily_contribution = daily_contribution + ? WHERE guild_id = ? AND player_id = ?')
+      .run(amount, amount, guildId, userId);
+
+    // 更新仙盟资金/经验
+    if (type === 'gold') {
+      db.prepare('UPDATE guilds SET fund = fund + ? WHERE id = ?').run(amount, guildId);
+    } else {
+      db.prepare('UPDATE guilds SET experience = experience + ? WHERE id = ?').run(amount, guildId);
+    }
+
+    // 记录日志
+    db.prepare(`
+      INSERT INTO guild_logs (guild_id, player_id, player_name, action, detail)
+      VALUES (?, ?, ?, 'contribute', ?)
+    `).run(guildId, userId, userName || `玩家${userId}`, `捐献 ${amount} ${type === 'gold' ? '灵石' : '经验'}`);
+
+    // 检查是否升级
+    const updatedGuild = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId);
+    const expNeeded = guildConfig.levelExp[updatedGuild.level] || 9999999;
+    let leveledUp = false;
+    if (updatedGuild.level < 10 && updatedGuild.experience >= expNeeded) {
+      db.prepare('UPDATE guilds SET level = level + 1 WHERE id = ?').run(guildId);
+      leveledUp = true;
+    }
+
+    // 获取更新后的贡献
+    const updatedMember = db.prepare('SELECT contribution FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+
+    res.json({
+      success: true,
+      message: leveledUp ? `捐献成功！仙盟升级了！` : '捐献成功',
+      contribution: updatedMember?.contribution || 0,
+      guildExp: updatedGuild.experience,
+      guildLevel: updatedGuild.level,
+      leveledUp
+    });
+  } catch (err) {
+    Logger.error('捐献失败:', err.message);
+    res.json({ success: false, message: '捐献失败: ' + err.message });
+  }
+});
+
+// 升级建筑
+router.post('/building/upgrade', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const { userId, guildId, buildingKey } = req.body;
+
+  if (!userId || !guildId || !buildingKey) {
+    return res.json({ success: false, message: '参数不完整' });
+  }
+
+  const guild = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId);
+  if (!guild) return res.json({ success: false, message: '仙盟不存在' });
+
+  const member = db.prepare('SELECT role, contribution FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+  if (!member) return res.json({ success: false, message: '您不是该仙盟成员' });
+  if (member.role === 'member') return res.json({ success: false, message: '权限不足' });
+
+  const buildingConfigs = {
+    hall: { name: '议事大厅', maxLevel: 10, cost: { gold: 50000, contrib: 1000 } },
+    depot: { name: '资源仓库', maxLevel: 10, cost: { gold: 30000, contrib: 600 } },
+    training: { name: '修炼室', maxLevel: 10, cost: { gold: 20000, contrib: 400 } },
+    shop: { name: '仙盟商店', maxLevel: 10, cost: { gold: 25000, contrib: 500 } }
+  };
+
+  const config = buildingConfigs[buildingKey];
+  if (!config) return res.json({ success: false, message: '建筑不存在' });
+
+  const current = db.prepare('SELECT level FROM guild_buildings WHERE guild_id = ? AND building_key = ?').get(guildId, buildingKey);
+  const currentLevel = current?.level || 0;
+  if (currentLevel >= config.maxLevel) return res.json({ success: false, message: '建筑已满级' });
+
+  if (guild.fund < config.cost.gold) return res.json({ success: false, message: '仙盟资金不足' });
+  if (member.contribution < config.cost.contrib) return res.json({ success: false, message: '个人贡献不足' });
+
+  try {
+    db.prepare(`
+      INSERT INTO guild_buildings (guild_id, building_key, level)
+      VALUES (?, ?, 1)
+      ON CONFLICT(guild_id, building_key) DO UPDATE SET level = level + 1
+    `).run(guildId, buildingKey);
+
+    db.prepare('UPDATE guilds SET fund = fund - ? WHERE id = ?').run(config.cost.gold, guildId);
+    db.prepare('UPDATE guild_members SET contribution = contribution - ? WHERE guild_id = ? AND player_id = ?')
+      .run(config.cost.contrib, guildId, userId);
+
+    db.prepare(`
+      INSERT INTO guild_logs (guild_id, player_id, player_name, action, detail)
+      VALUES (?, ?, ?, 'building_upgrade', ?)
+    `).run(guildId, userId, member.player_name || `玩家${userId}`, `升级${config.name}到${currentLevel + 1}级`);
+
+    const newLevel = currentLevel + 1;
+    res.json({ success: true, building: buildingKey, level: newLevel, message: `${config.name}升级成功！` });
+  } catch (err) {
+    Logger.error('升级建筑失败:', err.message);
+    res.json({ success: false, message: '升级失败' });
+  }
+});
+
+// 成员职位变更 (支持 /member/position 和 /set-role)
+router.post('/member/position', (req, res) => {
+  const { userId, guildId, targetPlayerId, role } = req.body;
+  if (!userId || !guildId || !targetPlayerId || !role) {
+    return res.json({ success: false, message: '参数不完整' });
+  }
+  if (!['elder', 'core', 'normal', 'member'].includes(role)) {
+    return res.json({ success: false, message: '无效角色' });
+  }
+
+  const member = db.prepare('SELECT role FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+  if (!member || member.role === 'member') return res.json({ success: false, message: '权限不足' });
+
+  try {
+    db.prepare('UPDATE guild_members SET role = ? WHERE guild_id = ? AND player_id = ?').run(role, guildId, targetPlayerId);
+    db.prepare(`
+      INSERT INTO guild_logs (guild_id, player_id, player_name, action, detail)
+      VALUES (?, ?, ?, 'set_role', ?)
+    `).run(guildId, userId, member.player_name || `玩家${userId}`, `设置玩家${targetPlayerId}为${role}`);
+
+    res.json({ success: true, message: `已任命为${role === 'elder' ? '长老' : role === 'core' ? '核心弟子' : '普通弟子'}` });
+  } catch (err) {
+    res.json({ success: false, message: '设置失败' });
+  }
+});
+
+// 活动列表
+router.get('/activity/list', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const { guildId } = req.query;
+  if (!guildId) return res.json({ success: false, message: '缺少 guildId' });
+
+  // 模拟活动数据 (可扩展为数据库存储)
+  const activities = [
+    { id: 1, name: '仙盟战', icon: '⚔️', reward: '大量贡献+灵石', status: 'available', nextTime: Date.now() + 3600000 },
+    { id: 2, name: '副本挑战', icon: '🗝️', reward: '稀有装备', status: 'available', nextTime: Date.now() + 7200000 },
+    { id: 3, name: '资源采集', icon: '⛏️', reward: '灵石+贡献', status: 'available', nextTime: Date.now() + 10800000 }
+  ];
+  res.json({ success: true, activities });
+});
+
+// 参加活动
+router.post('/activity/join', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const { userId, guildId, activityId } = req.body;
+  if (!userId || !guildId || !activityId) return res.json({ success: false, message: '参数不完整' });
+
+  const member = db.prepare('SELECT * FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+  if (!member) return res.json({ success: false, message: '您不是该仙盟成员' });
+
+  try {
+    db.prepare(`
+      INSERT INTO guild_logs (guild_id, player_id, player_name, action, detail)
+      VALUES (?, ?, ?, 'activity_join', ?)
+    `).run(guildId, userId, member.player_name || `玩家${userId}`, `参加了活动 ID:${activityId}`);
+
+    res.json({ success: true, message: '参加成功！' });
+  } catch (err) {
+    res.json({ success: false, message: '参加失败' });
+  }
+});
+
+// 仓库申请 (占位，后续可接入物品系统)
+router.post('/warehouse/request', (req, res) => {
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const { userId, guildId, itemId } = req.body;
+  if (!userId || !guildId) return res.json({ success: false, message: '参数不完整' });
+
+  const member = db.prepare('SELECT * FROM guild_members WHERE guild_id = ? AND player_id = ?').get(guildId, userId);
+  if (!member) return res.json({ success: false, message: '您不是该仙盟成员' });
+
+  res.json({ success: true, message: '已提交申请，等待审批' });
 });
 
 // setDb 注入（兼容主 server.js 模式）
