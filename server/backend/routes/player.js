@@ -389,6 +389,239 @@ router.post('/login', (req, res) => {
   res.json({ success: true, player, offlineReward: 0 });
 });
 
+// ============================================================
+// 离线收益系统
+// 规则：
+//   - 玩家离线时，每分钟获得挂机地图收益的50%
+//   - 单次离线最多计算4小时（240分钟）
+//   - 离线收益在玩家下次登录时一次性发放（前端登录时调用此接口）
+// ============================================================
+
+// 根据境界获取挂机基础收益（每分钟）
+function getAfkBaseReward(realm) {
+  const rewards = {
+    1: { cultivation: 5,   exp: 2,   lingshi: 1 },   // 炼气
+    2: { cultivation: 12,  exp: 5,   lingshi: 2 },  // 筑基
+    3: { cultivation: 30,  exp: 12,  lingshi: 5 },  // 金丹
+    4: { cultivation: 75,  exp: 30,  lingshi: 12 }, // 元婴
+    5: { cultivation: 180, exp: 70,  lingshi: 25 }, // 化神
+    6: { cultivation: 400, exp: 150, lingshi: 50 }, // 炼虚
+    7: { cultivation: 900, exp: 350, lingshi: 100 },// 大乘
+    8: { cultivation: 2000,exp: 800, lingshi: 200 },// 渡劫
+    9: { cultivation: 4500,exp: 1800,lingshi: 400 }, // 飞升
+  };
+  return rewards[realm] || rewards[1];
+}
+
+// VIP加成表（灵石额外倍率）
+const VIP_LINGSHI_MULTIPLIER = {
+  0: 1.0, 1: 1.1, 2: 1.2, 3: 1.3, 4: 1.5,
+  5: 1.8, 6: 2.0, 7: 2.2, 8: 2.5, 9: 2.8, 10: 3.0
+};
+
+/**
+ * GET /api/player/offline-reward
+ * 获取离线收益预览（玩家登录后前端调用，显示弹窗前预览）
+ * 不会实际发放奖励
+ */
+router.get('/offline-reward', (req, res) => {
+  const userId = parseInt(req.query.userId) || parseInt(req.query.player_id) || parseInt(req.get('X-User-Id')) || 1;
+
+  const path = require('path');
+  const DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
+
+  let db;
+  try {
+    const Database = require('better-sqlite3');
+    db = new Database(DB_PATH);
+  } catch (e) {
+    db = null;
+  }
+
+  if (!db) {
+    return res.json({ success: false, error: '数据库不可用' });
+  }
+
+  try {
+    // 确保 last_logout_at 字段存在（与 /api/auth/logout 保持一致）
+    try { db.exec("ALTER TABLE player ADD COLUMN last_logout_at TEXT"); } catch (_) {}
+
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const now = Date.now();
+    const lastLogout = player.last_logout_at ? new Date(player.last_logout_at).getTime() : null;
+
+    if (!lastLogout) {
+      return res.json({
+        success: true,
+        hasOfflineReward: false,
+        offlineMinutes: 0,
+        message: '无离线记录'
+      });
+    }
+
+    const offlineMs = now - lastLogout;
+    const offlineMinutes = Math.min(Math.floor(offlineMs / 60000), 240); // 最多240分钟
+
+    if (offlineMinutes < 1) {
+      return res.json({
+        success: true,
+        hasOfflineReward: false,
+        offlineMinutes: 0,
+        message: '离线时间不足1分钟'
+      });
+    }
+
+    const realm = player.realm_level || 1;
+    const vipLevel = player.vip_level || 0;
+    const vipMultiplier = VIP_LINGSHI_MULTIPLIER[vipLevel] || 1.0;
+    const base = getAfkBaseReward(realm);
+
+    // 离线收益 = 挂机收益 × 50% × 离线分钟数
+    const cultivationGain = Math.floor(base.cultivation * offlineMinutes * 0.5);
+    const expGain = Math.floor(base.exp * offlineMinutes * 0.5);
+    const lingshiGain = Math.floor(base.lingshi * offlineMinutes * 0.5 * vipMultiplier);
+
+    return res.json({
+      success: true,
+      hasOfflineReward: true,
+      offlineMinutes,
+      maxMinutes: 240,
+      realm,
+      vipLevel,
+      vipMultiplier,
+      rewards: {
+        cultivation: cultivationGain,
+        exp: expGain,
+        lingshi: lingshiGain
+      },
+      // 挂机地图原始收益（用于显示）
+      baseRewardPerMinute: {
+        cultivation: base.cultivation,
+        exp: base.exp,
+        lingshi: base.lingshi
+      },
+      offlineRate: 0.5, // 离线收益为挂机的50%
+      message: `离线${offlineMinutes}分钟，预计获得灵气+${cultivationGain}，经验+${expGain}，灵石+${lingshiGain}`
+    });
+  } catch (e) {
+    console.error('[player] GET /offline-reward 错误:', e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * POST /api/player/offline-reward
+ * 领取离线收益（玩家登录后前端调用，正式发放奖励）
+ */
+router.post('/offline-reward', (req, res) => {
+  const userId = parseInt(req.body.userId) || parseInt(req.body.player_id) || parseInt(req.get('X-User-Id')) || 1;
+
+  const path = require('path');
+  const DB_PATH = path.join(__dirname, '..', 'data', 'game.db');
+
+  let db;
+  try {
+    const Database = require('better-sqlite3');
+    db = new Database(DB_PATH);
+  } catch (e) {
+    db = null;
+  }
+
+  if (!db) {
+    return res.json({ success: false, error: '数据库不可用' });
+  }
+
+  try {
+    // 确保 last_logout_at 字段存在（与 /api/auth/logout 保持一致）
+    try { db.exec("ALTER TABLE player ADD COLUMN last_logout_at TEXT"); } catch (_) {}
+
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+    if (!player) {
+      return res.status(404).json({ success: false, error: '玩家不存在' });
+    }
+
+    const now = Date.now();
+    const lastLogout = player.last_logout_at ? new Date(player.last_logout_at).getTime() : null;
+
+    if (!lastLogout) {
+      return res.json({
+        success: true,
+        claimed: false,
+        offlineMinutes: 0,
+        message: '无离线记录，无需领取'
+      });
+    }
+
+    const offlineMs = now - lastLogout;
+    const offlineMinutes = Math.min(Math.floor(offlineMs / 60000), 240);
+
+    if (offlineMinutes < 1) {
+      // 清空登出时间
+      db.prepare('UPDATE player SET last_logout_at = NULL, last_login = CURRENT_TIMESTAMP WHERE id = ?').run(userId);
+      return res.json({
+        success: true,
+        claimed: false,
+        offlineMinutes: 0,
+        message: '离线时间不足1分钟'
+      });
+    }
+
+    const realm = player.realm_level || 1;
+    const vipLevel = player.vip_level || 0;
+    const vipMultiplier = VIP_LINGSHI_MULTIPLIER[vipLevel] || 1.0;
+    const base = getAfkBaseReward(realm);
+
+    const cultivationGain = Math.floor(base.cultivation * offlineMinutes * 0.5);
+    const expGain = Math.floor(base.exp * offlineMinutes * 0.5);
+    const lingshiGain = Math.floor(base.lingshi * offlineMinutes * 0.5 * vipMultiplier);
+
+    // 发放奖励
+    if (lingshiGain > 0) {
+      db.prepare('UPDATE Users SET lingshi = lingshi + ?, updatedAt = ? WHERE id = ?').run(lingshiGain, new Date().toISOString(), userId);
+      db.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(lingshiGain, userId);
+    }
+
+    if (expGain > 0) {
+      db.prepare('UPDATE player SET exp = exp + ? WHERE id = ?').run(expGain, userId);
+    }
+
+    // 更新 cultivation 表的 accumulatedPower（如果存在）
+    try {
+      db.prepare('UPDATE Cultivations SET accumulatedPower = accumulatedPower + ? WHERE userId = ?').run(cultivationGain, userId);
+    } catch (_) {}
+
+    // 清空 last_logout_at，更新 last_login
+    db.prepare('UPDATE player SET last_logout_at = NULL, last_login = CURRENT_TIMESTAMP WHERE id = ?').run(userId);
+
+    console.log(`[offline-reward] 玩家${userId}领取离线收益：离线${offlineMinutes}分钟，灵气+${cultivationGain}，经验+${expGain}，灵石+${lingshiGain}`);
+
+    return res.json({
+      success: true,
+      claimed: true,
+      offlineMinutes,
+      realm,
+      vipLevel,
+      rewards: {
+        cultivation: cultivationGain,
+        exp: expGain,
+        lingshi: lingshiGain
+      },
+      message: `离线${offlineMinutes}分钟，领取成功！灵气+${cultivationGain}，经验+${expGain}，灵石+${lingshiGain}`
+    });
+  } catch (e) {
+    console.error('[player] POST /offline-reward 错误:', e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ============================================================
+// 原有挂机/AFK系统保留，不受离线收益影响
+// ============================================================
+
 // GET /api/player/bag?type=equipment - 返回玩家装备背包
 router.get('/bag', (req, res) => {
   const userId = req.userId || parseInt(req.query.userId || req.query.player_id || 1) || 1;
