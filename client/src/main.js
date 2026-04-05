@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import './assets/mobile.css'
+import './css/battle-animations.css'
 
 const routes = [
   { path: '/', component: () => import('./components/MainLayout.vue') },

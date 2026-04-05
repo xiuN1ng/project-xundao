@@ -536,4 +536,277 @@ export default {
 .history-icon {
   font-size: 14px;
 }
+
+/* 境界突破动画样式 */
+.realm-breakthrough-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: breakthroughOverlayIn 0.5s ease-out forwards;
+}
+
+@keyframes breakthroughOverlayIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* 金光从中心扩散 */
+.golden-light-expand {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 215, 0, 0.8) 0%,
+    rgba(255, 180, 0, 0.5) 30%,
+    rgba(255, 140, 0, 0.2) 60%,
+    transparent 80%
+  );
+  transform: translate(-50%, -50%);
+  animation: goldenLightExpand 2.0s ease-out forwards;
+  will-change: transform, width, height;
+  pointer-events: none;
+}
+
+@keyframes goldenLightExpand {
+  0% { width: 0; height: 0; opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { width: 200vmax; height: 200vmax; opacity: 0; }
+}
+
+/* 金光波纹 */
+.golden-ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 4px solid rgba(255, 215, 0, 0.6);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: goldenRipple 1.5s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes goldenRipple {
+  0% { width: 50px; height: 50px; opacity: 1; border-width: 4px; }
+  100% { width: 800px; height: 800px; opacity: 0; border-width: 1px; }
+}
+
+/* 灵气粒子 */
+.spirit-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.spirit-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 215, 0, 1) 0%,
+    rgba(255, 180, 0, 0.6) 40%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  animation: spiritParticleFloat var(--duration, 2s) ease-in-out forwards;
+  animation-delay: var(--delay, 0s);
+  will-change: transform, opacity;
+}
+
+@keyframes spiritParticleFloat {
+  0% {
+    opacity: 0;
+    transform: translate(
+      calc(var(--start-x) - 50%),
+      calc(var(--start-y) - 50% + 50px)
+    ) scale(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(
+      calc(var(--start-x) - 50% + var(--drift-x) * 0.3),
+      calc(var(--start-y) - 50% - 100px)
+    ) scale(1.2);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(
+      calc(var(--start-x) - 50% + var(--drift-x) * 0.6),
+      calc(var(--start-y) - 50% - 200px)
+    ) scale(1);
+  }
+  80% {
+    opacity: 0.5;
+    transform: translate(
+      calc(var(--start-x) - 50% + var(--drift-x)),
+      calc(var(--start-y) - 50% - 350px)
+    ) scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(
+      calc(var(--start-x) - 50% + var(--drift-x) * 1.2),
+      calc(var(--start-y) - 50% - 500px)
+    ) scale(0);
+  }
+}
+
+/* 境界名称大字显示 */
+.realm-name-display {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 10001;
+  will-change: transform, opacity;
+}
+
+.realm-name-text {
+  font-size: 72px;
+  font-weight: bold;
+  font-family: 'KaiTi', 'STKaiti', 'SimSun', serif;
+  background: linear-gradient(
+    180deg,
+    #fff 0%,
+    #ffd700 30%,
+    #ff8c00 70%,
+    #ff4500 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.8))
+          drop-shadow(0 0 40px rgba(255, 140, 0, 0.6))
+          drop-shadow(0 0 60px rgba(255, 69, 0, 0.4));
+  animation: realmNameAppear 2.5s ease-out forwards;
+}
+
+@keyframes realmNameAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(30px);
+    filter: blur(10px);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.15) translateY(-10px);
+    filter: blur(0);
+  }
+  35% { transform: scale(1) translateY(0); }
+  70% { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(1.1) translateY(-30px); filter: blur(5px); }
+}
+
+.realm-subtitle {
+  font-size: 28px;
+  color: rgba(255, 215, 0, 0.8);
+  margin-top: 20px;
+  animation: realmSubtitleFade 2.5s ease-out forwards;
+}
+
+@keyframes realmSubtitleFade {
+  0% { opacity: 0; transform: translateY(20px); }
+  30% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
+
+/* 突破成功闪光 */
+.breakthrough-success-flash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: white;
+  pointer-events: none;
+  z-index: 10002;
+  animation: breakthroughFlash 0.5s ease-out forwards;
+}
+
+@keyframes breakthroughFlash {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+/* 突破震动 */
+.breakthrough-shake {
+  animation: breakthroughShake 0.8s ease-out forwards;
+}
+
+@keyframes breakthroughShake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-12px, -8px); }
+  20% { transform: translate(10px, 6px); }
+  30% { transform: translate(-8px, 5px); }
+  40% { transform: translate(6px, -4px); }
+  50% { transform: translate(-5px, 3px); }
+  60% { transform: translate(4px, -2px); }
+  70% { transform: translate(-3px, 2px); }
+  80% { transform: translate(2px, -1px); }
+  90% { transform: translate(-1px, 1px); }
+}
+
+/* 跳过提示 */
+.breakthrough-skip-hint {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  animation: skipHintPulse 2s ease-in-out infinite;
+}
+
+@keyframes skipHintPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* 预览按钮 */
+.preview-breakthrough-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  color: #ffd700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.preview-breakthrough-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: rgba(255, 215, 0, 0.5);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .realm-name-text { font-size: 48px; }
+  .realm-subtitle { font-size: 20px; }
+}
+
+@media (max-width: 480px) {
+  .realm-name-text { font-size: 36px; }
+  .realm-subtitle { font-size: 18px; }
+}
 </style>

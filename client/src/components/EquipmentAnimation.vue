@@ -349,37 +349,147 @@ watch(() => props.show, (newVal) => {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* 过渡动画 */
+/* 过渡动画 - 改进的滑入+闪光效果 */
 .equipment-enter-active {
-  animation: equipmentIn 0.5s ease-out;
+  animation: equipmentIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 .equipment-leave-active {
-  animation: equipmentOut 0.3s ease-in;
+  animation: equipmentOut 0.4s ease-in forwards;
 }
 
 @keyframes equipmentIn {
   0% {
     opacity: 0;
-    transform: scale(0.3) rotate(-10deg);
+    transform: scale(0.2) translateY(100px) rotate(-15deg);
   }
   50% {
-    transform: scale(1.1) rotate(5deg);
+    transform: scale(1.1) translateY(-20px) rotate(5deg);
+  }
+  70% {
+    transform: scale(0.95) translateY(10px) rotate(-2deg);
   }
   100% {
     opacity: 1;
-    transform: scale(1) rotate(0deg);
+    transform: scale(1) translateY(0) rotate(0deg);
   }
 }
 
 @keyframes equipmentOut {
   0% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
   100% {
     opacity: 0;
-    transform: scale(0.5);
+    transform: scale(0.5) translateY(-50px);
+  }
+}
+
+/* 装备滑入闪光效果 */
+.equipment-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  animation: equipmentGlowSlide 0.8s ease-out forwards;
+  animation-delay: 0.3s;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes equipmentGlowSlide {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+/* 装备图标弹入动画 */
+.equipment-icon {
+  font-size: 80px;
+  margin-bottom: 15px;
+  animation: equipmentIconBounce 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes equipmentIconBounce {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.3) rotate(20deg);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.85) rotate(-10deg);
+  }
+  85% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* 装备名称文字闪烁出现 */
+.equipment-name {
+  font-size: 24px;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 8px;
+  animation: equipmentNameAppear 0.5s ease-out forwards;
+  animation-delay: 0.4s;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+@keyframes equipmentNameAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 属性依次显示动画 */
+.attr-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 16px;
+  opacity: 0;
+  animation: equipmentAttrShow 0.4s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+.attr-row:nth-child(1) { animation-delay: 0.5s; }
+.attr-row:nth-child(2) { animation-delay: 0.6s; }
+.attr-row:nth-child(3) { animation-delay: 0.7s; }
+.attr-row:nth-child(4) { animation-delay: 0.8s; }
+.attr-row:nth-child(5) { animation-delay: 0.9s; }
+
+@keyframes equipmentAttrShow {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 </style>
