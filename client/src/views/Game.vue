@@ -42,6 +42,7 @@
       <AbyssDungeonPanel v-if="activeTab === 'abyss'" />
       <ClanPanel v-if="activeTab === 'clan'" />
       <EquipmentEnhancePanel v-if="activeTab === 'equipment-enhance'" />
+      <FashionPanel v-if="activeTab === 'fashion'" />
     </main>
 
     <!-- 全局动画组件 -->
@@ -78,6 +79,7 @@ import RealmDungeonPanel from '../components/RealmDungeonPanel.vue'
 import AbyssDungeonPanel from '../components/AbyssDungeonPanel.vue'
 import ClanPanel from '../components/ClanPanel.vue'
 import EquipmentEnhancePanel from '../components/EquipmentEnhancePanel.vue'
+import FashionPanel from '../components/FashionPanel.vue'
 
 const playerStore = usePlayerStore()
 const player = playerStore.player
@@ -106,7 +108,8 @@ const tabs = [
   { id: 'activity', name: '活动', icon: '🎁' },
   { id: 'friend', name: '好友', icon: '👥' },
   { id: 'rank', name: '排行', icon: '📊' },
-  { id: 'shop', name: '商店', icon: '🛒' }
+  { id: 'shop', name: '商店', icon: '🛒' },
+  { id: 'fashion', name: '时装', icon: '👗' }
 ]
 </script>
 
