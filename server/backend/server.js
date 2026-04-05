@@ -273,7 +273,7 @@ try {
     DIFFICULTY_CONFIG,
     PROTECTION_ITEMS,
     REALMS: Object.values(tribulationSystem.REALM_DATA),
-    db: null  // db 由 tribulationStorage 自己管理
+    db: db  // 注入数据库引用供 tribulation 路由查询玩家境界
   });
 } catch(e) {
   console.log('[tribulation configure]', e.message);

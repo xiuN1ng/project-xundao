@@ -161,6 +161,28 @@ function getWealthRank(limit = 50) {
 }
 
 // 获取章节/爬塔榜（基于 tower_progress.highest_floor，排除 fake AI）
+function getRealmRank(n) {
+  try {
+    return db.prepare(`
+      SELECT pl.id, u.username, u.level, pl.realm, pl.realm_level
+      FROM player pl
+      JOIN Users u ON pl.id = u.id
+      WHERE pl.id > 0 AND pl.realm > 0
+      ORDER BY pl.realm DESC, pl.realm_level DESC
+      LIMIT ?
+    `).all(n).map((p, i) => ({
+      rank: i + 1,
+      playerId: p.id,
+      name: p.username,
+      level: p.level,
+      realm: p.realm,
+      realm_level: p.realm_level
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
 function getChapterRank(limit = 50) {
   if (!db) return [];
   try {
@@ -385,8 +407,9 @@ router.get('/:type', (req, res) => {
     case 'level':  result = getLevelRank(n);  break;
     case 'wealth': result = getWealthRank(n); break;
     case 'chapter': result = getChapterRank(n); break;
+    case 'realm': result = getRealmRank(n); break;
     default:
-      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter'] });
+      return res.json({ success: false, error: '未知排行榜类型', types: ['combat', 'level', 'wealth', 'chapter', 'realm'] });
   }
 
   // 附加当前玩家排名（仅当 uid > 0 时）
@@ -402,6 +425,12 @@ router.get('/:type', (req, res) => {
     if (type === 'wealth') {
       try {
         const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM Users WHERE id > 0 AND lingshi > (SELECT lingshi FROM Users WHERE id = ?)`).get(uid);
+        myRankInfo = { myRank: rank.r };
+      } catch (e) {}
+    }
+    if (type === 'realm') {
+      try {
+        const rank = db.prepare(`SELECT COUNT(*) + 1 as r FROM player WHERE id > 0 AND (realm > (SELECT realm FROM player WHERE id = ?) OR (realm = (SELECT realm FROM player WHERE id = ?) AND realm_level > (SELECT realm_level FROM player WHERE id = ?)))`).get(uid, uid, uid);
         myRankInfo = { myRank: rank.r };
       } catch (e) {}
     }

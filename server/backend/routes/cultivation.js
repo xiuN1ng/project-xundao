@@ -537,7 +537,7 @@ router.post('/breakthrough', (req, res) => {
     db.prepare('UPDATE Cultivations SET value = 0, realm = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, breakthroughCultivationPower, userId);
     // 同步更新 Users 表（权威源）和 player 表
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
-    db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
+    db.prepare('UPDATE player SET realm = ?, realm_level = ?, level = level + 1 WHERE id = ?').run(nextRealm, nextRealm, userId);
     
     // 成就触发：境界突破
     if (achievementTrigger) {
@@ -611,7 +611,7 @@ router.post('/advance', (req, res) => {
 
     db.prepare('UPDATE Cultivations SET value = 0, realm = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, breakthroughCultivationPower, userId);
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
-    db.prepare('UPDATE player SET realm = ?, level = level + 1 WHERE id = ?').run(nextRealm, userId);
+    db.prepare('UPDATE player SET realm = ?, realm_level = ?, level = level + 1 WHERE id = ?').run(nextRealm, nextRealm, userId);
 
     if (achievementTrigger) {
       try {
