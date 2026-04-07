@@ -9142,6 +9142,15 @@ try {
   Logger.warn('⚠ 宗门建设路由加载失败:', e.message);
 }
 
+// ==================== 成就系统增强路由 (P1-6) ====================
+try {
+  const achievementRoute = require('./backend/routes/achievement');
+  app.use('/api/ach2', achievementRoute);
+  Logger.info('✓ 成就系统增强路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 成就系统增强路由加载失败:', e.message);
+}
+
 // 导出db实例供其他模块使用
 module.exports = app;
 module.exports.db = db;

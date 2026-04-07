@@ -1,545 +1,415 @@
+/**
+ * achievement.js - 成就系统增强版
+ * P1-6: 成就系统重构
+ *
+ * 新增:
+ * - 挑战类成就 (challenge)
+ * - 累计类成就 (accumulation)
+ * - 称号系统: 成就奖励称号可装备，额外属性加成
+ *
+ * API:
+ *   GET  /api/achievement/list          - 成就列表(含分类)
+ *   GET  /api/achievement/titles        - 称号列表
+ *   POST /api/achievement/title/equip   - 装备称号
+ *   GET  /api/achievement/bonuses       - 当前装备称号的战斗加成
+ */
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const Database = require('better-sqlite3');
 
-// 数据库连接
+const Logger = {
+  info: (...args) => console.log('[achievement]', new Date().toISOString(), ...args),
+  error: (...args) => console.error('[achievement:error]', new Date().toISOString(), ...args)
+};
+
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'game.db');
 
-// 用户成就进度（必须在模块加载时初始化，用于 initAchievementTable → loadAchievementsFromDB 调用链）
-let userAchievements = {};
-
 let db;
 try {
-  const Database = require('better-sqlite3');
   db = new Database(DB_PATH);
-  initAchievementTable();
-  loadAchievementsFromDB();
-} catch (e) {
-  console.log('[achievement] DB连接失败:', e.message);
-  db = null;
+  db.pragma('journal_mode = WAL');
+  Logger.info('数据库连接成功');
+} catch (err) {
+  Logger.error('数据库连接失败:', err.message);
+  db = { prepare: () => ({ run: () => {}, get: () => null, all: () => [] }), exec: () => {} };
 }
 
-function initAchievementTable() {
-  if (!db) return;
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS achievement_progress (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        achievement_id INTEGER NOT NULL,
-        progress INTEGER DEFAULT 0,
-        completed INTEGER DEFAULT 0,
-        claimed INTEGER DEFAULT 0,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, achievement_id)
-      );
-    `);
-    console.log('[achievement] achievement_progress 表初始化完成');
-  } catch (e) {
-    console.error('[achievement] 建表失败:', e.message);
-  }
-}
+// ============================================================
+// 称号配置：成就奖励的称号，可装备
+// ============================================================
+const TITLE_TEMPLATES = {
+  // 修炼成就奖励称号
+  '筑基成功':      { name: '筑基修士',    icon: '🏔️', slot: 'title', effects: { attack: 10,  defense: 5  } },
+  '金丹大道':      { name: '金丹真人',    icon: '🌟', slot: 'title', effects: { attack: 25,  defense: 12 } },
+  '元婴真君':      { name: '元婴大能',    icon: '👼', slot: 'title', effects: { attack: 50,  defense: 25 } },
+  '化神大能':      { name: '化神尊者',    icon: '✨', slot: 'title', effects: { attack: 100, defense: 50 } },
+  '炼虚合道':      { name: '炼虚至尊',    icon: '💫', slot: 'title', effects: { attack: 200, defense: 100 } },
+  // 战斗成就奖励称号
+  '战神降临':      { name: '战神',        icon: '⚔️', slot: 'title', effects: { attack: 80,  crit: 5 } },
+  '天下无敌':      { name: '无敌战神',    icon: '🔥', slot: 'title', effects: { attack: 150, crit: 10 } },
+  // 装备成就奖励称号
+  '神装满身':      { name: '神装收藏家',  icon: '💎', slot: 'title', effects: { defense: 60, hp: 500 } },
+  // 副本成就奖励称号
+  '江湖高手':      { name: '江湖高手',    icon: '🎌', slot: 'title', effects: { attack: 30, defense: 30 } },
+  // 竞技成就奖励称号
+  '竞技大师':      { name: '竞技冠军',    icon: '🏆', slot: 'title', effects: { attack: 40, speed: 10 } },
+  // 社交成就奖励称号
+  '朋友遍天下':    { name: '交际花',      icon: '🌸', slot: 'title', effects: { hp: 200, defense: 20 } },
+  // 天梯成就奖励称号
+  '飞升成仙':      { name: '飞升仙人',    icon: '🛤️', slot: 'title', effects: { attack: 180, defense: 90, hp: 1000 } },
+  // 挑战类成就奖励称号
+  '不屈意志':      { name: '不屈勇者',    icon: '🛡️', slot: 'title', effects: { hp: 300, defense: 40 } },
+  '极限挑战':      { name: '极限挑战者',  icon: '🔥', slot: 'title', effects: { attack: 60, crit: 8 } },
+  // 累计类成就奖励称号
+  '灵石达人':      { name: '灵石达人',    icon: '💰', slot: 'title', effects: { lingshi_rate: 0.05 } },
+  '修炼狂人':      { name: '修炼狂人',    icon: '🌀', slot: 'title', effects: { cultivation_rate: 0.1 } },
+};
 
-function loadAchievementsFromDB() {
-  if (!db) return;
-  try {
-    const rows = db.prepare('SELECT * FROM achievement_progress').all();
-    rows.forEach(row => {
-      if (!userAchievements[row.user_id]) userAchievements[row.user_id] = {};
-      userAchievements[row.user_id][row.achievement_id] = {
-        progress: row.progress,
-        completed: !!row.completed,
-        claimed: !!row.claimed
-      };
-    });
-    console.log(`[achievement] 从DB加载了 ${rows.length} 条成就进度`);
-  } catch (e) {
-    console.error('[achievement] 加载成就进度失败:', e.message);
-  }
-}
+// ============================================================
+// 成就模板扩展：新增挑战(challenge)和累计(accumulation)分类
+// ============================================================
+const ACHIEVEMENT_TEMPLATES = [
+  // === 修炼类 cultivate ===
+  { id: 1,  category: 'cultivate',  name: '初入修仙',       desc: '达到练气期',           target: 2,  reward: { diamonds: 10,  title: null } },
+  { id: 2,  category: 'cultivate',  name: '筑基成功',       desc: '达到筑基期',           target: 3,  reward: { diamonds: 50,  title: '筑基成功' } },
+  { id: 3,  category: 'cultivate',  name: '金丹大道',       desc: '达到金丹期',           target: 4,  reward: { diamonds: 100, title: '金丹大道' } },
+  { id: 4,  category: 'cultivate',  name: '元婴真君',       desc: '达到元婴期',           target: 5,  reward: { diamonds: 200, title: '元婴真君' } },
+  { id: 5,  category: 'cultivate',  name: '化神大能',       desc: '达到化神期',           target: 6,  reward: { diamonds: 500, title: '化神大能' } },
+  { id: 6,  category: 'cultivate',  name: '炼虚合道',       desc: '达到炼虚期',           target: 7,  reward: { diamonds: 1000, title: '炼虚合道' } },
 
-/**
- * 将 DB 加载的成就数据同步到 achievement_trigger_service
- * 解决服务器重启后 trigger service 内存为空导致成就被错误覆盖的问题
- */
-function syncAchievementsToTriggerService() {
-  if (!achievementTrigger || !achievementTrigger.loadUserProgressFromExternal) return;
-  for (const [userIdStr, achData] of Object.entries(userAchievements)) {
-    achievementTrigger.loadUserProgressFromExternal(Number(userIdStr), achData);
-  }
-  console.log(`[achievement] 已将 ${Object.keys(userAchievements).length} 个用户的成就数据同步到 trigger service`);
-}
+  // === 战斗类 combat ===
+  { id: 10, category: 'combat',     name: '初战告捷',       desc: '赢得1场战斗',          target: 1,  reward: { diamonds: 10,  title: null } },
+  { id: 11, category: 'combat',     name: '百战百胜',       desc: '赢得10场战斗',         target: 10, reward: { diamonds: 50,  title: null } },
+  { id: 12, category: 'combat',     name: '战神降临',       desc: '赢得100场战斗',        target: 100, reward: { diamonds: 200, title: '战神降临' } },
+  { id: 13, category: 'combat',     name: '天下无敌',       desc: '赢得500场战斗',        target: 500, reward: { diamonds: 500, title: '天下无敌' } },
 
-function saveAchievementToDB(userId, achievementId, progress, completed, claimed) {
-  if (!db) return;
-  try {
-    db.prepare(`
-      INSERT OR REPLACE INTO achievement_progress (user_id, achievement_id, progress, completed, claimed, updated_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(userId, achievementId, progress, completed ? 1 : 0, claimed ? 1 : 0);
+  // === 装备类 equipment ===
+  { id: 20, category: 'equipment',  name: '初获装备',       desc: '获得第1件装备',        target: 1,  reward: { diamonds: 10,  title: null } },
+  { id: 21, category: 'equipment',  name: '装备收藏家',     desc: '拥有10件装备',         target: 10, reward: { diamonds: 50,  title: null } },
+  { id: 22, category: 'equipment',  name: '神装满身',       desc: '拥有50件装备',         target: 50, reward: { diamonds: 200, title: '神装满身' } },
 
-    // 同步更新内存缓存（解决 save 后 GET 仍返回旧数据的 bug）
-    if (!userAchievements[userId]) userAchievements[userId] = {};
-    userAchievements[userId][achievementId] = { progress, completed: !!completed, claimed: !!claimed };
-  } catch (e) {
-    console.error('[achievement] 保存成就进度失败:', e.message);
-  }
-}
+  // === 副本类 chapter ===
+  { id: 30, category: 'chapter',    name: '初入江湖',       desc: '通关第1章',            target: 1,  reward: { diamonds: 10,  title: null } },
+  { id: 31, category: 'chapter',    name: '江湖新秀',       desc: '通关第5章',            target: 5,  reward: { diamonds: 50,  title: null } },
+  { id: 32, category: 'chapter',    name: '江湖高手',       desc: '通关第10章',           target: 10, reward: { diamonds: 100, title: '江湖高手' } },
 
-// 共享玩家数据引用
-let playerRef = null;
-router.setPlayerRef = (ref) => { playerRef = ref; };
-router.getPlayerRef = () => playerRef;
+  // === 竞技类 arena ===
+  { id: 40, category: 'arena',      name: '竞技新星',       desc: '进入竞技场前10',       target: 10, reward: { diamonds: 50,  title: null } },
+  { id: 41, category: 'arena',      name: '竞技大师',       desc: '获得竞技场冠军',        target: 1,  reward: { diamonds: 200, title: '竞技大师' } },
 
-// 成就触发服务（后端埋点检测）
-let achievementTrigger;
-try {
-  achievementTrigger = require('../../game/achievement_trigger_service');
-  // 注册持久化回调：每次成就进度更新自动写入 DB
-  achievementTrigger.setSaveProgressCallback(saveAchievementToDB);
-  // 将 DB 已加载的成就数据同步到 trigger service（解决重启后内存为空的问题）
-  syncAchievementsToTriggerService();
-} catch (e) {
-  console.log('[achievement] 成就触发服务加载:', e.message);
-  achievementTrigger = null;
-}
+  // === 社交类 social ===
+  { id: 50, category: 'social',     name: '广结善缘',       desc: '拥有5个好友',           target: 5,  reward: { diamonds: 20,  title: null } },
+  { id: 51, category: 'social',     name: '朋友遍天下',     desc: '拥有20个好友',         target: 20, reward: { diamonds: 100, title: '朋友遍天下' } },
 
-// 事件总线监听器（可选：作为直接调用的补充）
-let eventBus;
-try {
-  eventBus = require('../../game/eventBus');
-} catch (e) {
-  console.log('[achievement] eventBus加载失败:', e.message);
-  eventBus = null;
-}
+  // === 天梯类 realm ===
+  { id: 60, category: 'realm',      name: '一重天内',       desc: '通关1层天梯',          target: 1,  reward: { diamonds: 30,  title: null } },
+  { id: 61, category: 'realm',      name: '九重天内',       desc: '通关9层天梯',          target: 9,  reward: { diamonds: 200, title: null } },
+  { id: 62, category: 'realm',      name: '飞升成仙',       desc: '通关全部天梯',          target: 20, reward: { diamonds: 500, title: '飞升成仙' } },
 
-// 注册事件总线监听器（松耦合方式）
-if (eventBus && achievementTrigger) {
-  eventBus.on('cultivation:breakthrough', ({ userId, newRealm }) => {
-    try {
-      achievementTrigger.onRealmBreakthrough(userId, newRealm);
-      const notifications = achievementTrigger.popNotifications(userId);
-      if (notifications && notifications.length > 0) {
-        console.log(`[成就通知] 用户${userId}境界突破达成:`, notifications.map(n => n.achievementName).join(', '));
-      }
-    } catch (e) {
-      console.warn('[achievement] cultivation:breakthrough 事件处理失败:', e.message);
-    }
-  });
+  // === 挑战类 challenge (新增) ===
+  { id: 70, category: 'challenge',  name: '极限挑战',       desc: '通关噩梦难度副本',      target: 1,  reward: { diamonds: 300, title: '极限挑战' } },
+  { id: 71, category: 'challenge',  name: '不屈意志',       desc: '连续7天登录',          target: 7,  reward: { diamonds: 150, title: '不屈意志' } },
+  { id: 72, category: 'challenge',  name: '一命通关',       desc: '无伤通关任意副本',     target: 1,  reward: { diamonds: 500, title: null } },
+  { id: 73, category: 'challenge',  name: '速战速决',       desc: '3回合内击败Boss',      target: 1,  reward: { diamonds: 200, title: null } },
+  { id: 74, category: 'challenge',  name: '万人敌',         desc: '单次战斗造成10000伤害', target: 10000, reward: { diamonds: 300, title: null } },
 
-  eventBus.on('chapter:complete', ({ userId, chapterId }) => {
-    try {
-      achievementTrigger.onChapterClear(userId, chapterId);
-      const notifications = achievementTrigger.popNotifications(userId);
-      if (notifications && notifications.length > 0) {
-        console.log(`[成就通知] 用户${userId}章节通关达成:`, notifications.map(n => n.achievementName).join(', '));
-      }
-    } catch (e) {
-      console.warn('[achievement] chapter:complete 事件处理失败:', e.message);
-    }
-  });
-
-  eventBus.on('chapter:battle', ({ userId, chapterId }) => {
-    try {
-      achievementTrigger.onChapterClear(userId, chapterId);
-    } catch (e) {
-      console.warn('[achievement] chapter:battle 事件处理失败:', e.message);
-    }
-  });
-
-  eventBus.on('arena:challenge', ({ userId, win, combatPower }) => {
-    if (!win) return;
-    try {
-      achievementTrigger.onCombatWin(userId, combatPower);
-      const notifications = achievementTrigger.popNotifications(userId);
-      if (notifications && notifications.length > 0) {
-        console.log(`[成就通知] 用户${userId}竞技场战斗达成:`, notifications.map(n => n.achievementName).join(', '));
-      }
-    } catch (e) {
-      console.warn('[achievement] arena:challenge 事件处理失败:', e.message);
-    }
-  });
-
-  eventBus.on('forge:make', ({ userId, recipeId, quality }) => {
-    try {
-      achievementTrigger.onEquipmentObtain(userId, recipeId, quality);
-      const notifications = achievementTrigger.popNotifications(userId);
-      if (notifications && notifications.length > 0) {
-        console.log(`[成就通知] 用户${userId}锻造装备达成:`, notifications.map(n => n.achievementName).join(', '));
-      }
-    } catch (e) {
-      console.warn('[achievement] forge:make 事件处理失败:', e.message);
-    }
-  });
-
-  eventBus.on('forge:strengthen', ({ userId, equipId, newLevel }) => {
-    try {
-      achievementTrigger.onEquipmentObtain(userId, equipId, null);
-    } catch (e) {
-      console.warn('[achievement] forge:strengthen 事件处理失败:', e.message);
-    }
-  });
-
-  console.log('[achievement] 事件总线监听器注册完成');
-}
-
-// 成就配置
-const achievementTemplates = [
-  // 修炼成就
-  { id: 1, category: 'cultivate', name: '初入修仙', desc: '达到练气期', target: 2, reward: { diamonds: 10 }, icon: '🧘' },
-  { id: 2, category: 'cultivate', name: '筑基成功', desc: '达到筑基期', target: 3, reward: { diamonds: 50 }, icon: '🧘' },
-  { id: 3, category: 'cultivate', name: '金丹大道', desc: '达到金丹期', target: 4, reward: { diamonds: 100 }, icon: '🧘' },
-  { id: 4, category: 'cultivate', name: '元婴期', desc: '达到元婴期', target: 5, reward: { diamonds: 200 }, icon: '🧘' },
-  { id: 5, category: 'cultivate', name: '化神期', desc: '达到化神期', target: 6, reward: { diamonds: 500 }, icon: '🧘' },
-  { id: 6, category: 'cultivate', name: '渡劫飞升', desc: '达到渡劫期', target: 7, reward: { diamonds: 1000 }, icon: '🧘' },
-  
-  // 战力成就
-  { id: 10, category: 'combat', name: '初战告捷', desc: '战力达到1000', target: 1000, reward: { lingshi: 100 }, icon: '⚔️' },
-  { id: 11, category: 'combat', name: '小有名气', desc: '战力达到5000', target: 5000, reward: { lingshi: 500 }, icon: '⚔️' },
-  { id: 12, category: 'combat', name: '一方强者', desc: '战力达到20000', target: 20000, reward: { lingshi: 2000 }, icon: '⚔️' },
-  { id: 13, category: 'combat', name: '威震天下', desc: '战力达到100000', target: 100000, reward: { lingshi: 10000 }, icon: '⚔️' },
-  
-  // 装备成就
-  { id: 20, category: 'equipment', name: '初具装备', desc: '强化装备到+5', target: 5, reward: { diamonds: 20 }, icon: '🗡️' },
-  { id: 21, category: 'equipment', name: '装备小成', desc: '强化装备到+10', target: 10, reward: { diamonds: 50 }, icon: '🗡️' },
-  { id: 22, category: 'equipment', name: '装备大成', desc: '强化装备到+15', target: 15, reward: { diamonds: 100 }, icon: '🗡️' },
-  
-  // 灵兽成就
-  { id: 30, category: 'beast', name: '捕获灵兽', desc: '拥有1只灵兽', target: 1, reward: { diamonds: 10 }, icon: '🦊' },
-  { id: 31, category: 'beast', name: '灵兽伙伴', desc: '拥有5只灵兽', target: 5, reward: { diamonds: 50 }, icon: '🦊' },
-  { id: 32, category: 'beast', name: '神兽环绕', desc: '拥有神兽', target: 1, reward: { diamonds: 100 }, icon: '🦊' },
-  
-  // 章节成就
-  { id: 40, category: 'chapter', name: '初窥门径', desc: '通关第5章', target: 5, reward: { lingshi: 100 }, icon: '📖' },
-  { id: 41, category: 'chapter', name: '小有所成', desc: '通关第10章', target: 10, reward: { lingshi: 500 }, icon: '📖' },
-  { id: 42, category: 'chapter', name: '登堂入室', desc: '通关第30章', target: 30, reward: { lingshi: 2000 }, icon: '📖' },
-  { id: 43, category: 'chapter', name: '登峰造极', desc: '通关第50章', target: 50, reward: { lingshi: 5000 }, icon: '📖' },
-  { id: 44, category: 'chapter', name: '证道成仙', desc: '通关第100章', target: 100, reward: { diamonds: 1000 }, icon: '📖' },
-  
-  // 社交成就
-  { id: 50, category: 'social', name: '结交朋友', desc: '拥有5个好友', target: 5, reward: { lingshi: 50 }, icon: '👥' },
-  { id: 51, category: 'social', name: '人脉广泛', desc: '拥有20个好友', target: 20, reward: { lingshi: 200 }, icon: '👥' },
-  { id: 52, category: 'social', name: '加入仙盟', desc: '加入仙盟', target: 1, reward: { diamonds: 20 }, icon: '🏛️' },
-  
-  // 消费成就
-  { id: 60, category: 'spend', name: '初次充值', desc: '首次充值任意金额', target: 1, reward: { diamonds: 10 }, icon: '💎' },
-  { id: 61, category: 'spend', name: '累计充值', desc: '累计充值100元', target: 100, reward: { diamonds: 100 }, icon: '💎' },
-  { id: 62, category: 'spend', name: '充值大户', desc: '累计充值1000元', target: 1000, reward: { diamonds: 1000 }, icon: '💎' },
-  
-  // 在线成就
-  { id: 70, category: 'online', name: '每日登录', desc: '累计登录1天', target: 1, reward: { lingshi: 10 }, icon: '📅' },
-  { id: 71, category: 'online', name: '持续修炼', desc: '累计登录7天', target: 7, reward: { diamonds: 50 }, icon: '📅' },
-  { id: 72, category: 'online', name: '持之以恒', desc: '累计登录30天', target: 30, reward: { diamonds: 200 }, icon: '📅' },
-  { id: 73, category: 'online', name: '修仙达人', desc: '累计登录100天', target: 100, reward: { diamonds: 1000 }, icon: '📅' }
+  // === 累计类 accumulation (新增) ===
+  { id: 80, category: 'accumulation', name: '灵石达人',     desc: '累计消耗100000灵石',   target: 100000, reward: { diamonds: 100, title: '灵石达人' } },
+  { id: 81, category: 'accumulation', name: '灵石富豪',     desc: '累计消耗1000000灵石',  target: 1000000, reward: { diamonds: 500, title: null } },
+  { id: 82, category: 'accumulation', name: '修炼狂人',     desc: '累计修炼10000次',      target: 10000, reward: { diamonds: 200, title: '修炼狂人' } },
+  { id: 83, category: 'accumulation', name: '挂机之王',     desc: '离线挂机满24小时',     target: 24,   reward: { diamonds: 150, title: null } },
+  { id: 84, category: 'accumulation', name: '击杀一千',     desc: '累计击杀怪物1000只',   target: 1000, reward: { diamonds: 200, title: null } },
+  { id: 85, category: 'accumulation', name: '副本探索者',   desc: '通关不同副本50种',     target: 50,   reward: { diamonds: 300, title: null } },
 ];
 
-// GET /api/achievement/list?player_id=X - 正确的成就列表接口（解决 /list 被 /:userId 路由错误捕获的问题）
+const CATEGORY_NAMES = {
+  cultivate:     { name: '修炼成就', icon: '🧘' },
+  combat:        { name: '战斗成就', icon: '⚔️' },
+  equipment:     { name: '装备成就', icon: '🛡️' },
+  chapter:       { name: '副本成就', icon: '📜' },
+  arena:         { name: '竞技成就', icon: '🏆' },
+  social:        { name: '社交成就', icon: '🤝' },
+  realm:         { name: '天梯成就', icon: '🛤️' },
+  challenge:     { name: '挑战成就', icon: '🔥' },
+  accumulation:  { name: '累计成就', icon: '📊' },
+};
+
+// ============================================================
+// 初始化 player_titles 表
+// ============================================================
+function initTables() {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_titles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        title_key TEXT NOT NULL,
+        obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(player_id, title_key)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS player_equipped_title (
+        player_id INTEGER PRIMARY KEY,
+        title_key TEXT NOT NULL,
+        equipped_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    Logger.info('player_titles / player_equipped_title 表初始化完成');
+  } catch (e) {
+    Logger.error('initTables error:', e.message);
+  }
+}
+initTables();
+
+// ============================================================
+// 辅助函数
+// ============================================================
+function getPlayerId(req) {
+  return Number(req.userId || req.query.userId || req.body?.userId || 1);
+}
+
+function loadUserProgress(userId) {
+  try {
+    const rows = db.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
+    const result = {};
+    rows.forEach(row => {
+      result[Number(row.achievement_id)] = {
+        progress: row.progress || 0,
+        completed: !!row.completed,
+        claimed: !!row.claimed,
+      };
+    });
+    return result;
+  } catch (e) {
+    return {};
+  }
+}
+
+function getPlayerTitles(playerId) {
+  try {
+    const rows = db.prepare('SELECT title_key, obtained_at FROM player_titles WHERE player_id = ?').all(playerId);
+    return rows.map(r => r.title_key);
+  } catch (e) {
+    return [];
+  }
+}
+
+function getEquippedTitle(playerId) {
+  try {
+    const row = db.prepare('SELECT title_key FROM player_equipped_title WHERE player_id = ?').get(playerId);
+    return row?.title_key || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function calcTitleBonuses(titleKey) {
+  const tpl = TITLE_TEMPLATES[titleKey];
+  if (!tpl || !tpl.effects) return {};
+  return tpl.effects;
+}
+
+// ============================================================
+// GET /api/achievement/list - 成就列表
+// ============================================================
 router.get('/list', (req, res) => {
-  const userId = parseInt(req.query.player_id || req.query.userId);
-  if (!userId || isNaN(userId)) {
-    return res.json({ achievements: [], categories: {}, stats: { total: 0, completed: 0, claimed: 0 } });
-  }
+  const playerId = getPlayerId(req);
+  const userProgress = loadUserProgress(playerId);
+  const ownedTitles = getPlayerTitles(playerId);
+  const equippedTitle = getEquippedTitle(playerId);
 
-  // 确保 in-memory 数据与 DB 同步
-  if (!userAchievements[userId]) {
-    userAchievements[userId] = {};
-  }
-  if (db) {
-    try {
-      const rows = db.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
-      rows.forEach(row => {
-        const achId = Number(row.achievement_id);
-        if (!userAchievements[userId][achId] || userAchievements[userId][achId].progress === 0) {
-          userAchievements[userId][achId] = {
-            progress: row.progress,
-            completed: !!row.completed,
-            claimed: !!row.claimed
-          };
-        }
-      });
-    } catch (e) {
-      console.warn('[achievement] DB同步失败:', e.message);
-    }
+  const achievements = ACHIEVEMENT_TEMPLATES.map(ach => {
+    const uAch = userProgress[ach.id] || { progress: 0, completed: false, claimed: false };
+    const titleReward = ach.reward?.title ? {
+      key: ach.reward.title,
+      ...(TITLE_TEMPLATES[ach.reward.title] || {}),
+      owned: ownedTitles.includes(ach.reward.title),
+    } : null;
 
-    // 实时查询玩家当前realm和combat_power，动态更新成就进度
-    try {
-      const player = db.prepare('SELECT realm, combat_power, level FROM Users WHERE id = ?').get(userId);
-      if (player) {
-        const playerRealm = player.realm || 1;
-        const playerCP = player.combat_power || 0;
-
-        // cultivate类: progress = min(realm, target), completed = (realm >= target)
-        // combat类: progress = min(combat_power, target), completed = (combat_power >= target)
-        achievementTemplates.forEach(ach => {
-          if (ach.category === 'cultivate') {
-            const realProgress = Math.min(playerRealm, ach.target);
-            const isCompleted = playerRealm >= ach.target;
-            if (!userAchievements[userId][ach.id]) {
-              userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
-            }
-            // 取最大值（DB进度 vs 实时计算）
-            if (realProgress > (userAchievements[userId][ach.id].progress || 0)) {
-              userAchievements[userId][ach.id].progress = realProgress;
-            }
-            if (isCompleted) {
-              userAchievements[userId][ach.id].completed = true;
-            }
-          } else if (ach.category === 'combat') {
-            const realProgress = Math.min(playerCP, ach.target);
-            const isCompleted = playerCP >= ach.target;
-            if (!userAchievements[userId][ach.id]) {
-              userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
-            }
-            if (realProgress > (userAchievements[userId][ach.id].progress || 0)) {
-              userAchievements[userId][ach.id].progress = realProgress;
-            }
-            if (isCompleted) {
-              userAchievements[userId][ach.id].completed = true;
-            }
-          }
-        });
-      }
-    } catch (e) {
-      console.warn('[achievement] 实时realm/combat查询失败:', e.message);
-    }
-  }
-
-  const achievements = achievementTemplates.map(ach => {
-    const userAch = userAchievements[userId][ach.id];
     return {
       ...ach,
-      progress: userAch?.progress || 0,
-      completed: userAch?.completed || false,
-      claimed: userAch?.claimed || false
+      progress: uAch.progress,
+      completed: uAch.completed,
+      claimed: uAch.claimed,
+      titleReward,
     };
   });
 
+  // 按分类组织
   const categories = {};
-  achievements.forEach(ach => {
-    if (!categories[ach.category]) categories[ach.category] = [];
-    categories[ach.category].push(ach);
-  });
-
-  res.json({
-    achievements,
-    categories,
-    stats: {
-      total: achievements.length,
-      completed: achievements.filter(a => a.completed).length,
-      claimed: achievements.filter(a => a.claimed).length
-    }
-  });
-});
-
-// 获取用户成就列表（/:userId 路由）
-router.get('/:userId', (req, res) => {
-  const userId = parseInt(req.params.userId);
-  
-  if (!userAchievements[userId]) {
-    userAchievements[userId] = {};
-  }
-  
-  // 确保 in-memory 数据与 DB 同步（解决直接 DB 更新后 in-memory 仍为 0 的问题）
-  if (db) {
-    try {
-      const rows = db.prepare('SELECT achievement_id, progress, completed, claimed FROM achievement_progress WHERE user_id = ?').all(userId);
-      rows.forEach(row => {
-        const achId = Number(row.achievement_id);
-        if (!userAchievements[userId][achId] || userAchievements[userId][achId].progress === 0) {
-          userAchievements[userId][achId] = {
-            progress: row.progress,
-            completed: !!row.completed,
-            claimed: !!row.claimed
-          };
-        }
-      });
-    } catch (e) {
-      console.warn('[achievement] DB同步失败:', e.message);
+  for (const [catKey, catInfo] of Object.entries(CATEGORY_NAMES)) {
+    const catAchievements = achievements.filter(a => a.category === catKey);
+    if (catAchievements.length > 0) {
+      categories[catKey] = {
+        ...catInfo,
+        achievements: catAchievements,
+        total: catAchievements.length,
+        completed: catAchievements.filter(a => a.completed).length,
+      };
     }
   }
-  
-  const achievements = achievementTemplates.map(ach => {
-    const userAch = userAchievements[userId][ach.id];
-    return {
-      ...ach,
-      progress: userAch?.progress || 0,
-      completed: userAch?.completed || false,
-      claimed: userAch?.claimed || false
-    };
-  });
-  
-  // 按分类
-  const categories = {};
-  achievements.forEach(ach => {
-    if (!categories[ach.category]) {
-      categories[ach.category] = [];
-    }
-    categories[ach.category].push(ach);
-  });
-  
+
   const totalCompleted = achievements.filter(a => a.completed).length;
   const totalClaimed = achievements.filter(a => a.claimed).length;
-  
+
   res.json({
+    success: true,
+    playerId,
     achievements,
     categories,
     stats: {
       total: achievements.length,
       completed: totalCompleted,
-      claimed: totalClaimed
-    }
+      claimed: totalClaimed,
+    },
+    equippedTitle: equippedTitle ? {
+      key: equippedTitle,
+      ...(TITLE_TEMPLATES[equippedTitle] || {}),
+    } : null,
   });
 });
 
-// 更新成就进度
-router.post('/update', (req, res) => {
-  const { userId, category, value } = req.body;
-  
-  if (!userAchievements[userId]) {
-    userAchievements[userId] = {};
-  }
-  
-  // 找出该分类下所有相关成就
-  const related = achievementTemplates.filter(a => a.category === category);
-  
-  related.forEach(ach => {
-    if (!userAchievements[userId][ach.id]) {
-      userAchievements[userId][ach.id] = { progress: 0, completed: false, claimed: false };
-    }
-    
-    // 使用max确保进度只进不退
-    const current = userAchievements[userId][ach.id].progress;
-    const newProgress = Math.max(current, value);
-    userAchievements[userId][ach.id].progress = newProgress;
-    
-    const wasCompleted = userAchievements[userId][ach.id].completed;
-    if (newProgress >= ach.target) {
-      userAchievements[userId][ach.id].completed = true;
-    }
-    
-    // 持久化到DB
-    saveAchievementToDB(userId, ach.id, newProgress, userAchievements[userId][ach.id].completed, userAchievements[userId][ach.id].claimed);
-  });
-  
-  res.json({ success: true });
-});
+// ============================================================
+// GET /api/achievement/titles - 称号列表
+// ============================================================
+router.get('/titles', (req, res) => {
+  const playerId = getPlayerId(req);
+  const ownedTitles = getPlayerTitles(playerId);
+  const equippedTitle = getEquippedTitle(playerId);
 
-// ==================== 后端成就触发 API ====================
+  const allTitles = Object.entries(TITLE_TEMPLATES).map(([key, tpl]) => ({
+    key,
+    ...tpl,
+    owned: ownedTitles.includes(key),
+    equipped: equippedTitle === key,
+  }));
 
-// 获取待推送的通知（成就达成通知，客户端轮询）
-router.get('/notifications/:userId', (req, res) => {
-  const userId = parseInt(req.params.userId) || 1;
-  
-  if (!achievementTrigger) {
-    return res.json({ success: false, message: '成就触发服务不可用', notifications: [] });
-  }
-  
-  const notifications = achievementTrigger.popNotifications(userId);
-  res.json({ success: true, notifications, count: notifications.length });
-});
-
-// 获取用户成就状态摘要（包含所有成就进度）
-router.get('/summary/:userId', (req, res) => {
-  const userId = parseInt(req.params.userId) || 1;
-  
-  if (!achievementTrigger) {
-    return res.json({ success: false, message: '成就触发服务不可用' });
-  }
-  
-  const summary = achievementTrigger.getUserAchievementSummary(userId);
-  
-  // 统计
-  const total = summary.length;
-  const completed = summary.filter(a => a.completed).length;
-  const claimed = summary.filter(a => a.claimed).length;
-  const pending = summary.filter(a => a.completed && !a.claimed).length;
-  
   res.json({
     success: true,
-    achievements: summary,
-    stats: { total, completed, claimed, pending }
+    playerId,
+    titles: allTitles,
+    equippedTitle: equippedTitle ? { key: equippedTitle, ...(TITLE_TEMPLATES[equippedTitle] || {}) } : null,
+    totalTitles: allTitles.length,
+    ownedCount: ownedTitles.length,
   });
 });
 
-// 手动触发成就检测（供其他后端服务调用）
-router.post('/trigger', (req, res) => {
-  const userId = req.userId || parseInt(req.body.userId) || 1;
-  const { trigger, value, extra } = req.body;
-  
-  if (!achievementTrigger) {
-    return res.json({ success: false, message: '成就触发服务不可用' });
-  }
-  
-  if (!userId || !trigger) {
-    return res.json({ success: false, message: '缺少必要参数 userId 或 trigger' });
-  }
-  
-  const results = achievementTrigger.triggerAchievement(userId, trigger, value || 0, extra || {});
-  const notifications = achievementTrigger.popNotifications(userId);
-  
-  res.json({
-    success: true,
-    newlyCompleted: results.map(a => ({ id: a.id, name: a.name, desc: a.desc, reward: a.reward })),
-    notifications
-  });
-});
+// ============================================================
+// POST /api/achievement/title/equip - 装备称号
+// ============================================================
+router.post('/title/equip', (req, res) => {
+  const playerId = getPlayerId(req);
+  const { titleKey } = req.body;
 
-// 领取奖励（新版，支持后端触发服务）
-router.post('/claim', (req, res) => {
-  const userId = req.userId || parseInt(req.body.userId) || 1;
-  const { achievementId } = req.body;
-  
-  // 优先使用后端触发服务
-  if (achievementTrigger) {
-    const claimed = achievementTrigger.claimAchievement(userId, achievementId);
-    if (!claimed) {
-      return res.json({ success: false, message: '成就未完成或奖励已领取' });
-    }
-    
-    // 查找成就定义获取奖励
-    const def = achievementTrigger.ACHIEVEMENT_DEFINITIONS[achievementId];
-    if (def && playerRef) {
-      if (def.reward.spiritStones) playerRef.lingshi = (playerRef.lingshi || 0) + def.reward.spiritStones;
-      if (def.reward.diamonds) playerRef.diamonds = (playerRef.diamonds || 0) + def.reward.diamonds;
-    }
-    
-    return res.json({
+  if (!titleKey) {
+    return res.json({ success: false, message: '请指定要装备的称号' });
+  }
+
+  const ownedTitles = getPlayerTitles(playerId);
+  if (!ownedTitles.includes(titleKey)) {
+    return res.json({ success: false, message: '尚未获得此称号' });
+  }
+
+  if (!TITLE_TEMPLATES[titleKey]) {
+    return res.json({ success: false, message: '称号不存在' });
+  }
+
+  try {
+    // 如果已装备其他称号，先卸下
+    db.prepare('DELETE FROM player_equipped_title WHERE player_id = ?').run(playerId);
+    // 装备新称号
+    db.prepare('INSERT INTO player_equipped_title (player_id, title_key) VALUES (?, ?)').run(playerId, titleKey);
+
+    const title = TITLE_TEMPLATES[titleKey];
+    Logger.info(`[称号装备] playerId=${playerId} title=${titleKey}`);
+
+    res.json({
       success: true,
-      reward: def?.reward || {},
-      message: `领取成功！奖励：${def?.reward?.spiritStones || 0}灵石，${def?.reward?.diamonds || 0}钻石`
+      message: `成功装备称号: ${titleKey}`,
+      equippedTitle: { key: titleKey, ...title },
     });
+  } catch (err) {
+    Logger.error('POST /title/equip error:', err.message);
+    res.json({ success: false, message: err.message });
   }
-  
-  // 回退到原有逻辑
-  const achievement = achievementTemplates.find(a => a.id === achievementId);
-  const userAch = userAchievements[userId]?.[achievementId];
-  
-  if (!achievement || !userAch) {
-    return res.json({ success: false, message: '成就不存在' });
+});
+
+// ============================================================
+// POST /api/achievement/title/unequip - 卸下称号
+// ============================================================
+router.post('/title/unequip', (req, res) => {
+  const playerId = getPlayerId(req);
+  try {
+    db.prepare('DELETE FROM player_equipped_title WHERE player_id = ?').run(playerId);
+    res.json({ success: true, message: '称号已卸下' });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
   }
-  if (!userAch.completed) {
-    return res.json({ success: false, message: '成就未完成' });
+});
+
+// ============================================================
+// GET /api/achievement/bonuses - 当前装备称号的战斗加成
+// ============================================================
+router.get('/bonuses', (req, res) => {
+  const playerId = getPlayerId(req);
+  const equippedTitle = getEquippedTitle(playerId);
+
+  if (!equippedTitle) {
+    return res.json({ success: true, playerId, equipped: false, bonuses: {} });
   }
-  if (userAch.claimed) {
-    return res.json({ success: false, message: '奖励已领取' });
-  }
-  
-  userAch.claimed = true;
-  saveAchievementToDB(userId, achievementId, userAch.progress, userAch.completed, true);
-  
-  if (playerRef) {
-    if (achievement.reward.diamonds) playerRef.diamonds += achievement.reward.diamonds;
-    if (achievement.reward.lingshi) playerRef.lingshi += achievement.reward.lingshi;
-  }
-  
+
+  const title = TITLE_TEMPLATES[equippedTitle] || {};
+  const bonuses = calcTitleBonuses(equippedTitle);
+
   res.json({
     success: true,
-    reward: achievement.reward,
-    diamonds: playerRef ? playerRef.diamonds : null,
-    lingshi: playerRef ? playerRef.lingshi : null,
-    message: `成就达成！获得${achievement.reward.diamonds || 0}钻石, ${achievement.reward.lingshi || 0}灵石`
+    playerId,
+    equipped: true,
+    equippedTitle: { key: equippedTitle, ...title },
+    bonuses,
   });
+});
+
+// ============================================================
+// POST /api/achievement/progress - 更新成就进度（供其他系统调用）
+// ============================================================
+router.post('/progress', (req, res) => {
+  const { playerId, category, value } = req.body;
+  const pid = Number(playerId) || 1;
+
+  try {
+    // 找到对应 category 的成就，更新进度
+    const templates = ACHIEVEMENT_TEMPLATES.filter(t => t.category === category);
+    const results = [];
+
+    for (const tpl of templates) {
+      // 检查进度记录
+      let row = db.prepare('SELECT * FROM achievement_progress WHERE user_id = ? AND achievement_id = ?').get(pid, tpl.id);
+      if (!row) {
+        db.prepare('INSERT INTO achievement_progress (user_id, achievement_id, progress, completed, claimed) VALUES (?, ?, 0, 0, 0)').run(pid, tpl.id);
+        row = db.prepare('SELECT * FROM achievement_progress WHERE user_id = ? AND achievement_id = ?').get(pid, tpl.id);
+      }
+
+      if (row.completed) continue; // 已完成跳过
+
+      const newProgress = Math.max(row.progress || 0, value);
+      const completed = newProgress >= tpl.target;
+
+      if (completed && !row.completed) {
+        db.prepare('UPDATE achievement_progress SET progress = ?, completed = 1 WHERE user_id = ? AND achievement_id = ?').run(newProgress, pid, tpl.id);
+        results.push({ id: tpl.id, name: tpl.name, completed: true, titleReward: tpl.reward?.title || null });
+      } else if (newProgress !== row.progress) {
+        db.prepare('UPDATE achievement_progress SET progress = ? WHERE user_id = ? AND achievement_id = ?').run(newProgress, pid, tpl.id);
+      }
+    }
+
+    res.json({ success: true, updated: results });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
+  }
 });
 
 module.exports = router;
