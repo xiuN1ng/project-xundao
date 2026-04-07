@@ -392,6 +392,224 @@ router.get('/', (req, res) => {
   }
 });
 
+// ============================================================
+// 离线委托系统 (P2-8)
+// 可委托类型: gather(采集) / kill_monster(杀怪) / errand(跑腿)
+// ============================================================
+
+// 委托任务配置
+const ENTRUST_TYPES = {
+  gather: {
+    name: '采集委托',
+    icon: '🌿',
+    desc: '派遣弟子采集灵药资源',
+    duration: 30, // 分钟
+    rewards: [
+      { type: 'material', itemId: 'spirit_herb', name: '灵草', icon: '🌿', countRange: [2, 8] },
+      { type: 'material', itemId: 'elixir_flower', name: '炼丹花', icon: '🌸', countRange: [1, 4] },
+      { type: 'material', itemId: 'magic_mushroom', name: '灵芝', icon: '🍄', countRange: [1, 3] },
+    ],
+  },
+  kill_monster: {
+    name: '猎怪委托',
+    icon: '⚔️',
+    desc: '派遣弟子清除宗门附近的妖兽',
+    duration: 60,
+    rewards: [
+      { type: 'material', itemId: 'beast_core', name: '兽核', icon: '🔮', countRange: [1, 5] },
+      { type: 'material', itemId: 'beast_leather', name: '兽皮', icon: '🧥', countRange: [2, 6] },
+      { type: 'material', itemId: 'demon_blood', name: '妖兽血', icon: '🩸', countRange: [1, 3] },
+    ],
+  },
+  errand: {
+    name: '跑腿委托',
+    icon: '📦',
+    desc: '弟子为宗门跑腿办事',
+    duration: 20,
+    rewards: [
+      { type: 'material', itemId: 'lingshi_pack', name: '灵石袋', icon: '💰', countRange: [1, 3] },
+      { type: 'material', itemId: 'mission_scroll', name: '任务卷轴', icon: '📜', countRange: [1, 2] },
+    ],
+  },
+};
+
+// 初始化委托表
+function initEntrustTables() {
+  const database = getDb();
+  try {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS player_entrust (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        entrust_type TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        finishes_at TEXT NOT NULL,
+        claimed INTEGER DEFAULT 0,
+        rewards TEXT DEFAULT '[]',
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(player_id, claimed)
+      )
+    `);
+    Logger.log('[Entrust] 表初始化完成');
+  } catch (err) {
+    Logger.error('[Entrust] 表初始化失败:', err.message);
+  }
+}
+initEntrustTables();
+
+// 辅助：从奖励表随机抽取
+function rollRewards(rewards) {
+  const result = [];
+  for (const r of rewards) {
+    if (Math.random() < 0.7) { // 70%概率获得
+      const count = Math.floor(Math.random() * (r.countRange[1] - r.countRange[0] + 1)) + r.countRange[0];
+      result.push({ ...r, count });
+    }
+  }
+  return result;
+}
+
+// GET /api/afk/entrust - 获取委托状态
+router.get('/entrust', (req, res) => {
+  const userId = extractUserId(req);
+  const database = getDb();
+
+  try {
+    // 查找玩家进行中的委托
+    const active = database.prepare(
+      'SELECT * FROM player_entrust WHERE player_id = ? AND claimed = 0 ORDER BY id DESC LIMIT 1'
+    ).get(userId);
+
+    if (!active) {
+      return res.json({
+        success: true,
+        hasActive: false,
+        availableTypes: Object.entries(ENTRUST_TYPES).map(([key, t]) => ({
+          type: key, name: t.name, icon: t.icon, desc: t.desc, duration: t.duration,
+        })),
+      });
+    }
+
+    const cfg = ENTRUST_TYPES[active.entrust_type];
+    const finishesAt = new Date(active.finishes_at).getTime();
+    const remainingMinutes = Math.max(0, Math.floor((finishesAt - Date.now()) / 60000));
+    const isReady = Date.now() >= finishesAt;
+
+    res.json({
+      success: true,
+      hasActive: true,
+      active: {
+        type: active.entrust_type,
+        name: cfg?.name || active.entrust_type,
+        icon: cfg?.icon || '❓',
+        startedAt: active.started_at,
+        finishesAt: active.finishes_at,
+        remainingMinutes,
+        isReady,
+        rewards: JSON.parse(active.rewards || '[]'),
+      },
+    });
+  } catch (err) {
+    Logger.error('[Entrust] GET /entrust error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/afk/entrust - 开始/领取委托
+router.post('/entrust', (req, res) => {
+  const userId = extractUserId(req);
+  const database = getDb();
+  const { action, type } = req.body; // action: 'start' | 'claim'
+
+  if (action === 'start') {
+    if (!type || !ENTRUST_TYPES[type]) {
+      return res.json({ success: false, message: '无效的委托类型: ' + type });
+    }
+
+    try {
+      // 检查是否已有进行中委托
+      const existing = database.prepare(
+        'SELECT * FROM player_entrust WHERE player_id = ? AND claimed = 0'
+      ).get(userId);
+      if (existing) {
+        return res.json({ success: false, message: '已有进行中的委托，请先完成或等待完成' });
+      }
+
+      const cfg = ENTRUST_TYPES[type];
+      const now = new Date();
+      const finishesAt = new Date(now.getTime() + cfg.duration * 60000);
+      const rewards = rollRewards(cfg.rewards);
+
+      database.prepare(`
+        INSERT INTO player_entrust (player_id, entrust_type, started_at, finishes_at, rewards)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(userId, type, now.toISOString(), finishesAt.toISOString(), JSON.stringify(rewards));
+
+      Logger.info(`[委托] playerId=${userId} 开始委托 type=${type} duration=${cfg.duration}min`);
+
+      res.json({
+        success: true,
+        message: `委托开始！预计 ${cfg.duration} 分钟后完成`,
+        entrust: {
+          type,
+          name: cfg.name,
+          icon: cfg.icon,
+          finishesAt: finishesAt.toISOString(),
+          duration: cfg.duration,
+          previewRewards: rewards,
+        },
+      });
+    } catch (err) {
+      Logger.error('[Entrust] POST /entrust start error:', err.message);
+      res.json({ success: false, message: err.message });
+    }
+  } else if (action === 'claim') {
+    try {
+      const active = database.prepare(
+        'SELECT * FROM player_entrust WHERE player_id = ? AND claimed = 0'
+      ).get(userId);
+      if (!active) {
+        return res.json({ success: false, message: '没有进行中的委托' });
+      }
+      if (Date.now() < new Date(active.finishes_at).getTime()) {
+        return res.json({ success: false, message: '委托尚未完成，请等待' });
+      }
+
+      const rewards = JSON.parse(active.rewards || '[]');
+      // 发放道具奖励
+      for (const r of rewards) {
+        const existing = database.prepare(
+          'SELECT id, count FROM player_items WHERE user_id = ? AND item_id = ?'
+        ).get(userId, r.itemId);
+        if (existing) {
+          database.prepare('UPDATE player_items SET count = count + ? WHERE id = ?').run(r.count, existing.id);
+        } else {
+          database.prepare(`
+            INSERT INTO player_items (user_id, item_id, item_name, item_type, count, icon, source)
+            VALUES (?, ?, ?, 'material', ?, ?, 'entrust')
+          `).run(userId, r.itemId, r.name, r.count, r.icon);
+        }
+      }
+
+      // 标记为已领取
+      database.prepare('UPDATE player_entrust SET claimed = 1 WHERE id = ?').run(active.id);
+
+      Logger.info(`[委托] playerId=${userId} 领取委托奖励`, rewards.map(r => r.name + 'x' + r.count));
+
+      res.json({
+        success: true,
+        message: `委托完成！获得 ${rewards.length} 种道具`,
+        rewards,
+      });
+    } catch (err) {
+      Logger.error('[Entrust] POST /entrust claim error:', err.message);
+      res.json({ success: false, message: err.message });
+    }
+  } else {
+    res.json({ success: false, message: '未知操作: ' + action });
+  }
+});
+
 module.exports = router;
 module.exports.initAfkTables = initAfkTables;
 module.exports.setDb = setDb;
