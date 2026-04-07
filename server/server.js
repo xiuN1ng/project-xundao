@@ -9133,6 +9133,15 @@ try {
   Logger.warn('⚠ 修炼属性路由加载失败:', e.message);
 }
 
+// ==================== 宗门建设路由 (P1-4) ====================
+try {
+  const sectContribRoute = require('./backend/routes/sect-contribution');
+  app.use('/api/sect-contrib', sectContribRoute);
+  Logger.info('✓ 宗门建设路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 宗门建设路由加载失败:', e.message);
+}
+
 // 导出db实例供其他模块使用
 module.exports = app;
 module.exports.db = db;
