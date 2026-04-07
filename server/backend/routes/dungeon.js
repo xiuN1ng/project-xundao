@@ -431,6 +431,26 @@ router.post('/battle/:battleId', (req, res) => {
         console.error('[dungeon] 成就触发失败:', e.message);
       }
     }
+
+    // ===================== 深渊裂隙触发 (P2-7) =====================
+    // 副本通关后5%概率触发深渊裂隙
+    if (won && Math.random() < 0.05) {
+      try {
+        const abyssKey = `abyss_portal_${userId}`;
+        const abyssPortal = {
+          dungeonId,
+          triggeredAt: Date.now(),
+          expiresAt: Date.now() + 3600000, // 1小时有效期
+          difficulty: diffKey,
+        };
+        // 存储到内存（也可存DB），深渊裂隙有效期1小时
+        if (!global.abyssPortals) global.abyssPortals = {};
+        global.abyssPortals[userId] = abyssPortal;
+        console.log(`[深渊裂隙] playerId=${userId} 触发深渊裂隙! 副本=${dungeonId} 有效期1小时`);
+      } catch (e) {
+        console.error('[深渊裂隙] 触发失败:', e.message);
+      }
+    }
   }
   
   res.json({
@@ -459,6 +479,118 @@ router.post('/battle/:battleId', (req, res) => {
       rounds: battleResult.rounds
     }
   });
+});
+
+// ============================================================
+// POST /api/dungeon/abyss - 进入深渊裂隙 (P2-7)
+// ============================================================
+router.post('/abyss', (req, res) => {
+  const userId = Number(req.userId || req.query.userId || req.body?.userId || 1);
+  const { action } = req.body; // 'enter' | 'info'
+
+  // action=info: 查询是否有活跃的深渊裂隙
+  if (action === 'info') {
+    const portal = global.abyssPortals?.[userId];
+    if (!portal || Date.now() > portal.expiresAt) {
+      return res.json({ success: true, hasPortal: false, message: '暂无深渊裂隙' });
+    }
+    return res.json({
+      success: true,
+      hasPortal: true,
+      portal: {
+        dungeonId: portal.dungeonId,
+        difficulty: portal.difficulty,
+        remainingMs: portal.expiresAt - Date.now(),
+      },
+    });
+  }
+
+  // action=enter: 进入深渊裂隙，强制战斗，掉落橙/红色装备
+  // 检查是否有活跃裂隙
+  const portal = global.abyssPortals?.[userId];
+  if (!portal || Date.now() > portal.expiresAt) {
+    return res.json({ success: false, message: '深渊裂隙已消失或不存在' });
+  }
+
+  try {
+    // 清除裂隙（一次性）
+    delete global.abyssPortals[userId];
+
+    // 获取玩家属性
+    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+    // 深渊裂隙Boss属性（比普通噩梦更强）
+    const abyssBoss = {
+      name: '深渊领主',
+      icon: '💀',
+      hp: Math.floor((player.level * 500 + 20000) * 2.5),
+      attack: Math.floor(player.level * 50 + 2000),
+      defense: Math.floor(player.level * 30 + 1000),
+    };
+
+    // 模拟战斗（深渊Boss极强，这里简化处理：80%胜率）
+    const won = Math.random() < 0.8;
+    const battleId = Math.floor(Date.now() / 1000);
+
+    let drops = [];
+    if (won) {
+      // 掉落橙色/红色装备（随机词缀）
+      const rarityRoll = Math.random();
+      const rarity = rarityRoll < 0.4 ? 'orange' : rarityRoll < 0.75 ? 'red' : 'gold';
+      const affixes = [];
+      const affixPool = [
+        { key: 'attack', name: '攻击+', range: [50, 200] },
+        { key: 'defense', name: '防御+', range: [30, 120] },
+        { key: 'hp', name: '生命+', range: [500, 3000] },
+        { key: 'crit', name: '暴击+', range: [5, 20] },
+        { key: 'speed', name: '速度+', range: [10, 50] },
+      ];
+      const numAffixes = rarity === 'gold' ? 4 : rarity === 'red' ? 3 : 2;
+      const shuffled = affixPool.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < numAffixes; i++) {
+        const a = shuffled[i];
+        const val = Math.floor(Math.random() * (a.range[1] - a.range[0]) + a.range[0]);
+        affixes.push({ key: a.key, name: a.name + val, value: val });
+      }
+
+      drops = [{
+        type: 'equipment',
+        rarity,
+        name: `【${rarity === 'gold' ? '金' : rarity === 'red' ? '红' : '橙'}色】深渊装备`,
+        icon: rarity === 'gold' ? '👑' : rarity === 'red' ? '🔴' : '🟠',
+        affixes,
+        note: '深渊裂隙专属装备，携带随机词缀',
+      }];
+
+      // 额外掉落
+      drops.push({
+        type: 'material',
+        itemId: 'abyss_core',
+        name: '深渊核心',
+        icon: '💠',
+        count: Math.floor(Math.random() * 3) + 1,
+      });
+    }
+
+    console.log(`[深渊裂隙] playerId=${userId} ${won ? '击败深渊领主' : '败于深渊领主'}`);
+
+    res.json({
+      success: true,
+      battleId,
+      won,
+      message: won ? '恭喜击败深渊领主！' : '不敌深渊领主，下次再来！',
+      boss: abyssBoss,
+      drops,
+      abyssReward: won ? {
+        spiritStones: Math.floor(Math.random() * 5000) + 2000,
+        exp: Math.floor(Math.random() * 5000) + 2000,
+      } : null,
+    });
+  } catch (err) {
+    console.error('[dungeon/abyss] error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
 });
 
 module.exports = router;
