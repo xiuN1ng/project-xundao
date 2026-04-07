@@ -202,11 +202,38 @@ function getPlayerBattleStats(userId) {
       }
     } catch (e) { /* ignore */ }
 
+    // 读取修炼属性加成（P0-1 攻击/防御修炼）
+    let cultAtkBonus = 0, cultDefBonus = 0, cultResBonus = 0, cultSpeedBonus = 0, critRate = 0;
+    try {
+      const cultAttr = db.prepare('SELECT * FROM cultivation_attributes WHERE user_id = ?').get(String(userId));
+      if (cultAttr) {
+        const CULTIVATION_ATTRS = {
+          attack:     [5, 10, 15, 20, 25, 35, 45, 60, 80, 100],
+          defense:    [3, 6, 9, 12, 15, 21, 27, 36, 48, 60],
+          resistance: [3, 6, 9, 12, 15, 21, 27, 36, 48, 60],
+          speed:      [2, 4, 6, 8, 10, 14, 18, 24, 32, 40],
+          crit:       [0.5, 1, 1.5, 2, 2.5, 3.5, 4.5, 6, 8, 10],
+        };
+        const calcBonus = (level, perLevel) => {
+          let total = 0;
+          for (let i = 0; i < Math.min(10, level); i++) total += perLevel[i];
+          return total;
+        };
+        cultAtkBonus    = calcBonus(cultAttr.attack_level || 0,     CULTIVATION_ATTRS.attack);
+        cultDefBonus    = calcBonus(cultAttr.defense_level || 0,   CULTIVATION_ATTRS.defense);
+        cultResBonus    = calcBonus(cultAttr.resistance_level || 0, CULTIVATION_ATTRS.resistance);
+        cultSpeedBonus  = calcBonus(cultAttr.speed_level || 0,      CULTIVATION_ATTRS.speed);
+        critRate        = Math.min(50, calcBonus(cultAttr.crit_level || 0, CULTIVATION_ATTRS.crit));
+      }
+    } catch (e) { /* cultivation attributes not available */ }
+
     return {
-      attack: (user.attack || 100) + equipAtk + beastAtk,
-      defense: (user.defense || 50) + equipDef,
-      hp: (user.hp || 1000) + equipHp + beastHp,
-      level: user.level || 1
+      attack:   (user.attack || 100) + equipAtk + beastAtk + cultAtkBonus,
+      defense:  (user.defense || 50) + equipDef + cultDefBonus + cultResBonus,
+      hp:       (user.hp || 1000) + equipHp + beastHp,
+      speed:    (user.speed || 10) + cultSpeedBonus,
+      critRate,
+      level:    user.level || 1
     };
   } catch (e) {
     return { attack: 100, defense: 50, hp: 1000, level: 1 };

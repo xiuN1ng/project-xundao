@@ -513,7 +513,7 @@ class TitleSystem {
         }
         return true;
 
-      case TitleType.ACHIEVvement:
+      case TitleType.ACHIEVEMENT:
         return playerData.achievements?.includes(title.requiredAchievement);
 
       default:

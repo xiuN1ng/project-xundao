@@ -3603,6 +3603,15 @@ try {
   Logger.info('称号API不可用:', e.message);
 }
 
+// ============ 成就殿/名人堂 API ============
+try {
+  const achievementHallApi = require('./routes/achievement_hall_api');
+  app.use('/api/achievement/hall', achievementHallApi);
+  Logger.info('✅ 成就殿/名人堂 API 已加载');
+} catch (e) {
+  Logger.info('成就殿API不可用:', e.message);
+}
+
 // ============ 灵石引导系统 API ============
 try {
   const lingdaoApi = require('./backend/routes/lingdao');
@@ -8897,6 +8906,15 @@ try {
   Logger.warn('⚠ 修炼路由加载失败:', e.message);
 }
 
+// ==================== 师门日常任务路由 ====================
+try {
+  const dailyMissionRoute = require('./backend/routes/dailyMission');
+  app.use('/api/daily-mission', dailyMissionRoute);
+  Logger.info('✓ 师门日常任务路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 师门日常任务路由加载失败:', e.message);
+}
+
 // ==================== 婚姻系统路由 ====================
 try {
   const coupleModule = require('./backend/routes/couple');
@@ -9044,6 +9062,28 @@ try {
   Logger.warn('⚠ 洞府路由加载失败:', e.message);
 }
 
+// ============ 洞府入侵路由 ============
+try {
+  const caveInvasionRouter = require('./backend/routes/cave-invasion-route');
+  app.use('/api/cave-invasion', caveInvasionRouter);
+  Logger.info('✅ 洞府入侵路由已加载 (backend/routes/cave-invasion-route.js)');
+
+  // 启动 NPC 入侵调度器 (每30秒检查一次)
+  setInterval(() => {
+    try {
+      const result = caveInvasionRouter.triggerNPCInvasion();
+      if (result) {
+        Logger.info(`[cave-invasion] NPC入侵触发: ${result.npc.name} → ${result.targetName}, 结果: ${result.result}`);
+      }
+    } catch (e) {
+      Logger.warn('[cave-invasion] NPC入侵调度异常:', e.message);
+    }
+  }, 30000);
+  Logger.info('[cave-invasion] NPC入侵调度器已启动 (每30秒检查一次)');
+} catch (e) {
+  Logger.warn('⚠ 洞府入侵路由加载失败:', e.message);
+}
+
 // 404处理 - 统一错误响应（必须放在所有路由之后）
 app.use((req, res) => {
   res.status(404).json({
@@ -9082,6 +9122,15 @@ try {
   Logger.info('✓ 引导系统路由已加载');
 } catch (e) {
   Logger.warn('⚠ 引导路由加载失败:', e.message);
+}
+
+// ==================== 修炼属性路由 (P0-1) ====================
+try {
+  const attributesRoute = require('./backend/routes/attributes');
+  app.use('/api/attributes', attributesRoute);
+  Logger.info('✓ 修炼属性路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 修炼属性路由加载失败:', e.message);
 }
 
 // 导出db实例供其他模块使用

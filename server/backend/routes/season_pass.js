@@ -21,11 +21,72 @@ const CURRENT_SEASON = {
   id: 1,
   name: '第一赛季·筑基篇',
   start_time: '2026-03-01 00:00:00',
-  end_time: '2026-04-30 23:59:59'
+  end_time: '2026-04-30 23:59:59',
+  duration_weeks: 4,  // 赛季时长（周）
+  theme: '筑基问道'    // 赛季主题
+};
+
+// ============================================================
+// 赛季通行证2.0 - 4周赛季任务配置
+// 每周一个主题，包含该周专属任务和主题奖励
+// ============================================================
+const SEASON_THEMES = {
+  week1: {
+    name: '第一周·炼气期',
+    theme: '炼气入门',
+    start_day: 1,
+    end_day: 7,
+    theme_reward: { item: '炼气丹', count: 5, description: '炼气丹×5' },
+    bonus_exp: 1.2  // 该周经验加成20%
+  },
+  week2: {
+    name: '第二周·筑基期',
+    theme: '筑基金丹',
+    start_day: 8,
+    end_day: 14,
+    theme_reward: { item: '筑基丹', count: 3, description: '筑基丹×3' },
+    bonus_exp: 1.3  // 该周经验加成30%
+  },
+  week3: {
+    name: '第三周·结丹期',
+    theme: '结丹化神',
+    start_day: 15,
+    end_day: 21,
+    theme_reward: { item: '结丹果', count: 2, description: '结丹果×2' },
+    bonus_exp: 1.4  // 该周经验加成40%
+  },
+  week4: {
+    name: '第四周·元婴期',
+    theme: '元婴渡劫',
+    start_day: 22,
+    end_day: 28,
+    theme_reward: { item: '渡劫符', count: 1, description: '渡劫符×1' },
+    bonus_exp: 1.5  // 该周经验加成50%
+  }
 };
 
 // 赛季任务配置（必须在 initDB 之前定义）
+// 新增4周主题任务，每个主题任务有独特奖励
 const SEASON_TASKS = {
+  // 每周主题任务（Season Pass 2.0新增）
+  weekly_theme: [
+    // 第一周主题任务
+    { key: 'week1_focus_dungeon', name: '【炼气】副本特训', description: '通关副本3次', exp_reward: 150, item_reward: '炼气丹', item_count: 2, target_count: 3, required_level: 0, week: 1 },
+    { key: 'week1_focus_arena', name: '【炼气】竞技试炼', description: '竞技场挑战2次', exp_reward: 100, item_reward: '灵石', item_count: 200, target_count: 2, required_level: 0, week: 1 },
+    { key: 'week1_focus_gather', name: '【炼气】采集精华', description: '采集药材×5', exp_reward: 80, item_reward: '灵草', item_count: 5, target_count: 5, required_level: 0, week: 1 },
+    // 第二周主题任务
+    { key: 'week2_focus_dungeon', name: '【筑基】副本特训', description: '通关副本5次', exp_reward: 200, item_reward: '筑基丹', item_count: 2, target_count: 5, required_level: 5, week: 2 },
+    { key: 'week2_focus_arena', name: '【筑基】竞技试炼', description: '竞技场挑战3次', exp_reward: 150, item_reward: '灵石', item_count: 300, target_count: 3, required_level: 5, week: 2 },
+    { key: 'week2_focus_cultivate', name: '【筑基】功法修炼', description: '修炼功法×10次', exp_reward: 180, item_reward: '经验', item_count: 1000, target_count: 10, required_level: 3, week: 2 },
+    // 第三周主题任务
+    { key: 'week3_focus_dungeon', name: '【结丹】副本特训', description: '通关副本8次', exp_reward: 300, item_reward: '结丹果', item_count: 1, target_count: 8, required_level: 10, week: 3 },
+    { key: 'week3_focus_pvp', name: '【结丹】巅峰对决', description: '竞技场胜利3次', exp_reward: 250, item_reward: '灵石', item_count: 500, target_count: 3, required_level: 8, week: 3 },
+    { key: 'week3_focus_sect', name: '【结丹】宗门贡献', description: '完成宗门任务×5', exp_reward: 200, item_reward: '贡献', item_count: 100, target_count: 5, required_level: 5, week: 3 },
+    // 第四周主题任务
+    { key: 'week4_focus_dungeon', name: '【元婴】副本特训', description: '通关副本10次', exp_reward: 400, item_reward: '渡劫符', item_count: 1, target_count: 10, required_level: 15, week: 4 },
+    { key: 'week4_focus_boss', name: '【元婴】 Boss挑战', description: '挑战世界Boss 2次', exp_reward: 350, item_reward: '龙鳞', item_count: 2, target_count: 2, required_level: 12, week: 4 },
+    { key: 'week4_focus_realm', name: '【元婴】境界突破', description: '突破境界1次', exp_reward: 500, item_reward: '灵石', item_count: 1000, target_count: 1, required_level: 10, week: 4 },
+  ],
   daily: [
     { key: 'daily_login', name: '每日登录', description: '登录游戏', exp_reward: 50, item_reward: '灵石', item_count: 50, target_count: 1, required_level: 0 },
     { key: 'daily_dungeon_1', name: '通关副本×1', description: '完成任意副本1次', exp_reward: 80, item_reward: '灵石', item_count: 100, target_count: 1, required_level: 0 },
@@ -45,6 +106,12 @@ const SEASON_TASKS = {
     { key: 'first_purchase', name: '首次购买战令', description: '购买本赛季战令', exp_reward: 200, item_reward: 'diamonds', item_count: 50, target_count: 1, required_level: 0 },
     { key: 'reach_level_10', name: '达到10级', description: '战令等级达到10级', exp_reward: 300, item_reward: 'spirit_stone', item_count: 2, target_count: 1, required_level: 10 },
     { key: 'reach_level_20', name: '达到20级', description: '战令等级达到20级', exp_reward: 500, item_reward: 'dragon_scale', item_count: 2, target_count: 1, required_level: 20 },
+    // Season Pass 2.0 新增成就任务
+    { key: 'complete_week1', name: '完成第一周主题', description: '完成第一周所有主题任务', exp_reward: 400, item_reward: '炼气丹', item_count: 5, target_count: 1, required_level: 0 },
+    { key: 'complete_week2', name: '完成第二周主题', description: '完成第二周所有主题任务', exp_exp: 500, item_reward: '筑基丹', item_count: 3, target_count: 1, required_level: 5 },
+    { key: 'complete_week3', name: '完成第三周主题', description: '完成第三周所有主题任务', exp_reward: 600, item_reward: '结丹果', item_count: 2, target_count: 1, required_level: 10 },
+    { key: 'complete_week4', name: '完成第四周主题', description: '完成第四周所有主题任务', exp_reward: 800, item_reward: '渡劫符', item_count: 1, target_count: 1, required_level: 15 },
+    { key: 'claim_all_theme_rewards', name: '收集所有主题奖励', description: '领取所有4周的主题奖励', exp_reward: 1000, item_reward: 'diamonds', item_count: 100, target_count: 1, required_level: 0 },
   ]
 };
 
@@ -277,16 +344,51 @@ function initSeasonTasks() {
   if (!db) return;
   try {
     const seasonId = CURRENT_SEASON.id;
+    
+    // 确保表结构支持 week 字段
+    try {
+      db.exec(`ALTER TABLE season_pass_tasks ADD COLUMN week INTEGER DEFAULT 0`);
+    } catch (e) {
+      // 列可能已存在，忽略
+    }
+    
     const insertTask = db.prepare(`
-      INSERT OR IGNORE INTO season_pass_tasks (task_key, season_id, category, name, description, exp_reward, item_reward, item_count, target_count, required_level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO season_pass_tasks (task_key, season_id, category, name, description, exp_reward, item_reward, item_count, target_count, required_level, week)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const [category, tasks] of Object.entries(SEASON_TASKS)) {
       for (const task of tasks) {
-        insertTask.run(task.key, seasonId, category, task.name, task.description, task.exp_reward, task.item_reward || null, task.item_count || 1, task.target_count, task.required_level || 0);
+        insertTask.run(
+          task.key, 
+          seasonId, 
+          category, 
+          task.name, 
+          task.description, 
+          task.exp_reward, 
+          task.item_reward || null, 
+          task.item_count || 1, 
+          task.target_count, 
+          task.required_level || 0,
+          task.week || 0
+        );
       }
     }
+    
+    // 初始化赛季主题奖励领取记录表
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS season_pass_theme_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER NOT NULL,
+        season_id INTEGER NOT NULL,
+        week INTEGER NOT NULL,
+        theme_reward_claimed INTEGER NOT NULL DEFAULT 0,
+        claimed_at TEXT,
+        UNIQUE(player_id, season_id, week)
+      )
+    `);
+    
+    console.log('[season_pass] Season Pass 2.0 任务初始化完成');
   } catch (e) {
     console.log('[season_pass] 初始化任务失败:', e.message);
   }
@@ -632,7 +734,7 @@ router.post('/add-exp', requireAuth, (req, res) => {
 });
 
 // ============================================================
-// GET /tasks - 获取赛季任务列表
+// GET /tasks - 获取赛季任务列表（Season Pass 2.0 增强：含周主题任务）
 // ============================================================
 router.get('/tasks', requireAuth, async (req, res) => {
   const playerId = req.authUserId;
@@ -648,14 +750,25 @@ router.get('/tasks', requireAuth, async (req, res) => {
   const progressList = getPlayerTaskProgress(playerId, seasonId);
   progressList.forEach(p => { progressMap[p.task_key] = p; });
 
-  // 按分类组织任务
-  const tasksByCategory = { daily: [], weekly: [], oneTime: [] };
+  // 按分类组织任务（Season Pass 2.0 新增 weekly_theme 分类）
+  const tasksByCategory = { daily: [], weekly: [], weekly_theme: [], oneTime: [] };
   const resetInfo = getTaskResetInfo();
+  
+  // 获取当前周
+  const currentWeek = getCurrentWeek(CURRENT_SEASON.start_time);
+  const currentTheme = getThemeInfo(currentWeek);
 
   for (const task of allTasks) {
     const prog = progressMap[task.task_key] || { progress: 0, completed: 0, claimed: 0 };
     const canClaim = prog.completed && !prog.claimed;
     const available = data.level >= task.required_level;
+    
+    // 检查周主题任务的可用性
+    let isCurrentWeekTask = false;
+    if (task.category === 'weekly_theme') {
+      const taskWeek = task.week || 0;
+      isCurrentWeekTask = taskWeek === currentWeek;
+    }
 
     const taskEntry = {
       key: task.task_key,
@@ -671,11 +784,19 @@ router.get('/tasks', requireAuth, async (req, res) => {
       claimed: !!prog.claimed,
       can_claim: canClaim,
       available: available,
-      locked: !available
+      locked: !available,
+      week: task.week || null,
+      is_current_week: isCurrentWeekTask
     };
 
     if (task.category === 'daily') tasksByCategory.daily.push(taskEntry);
     else if (task.category === 'weekly') tasksByCategory.weekly.push(taskEntry);
+    else if (task.category === 'weekly_theme') {
+      // 只显示当前周的主题任务，除非已完成
+      if (isCurrentWeekTask || prog.completed || prog.progress > 0) {
+        tasksByCategory.weekly_theme.push(taskEntry);
+      }
+    }
     else tasksByCategory.oneTime.push(taskEntry);
   }
 
@@ -686,11 +807,17 @@ router.get('/tasks', requireAuth, async (req, res) => {
       level: data.level,
       seasonLevel: data.level
     },
+    season_theme: {
+      current_week: currentWeek,
+      theme: currentTheme,
+      all_themes: SEASON_THEMES
+    },
     reset_info: resetInfo,
     tasks: tasksByCategory,
     categories: [
       { key: 'daily', name: '每日任务', count: tasksByCategory.daily.length },
       { key: 'weekly', name: '每周任务', count: tasksByCategory.weekly.length },
+      { key: 'weekly_theme', name: '周主题任务', count: tasksByCategory.weekly_theme.length },
       { key: 'oneTime', name: '成就任务', count: tasksByCategory.oneTime.length }
     ]
   });
@@ -901,3 +1028,143 @@ router.post('/claim/:level', requireAuth, (req, res) => {
 });
 
 module.exports = router;
+
+// ============================================================
+// Season Pass 2.0 新增 API：主题奖励相关
+// ============================================================
+
+/**
+ * 获取当前赛季主题信息
+ */
+function getCurrentWeek(seasonStartTime) {
+  const now = new Date();
+  const start = new Date(seasonStartTime);
+  const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  return Math.min(Math.floor(diffDays / 7) + 1, 4);  // 1-4周
+}
+
+function getThemeInfo(week) {
+  const themes = {
+    1: SEASON_THEMES.week1,
+    2: SEASON_THEMES.week2,
+    3: SEASON_THEMES.week3,
+    4: SEASON_THEMES.week4
+  };
+  return themes[week] || null;
+}
+
+/**
+ * 检查并返回主题任务列表（带周数信息）
+ */
+function getWeeklyThemeTasks(week) {
+  return SEASON_TASKS.weekly_theme.filter(t => t.week === week);
+}
+
+// 在主路由后添加主题相关端点（不通过 router，而是直接挂载）
+// 注意：这需要在 module.exports = router 之后添加
+// 由于 Express 路由模块化的限制，这里提供一个辅助函数供外部调用
+
+// 导出额外的主题信息
+module.exports.getSeasonThemes = function() {
+  return SEASON_THEMES;
+};
+
+module.exports.getCurrentSeasonTheme = function() {
+  const currentWeek = getCurrentWeek(CURRENT_SEASON.start_time);
+  return {
+    week: currentWeek,
+    theme: getThemeInfo(currentWeek),
+    allThemes: SEASON_THEMES
+  };
+};
+
+module.exports.CURRENT_SEASON = CURRENT_SEASON;
+module.exports.SEASON_THEMES = SEASON_THEMES;
+
+// ============================================================
+// 新增 API: 领取主题奖励
+// POST /api/season-pass/claim-theme
+// ============================================================
+router.post('/claim-theme', requireAuth, (req, res) => {
+  const playerId = req.authUserId;
+  const week = parseInt(req.body.week || 0);
+  const seasonId = CURRENT_SEASON.id;
+  
+  if (week < 1 || week > 4) {
+    return res.json({ success: false, message: '无效的周数' });
+  }
+  
+  // 获取主题信息
+  const themeInfo = getThemeInfo(week);
+  if (!themeInfo) {
+    return res.json({ success: false, message: '主题不存在' });
+  }
+  
+  // 检查是否已领取
+  let claimed = false;
+  if (db) {
+    try {
+      const existing = db.prepare('SELECT * FROM season_pass_theme_claims WHERE player_id = ? AND season_id = ? AND week = ?')
+        .get(playerId, seasonId, week);
+      if (existing && existing.theme_reward_claimed) {
+        claimed = true;
+      }
+    } catch (e) {
+      // 表可能不存在，继续
+    }
+  }
+  
+  if (claimed) {
+    return res.json({ success: false, message: '该周主题奖励已领取' });
+  }
+  
+  // 检查是否满足领取条件（需要达到对应周）
+  const currentWeek = getCurrentWeek(CURRENT_SEASON.start_time);
+  if (week > currentWeek) {
+    return res.json({ success: false, message: '该周主题尚未解锁' });
+  }
+  
+  // 记录领取并发放奖励
+  if (db) {
+    try {
+      // 尝试更新或插入
+      db.prepare(`
+        INSERT INTO season_pass_theme_claims (player_id, season_id, week, theme_reward_claimed, claimed_at)
+        VALUES (?, ?, ?, 1, datetime('now'))
+        ON CONFLICT(player_id, season_id, week) DO UPDATE SET theme_reward_claimed = 1, claimed_at = datetime('now')
+      `).run(playerId, seasonId, week);
+      
+      // 发放主题奖励物品
+      const reward = themeInfo.theme_reward;
+      if (reward && reward.item) {
+        if (reward.item === '灵石') {
+          db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(reward.count, playerId);
+        } else {
+          // 其他物品写入 player_items
+          db.prepare(`INSERT INTO player_items (player_id, item_name, item_type, icon, count, source) VALUES (?, ?, ?, ?, ?, ?)`)
+            .run(playerId, reward.item, reward.item, '', reward.count, 'season_pass_theme');
+        }
+      }
+      
+      // 增加经验（带周加成）
+      const expBonus = themeInfo.bonus_exp || 1.0;
+      const bonusExp = Math.floor(100 * expBonus);
+      db.prepare('UPDATE season_pass SET exp = exp + ? WHERE player_id = ? AND season_id = ?')
+        .run(bonusExp, playerId, seasonId);
+      
+      return res.json({
+        success: true,
+        message: `成功领取第${week}周主题奖励！`,
+        week: week,
+        theme: themeInfo.name,
+        reward: reward,
+        bonus_exp: bonusExp
+      });
+    } catch (e) {
+      console.log('[season_pass] claim-theme error:', e.message);
+      return res.json({ success: false, message: '领取失败: ' + e.message });
+    }
+  }
+  
+  return res.json({ success: false, message: '数据库未连接' });
+});

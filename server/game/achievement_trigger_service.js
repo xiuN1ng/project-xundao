@@ -12,6 +12,16 @@
  * - level_up:         IDs 90-94 (level_up)
  */
 
+// 成就殿/名人堂模块（可选加载）
+let achievementHall = null;
+try {
+  achievementHall = require('./achievement_hall');
+  achievementHall.initAchievementHall();
+  console.log('[achievement] 成就殿/名人堂模块加载成功');
+} catch (e) {
+  console.warn('[achievement] 成就殿/名人堂模块加载失败:', e.message);
+}
+
 // 持久化回调（由 achievement.js 注册 saveAchievementToDB）
 let saveProgressCallback = null;
 function setSaveProgressCallback(fn) { saveProgressCallback = fn; }
@@ -250,7 +260,7 @@ function triggerAchievement(userId, trigger, value, extra = {}) {
     if (!achProgress.completed && value >= threshold) {
       achProgress.completed = true;
       achProgress.completedAt = Date.now();
-      newlyCompleted.push({
+      const completedAch = {
         id: numericId,
         name: achDef.name,
         desc: achDef.desc,
@@ -261,10 +271,53 @@ function triggerAchievement(userId, trigger, value, extra = {}) {
         progress: value,
         reward: achDef.reward,
         icon: achDef.icon
-      });
+      };
+      newlyCompleted.push(completedAch);
 
       // 加入通知队列
       enqueueNotification(userId, numericId, achDef.name, achDef.desc, trigger, achDef.reward);
+
+      // ==================== 成就殿/名人堂集成 ====================
+      if (achievementHall) {
+        // 记录里程碑
+        const rarity = achievementHall.calculateMilestoneRarity(
+          getMilestoneTypeFromTrigger(trigger),
+          value,
+          threshold
+        );
+        const titleReward = achievementHall.getTitleReward(numericId);
+        
+        achievementHall.recordMilestone({
+          userId,
+          username: extra.username || `玩家${userId}`,
+          type: getMilestoneTypeFromTrigger(trigger),
+          achievementId: numericId,
+          achievementName: achDef.name,
+          achievementDesc: achDef.desc,
+          value,
+          target: threshold,
+          rarity,
+          title: titleReward,
+          titleName: titleReward ? getTitleName(titleReward) : null,
+          extra
+        });
+
+        // 如果需要广播，加入广播队列
+        if (achievementHall.shouldBroadcast(numericId)) {
+          const milestone = {
+            userId,
+            username: extra.username || `玩家${userId}`,
+            type: getMilestoneTypeFromTrigger(trigger),
+            achievementId: numericId,
+            achievementName: achDef.name,
+            achievementDesc: achDef.desc,
+            value,
+            target: threshold,
+            rarity
+          };
+          achievementHall.enqueueAchievementBroadcast(milestone);
+        }
+      }
     }
   }
 
@@ -272,6 +325,42 @@ function triggerAchievement(userId, trigger, value, extra = {}) {
   autoPersist(userId);
 
   return newlyCompleted;
+}
+
+/**
+ * 根据trigger类型获取里程碑类型
+ */
+function getMilestoneTypeFromTrigger(trigger) {
+  const typeMap = {
+    'realm_breakthrough': 'realm_breakthrough',
+    'chapter_clear': 'chapter_clear',
+    'combat_win': 'combat_power',
+    'dungeon_clear': 'dungeon_clear',
+    'level_up': 'achievement_complete',
+    'login': 'login_milestone',
+    'spend': 'spend_milestone',
+    'friend_add': 'achievement_complete',
+    'equipment_obtain': 'achievement_complete',
+    'equipment_obtain_epic': 'achievement_complete',
+    'equipment_obtain_legendary': 'achievement_complete',
+    'beast_obtain': 'achievement_complete'
+  };
+  return typeMap[trigger] || 'achievement_complete';
+}
+
+/**
+ * 根据称号ID获取称号名称
+ */
+function getTitleName(titleId) {
+  const titleNames = {
+    'achievement_beginner': '初学者',
+    'achievement_cultivator': '修士',
+    'achievement_master': '真人',
+    'achievement_golden': '金丹真人',
+    'achievement_yuanying': '元婴老怪',
+    'achievement_legendary': '天人合一'
+  };
+  return titleNames[titleId] || titleId;
 }
 
 /**
@@ -466,5 +555,8 @@ module.exports = {
   onCombatWin,
   onRealmBreakthrough,
   // 直接引用
-  userAchievementProgress
+  userAchievementProgress,
+  // 成就殿/名人堂集成
+  getAchievementHall: () => achievementHall,
+  popAchievementBroadcasts: () => achievementHall ? achievementHall.popBroadcasts() : []
 };

@@ -952,4 +952,163 @@ router.post('/reserve', (req, res) => {
   }
 });
 
+// =====================================================
+// P0-1 修炼属性系统 - 攻击/防御/抗性/速度/暴击 各10级
+// =====================================================
+
+// 修炼属性等级表（1-10级）
+const CULTIVATION_ATTRS = {
+  attack:      { name: '攻击修炼', perLevel: [5, 10, 15, 20, 25, 35, 45, 60, 80, 100] },
+  defense:     { name: '防御修炼', perLevel: [3, 6, 9, 12, 15, 21, 27, 36, 48, 60] },
+  resistance:  { name: '抗性修炼', perLevel: [3, 6, 9, 12, 15, 21, 27, 36, 48, 60] },
+  speed:       { name: '速度修炼', perLevel: [2, 4, 6, 8, 10, 14, 18, 24, 32, 40] },
+  crit:        { name: '暴击修炼', perLevel: [0.5, 1, 1.5, 2, 2.5, 3.5, 4.5, 6, 8, 10] },
+};
+
+// 每级修炼消耗（level 1~10）
+const UPGRADE_COSTS = [
+  { lingshi: 500,  cultivationPower: 100 },  // 1→2
+  { lingshi: 1200, cultivationPower: 250 },  // 2→3
+  { lingshi: 2500, cultivationPower: 500 },  // 3→4
+  { lingshi: 5000, cultivationPower: 1000 }, // 4→5
+  { lingshi: 10000, cultivationPower: 2000 },// 5→6
+  { lingshi: 18000, cultivationPower: 3500 },// 6→7
+  { lingshi: 30000, cultivationPower: 6000 },// 7→8
+  { lingshi: 50000, cultivationPower: 10000 },// 8→9
+  { lingshi: 80000, cultivationPower: 16000 },// 9→10 (max)
+];
+
+// 初始化修炼属性表
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS cultivation_attributes (
+    user_id TEXT PRIMARY KEY,
+    attack_level INTEGER DEFAULT 0,
+    defense_level INTEGER DEFAULT 0,
+    resistance_level INTEGER DEFAULT 0,
+    speed_level INTEGER DEFAULT 0,
+    crit_level INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+} catch (e) {
+  Logger.error('cultivation_attributes 表初始化失败:', e.message);
+}
+
+// 获取或初始化修炼属性
+function getOrCreateAttrs(userId) {
+  try {
+    let attrs = db.prepare('SELECT * FROM cultivation_attributes WHERE user_id = ?').get(String(userId));
+    if (!attrs) {
+      db.prepare('INSERT INTO cultivation_attributes (user_id) VALUES (?)').run(String(userId));
+      attrs = db.prepare('SELECT * FROM cultivation_attributes WHERE user_id = ?').get(String(userId));
+    }
+    return attrs;
+  } catch (e) {
+    Logger.error('getOrCreateAttrs error:', e.message);
+    return { user_id: String(userId), attack_level: 0, defense_level: 0, resistance_level: 0, speed_level: 0, crit_level: 0 };
+  }
+}
+
+// 计算属性总加成（根据各属性等级）
+function calcAttrBonuses(attrs) {
+  const result = {};
+  for (const [key, cfg] of Object.entries(CULTIVATION_ATTRS)) {
+    const level = Math.min(10, Math.max(0, attrs[key + '_level'] || 0));
+    let total = 0;
+    for (let i = 0; i < level; i++) {
+      total += cfg.perLevel[i];
+    }
+    result[key] = key === 'crit' ? Math.min(50, total) : total; // 暴击上限50%
+  }
+  return result;
+}
+
+// GET /api/cultivation/attributes - 获取修炼属性状态
+router.get('/attributes', (req, res) => {
+  const userId = req.userId || 1;
+  try {
+    const attrs = getOrCreateAttrs(userId);
+    const bonuses = calcAttrBonuses(attrs);
+    const cult = getOrCreateCultivation(userId);
+    res.json({
+      success: true,
+      attributes: {
+        attack:     { level: attrs.attack_level,     bonus: bonuses.attack,     nextCost: UPGRADE_COSTS[attrs.attack_level] },
+        defense:    { level: attrs.defense_level,    bonus: bonuses.defense,    nextCost: UPGRADE_COSTS[attrs.defense_level] },
+        resistance: { level: attrs.resistance_level, bonus: bonuses.resistance, nextCost: UPGRADE_COSTS[attrs.resistance_level] },
+        speed:      { level: attrs.speed_level,      bonus: bonuses.speed,      nextCost: UPGRADE_COSTS[attrs.speed_level] },
+        crit:       { level: attrs.crit_level,       bonus: bonuses.crit,       nextCost: UPGRADE_COSTS[attrs.crit_level] },
+      },
+      bonuses,
+      currency: {
+        lingshi:           (db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId) || {}).lingshi || 0,
+        cultivationPower:  parseInt(cult.cultivationPower) || 0,
+      }
+    });
+  } catch (err) {
+    Logger.error('GET /attributes error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/cultivation/attributes/upgrade - 升级修炼属性
+router.post('/attributes/upgrade', (req, res) => {
+  const userId = req.userId || 1;
+  const { attr } = req.body; // attack | defense | resistance | speed | crit
+
+  if (!attr || !CULTIVATION_ATTRS[attr]) {
+    return res.json({ success: false, message: '无效的属性类型，可选：attack/defense/resistance/speed/crit' });
+  }
+
+  try {
+    const attrs = getOrCreateAttrs(userId);
+    const levelKey = attr + '_level';
+    const currentLevel = attrs[levelKey] || 0;
+
+    if (currentLevel >= 10) {
+      return res.json({ success: false, message: '已达最高等级（10级）' });
+    }
+
+    const cost = UPGRADE_COSTS[currentLevel];
+    if (!cost) {
+      return res.json({ success: false, message: '已达最高等级' });
+    }
+
+    // 扣灵石
+    const user = db.prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!user || (user.lingshi || 0) < cost.lingshi) {
+      return res.json({ success: false, message: `灵石不足，需要${cost.lingshi}灵石` });
+    }
+
+    // 扣修为值
+    const cult = getOrCreateCultivation(userId);
+    const cultivationPower = parseInt(cult.cultivationPower) || 0;
+    if (cultivationPower < cost.cultivationPower) {
+      return res.json({ success: false, message: `修为值不足，需要${cost.cultivationPower}修为，当前${cultivationPower}` });
+    }
+
+    // 执行扣费 + 升级
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(cost.lingshi, userId);
+    db.prepare('UPDATE Cultivations SET cultivationPower = cultivationPower - ? WHERE userId = ?').run(cost.cultivationPower, userId);
+    db.prepare(`UPDATE cultivation_attributes SET ${levelKey} = ${levelKey} + 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`).run(String(userId));
+
+    const newAttrs = getOrCreateAttrs(userId);
+    const newLevel = newAttrs[levelKey];
+    const newBonuses = calcAttrBonuses(newAttrs);
+
+    Logger.info(`[cultivation:attr] userId=${userId} attr=${attr} level=${currentLevel}→${newLevel}`);
+
+    res.json({
+      success: true,
+      message: `${CULTIVATION_ATTRS[attr].name} 升级成功！${currentLevel}级 → ${newLevel}级`,
+      attribute: attr,
+      level: newLevel,
+      bonus: newBonuses[attr],
+      nextCost: newLevel < 10 ? UPGRADE_COSTS[newLevel] : null,
+    });
+  } catch (err) {
+    Logger.error('POST /attributes/upgrade error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

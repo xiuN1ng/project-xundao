@@ -236,3 +236,7 @@
        [B] server/game/deity_list_api.js (双重修复) ✅ (2026-04-01 04:32)
      验证: GET /api/deity-list/types ✅
 
+
+# === 更新 2026-04-07 15:54 ===
+P0 [F] 前端修复 - dist目录不完整(仅index.html)，需要重新构建或启动vite开发服务器
+P1 [B] API测试覆盖 - 补充战斗系统API测试用例
