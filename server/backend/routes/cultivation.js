@@ -1111,4 +1111,64 @@ router.post('/attributes/upgrade', (req, res) => {
   }
 });
 
+
+// ========== 修炼速度实时API ==========
+// GET /api/cultivation/speed - 获取实时修炼速度统计
+
+router.get('/speed/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // 获取玩家基本信息
+    const user = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.json({ success: false, message: '玩家不存在' });
+    }
+    
+    // 获取修炼数据
+    const cult = db.prepare('SELECT * FROM Cultivations WHERE userId = ?').get(userId);
+    if (!cult) {
+      return res.json({ success: false, message: '修炼数据不存在' });
+    }
+    
+    // 计算基础修炼速度（灵气/秒）
+    const baseSpeed = 0.5;
+    const realmBonus = (user.realm_level || 1) * 0.2;
+    const spiritRootBonus = getSpiritRootBonus ? getSpiritRootBonus(db, userId).spiritRate : 1.0;
+    const totalSpiritPerSecond = baseSpeed * realmBonus * spiritRootBonus;
+    
+    // 计算顿悟概率
+    const enlightenmentChance = Math.min(5, (user.realm_level || 1) * 0.5);
+    
+    // 今日修炼时长
+    const lastLogin = cult.last_cultivate_time ? new Date(cult.last_cultivate_time) : new Date();
+    const now = new Date();
+    const secondsSinceLastCultivate = Math.floor((now - lastLogin) / 1000);
+    
+    // 预计收益
+    const expectedSpiritGain = Math.floor(totalSpiritPerSecond * secondsSinceLastCultivate);
+    const expectedPowerGain = Math.floor(expectedSpiritGain * 0.1 * (user.realm_level || 1));
+    
+    res.json({
+      success: true,
+      data: {
+        spiritPerSecond: totalSpiritPerSecond.toFixed(2),
+        enlightenmentChance: enlightenmentChance.toFixed(2) + '%',
+        currentRealm: user.realm_level || 1,
+        realmName: REALM_BASE_CONFIG[user.realm_level || 1]?.name || '练气',
+        onlineSeconds: secondsSinceLastCultivate,
+        expectedSpiritGain,
+        expectedPowerGain,
+        bonuses: {
+          realm: realmBonus.toFixed(2),
+          spiritRoot: spiritRootBonus.toFixed(2),
+        }
+      }
+    });
+  } catch (err) {
+    Logger.error('GET /cultivation/speed error:', err.message);
+    res.json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
