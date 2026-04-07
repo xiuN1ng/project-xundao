@@ -7,6 +7,21 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('./database');
 
+// ============ 副本难度配置 ============
+const DIFFICULTIES = {
+  easy:      { name: '简单',     multiplier: 0.6,  costScale: 0.5,  rewardScale: 0.5,  color: '#4CAF50', icon: '🟢', sort: 1 },
+  normal:    { name: '普通',     multiplier: 1.0,  costScale: 1.0,  rewardScale: 1.0,  color: '#2196F3', icon: '🔵', sort: 2 },
+  hard:      { name: '困难',     multiplier: 1.5,  costScale: 1.5,  rewardScale: 1.8,  color: '#FF9800', icon: '🟠', sort: 3 },
+  nightmare:  { name: '噩梦',     multiplier: 2.2,  costScale: 2.0,  rewardScale: 3.0,  color: '#9C27B0', icon: '🟣', sort: 4 },
+};
+
+// 根据副本基础难度(difficulty 1-6)确定可用的难度层级
+function getAvailableDifficulties(baseDiff) {
+  if (baseDiff <= 2) return ['easy', 'normal'];
+  if (baseDiff <= 4) return ['easy', 'normal', 'hard'];
+  return ['normal', 'hard', 'nightmare'];
+}
+
 // ============ 副本配置数据 ============
 
 const DUNGEON_DATA = {
@@ -250,7 +265,7 @@ const dungeonStorage = {
   },
 
   // 开始副本挑战
-  async startChallenge(playerId, dungeonId, currentStage, maxHp) {
+  async startChallenge(playerId, dungeonId, currentStage, maxHp, difficulty = 'normal') {
     // 先结束之前的挑战
     await pool.execute(
       `UPDATE player_dungeon_challenges 
@@ -259,11 +274,18 @@ const dungeonStorage = {
       [playerId]
     );
     
+    // 尝试添加 difficulty 列（如果不存在则忽略）
+    try {
+      await pool.execute(
+        `ALTER TABLE player_dungeon_challenges ADD COLUMN difficulty VARCHAR(20) DEFAULT 'normal'`
+      );
+    } catch(e) { /* 列已存在 */ }
+    
     // 创建新的挑战
     const [result] = await pool.execute(
-      `INSERT INTO player_dungeon_challenges (player_id, dungeon_id, current_stage, current_hp, max_hp, status) 
-       VALUES (?, ?, ?, ?, ?, "in_progress")`,
-      [playerId, dungeonId, currentStage, maxHp, maxHp]
+      `INSERT INTO player_dungeon_challenges (player_id, dungeon_id, current_stage, current_hp, max_hp, difficulty, status) 
+       VALUES (?, ?, ?, ?, ?, ?, "in_progress")`,
+      [playerId, dungeonId, currentStage, maxHp, maxHp, difficulty]
     );
     return result.insertId;
   },
@@ -375,23 +397,35 @@ router.get('/list', (req, res) => {
   const staticDungeons = Object.values(DUNGEON_DATA);
   res.json({
     success: true,
-    data: staticDungeons.map(d => ({
-      dungeon_id: d.id,
-      name: d.name,
-      type: d.type,
-      description: d.description,
-      icon: d.icon,
-      difficulty: d.difficulty,
-      realm_req: d.realm_req,
-      level_req: d.level_req,
-      recommended_power: d.recommended_power,
-      stages: d.stages,
-      time_limit: d.time_limit,
-      entry_cost: d.entry_cost,
-      rewards: d.rewards,
-      monster_count: d.monsters ? d.monsters.length : 0,
-      is_available: d.is_available === 1
-    }))
+    data: staticDungeons.map(d => {
+      const availDiffs = getAvailableDifficulties(d.difficulty);
+      return {
+        dungeon_id: d.id,
+        name: d.name,
+        type: d.type,
+        description: d.description,
+        icon: d.icon,
+        difficulty: d.difficulty,
+        realm_req: d.realm_req,
+        level_req: d.level_req,
+        recommended_power: d.recommended_power,
+        stages: d.stages,
+        time_limit: d.time_limit,
+        entry_cost: d.entry_cost,
+        rewards: d.rewards,
+        monster_count: d.monsters ? d.monsters.length : 0,
+        is_available: d.is_available === 1,
+        // 难度分层配置
+        difficulty_tiers: availDiffs.map(key => ({
+          key,
+          name: DIFFICULTIES[key].name,
+          icon: DIFFICULTIES[key].icon,
+          color: DIFFICULTIES[key].color,
+          multiplier: DIFFICULTIES[key].multiplier,
+          rewardScale: DIFFICULTIES[key].rewardScale,
+        }))
+      };
+    })
   });
 });
 
@@ -444,7 +478,7 @@ router.get('/:player_id', async (req, res) => {
 // POST /api/dungeons/:dungeon_id/enter - 挑战副本
 router.post('/:dungeon_id/enter', async (req, res) => {
   try {
-    const { player_id, player_power } = req.body;
+    const { player_id, player_power, difficulty } = req.body;
     const { dungeon_id } = req.params;
     
     if (!player_id) {
@@ -463,6 +497,11 @@ router.post('/:dungeon_id/enter', async (req, res) => {
       });
     }
     
+    // 验证难度
+    const availDiffs = getAvailableDifficulties(dungeon.difficulty);
+    const diffKey = (difficulty && availDiffs.includes(difficulty)) ? difficulty : availDiffs[0];
+    const diff = DIFFICULTIES[diffKey];
+    
     // 检查玩家当前是否已有进行中的挑战
     const existingChallenge = await dungeonStorage.getPlayerChallenge(player_id);
     if (existingChallenge) {
@@ -478,7 +517,7 @@ router.post('/:dungeon_id/enter', async (req, res) => {
       });
     }
     
-    // 获取玩家当前境界和等级（从玩家数据中获取）
+    // 获取玩家当前境界和等级
     let playerRealm = 0;
     let playerLevel = 1;
     
@@ -508,50 +547,66 @@ router.post('/:dungeon_id/enter', async (req, res) => {
       });
     }
     
-    // 检查进入消耗
-    const entryCost = JSON.parse(dungeon.entry_cost || '{}');
-    if (entryCost.spirit_stones && entryCost.spirit_stones > 0) {
+    // 检查进入消耗（含难度缩放）
+    const baseEntryCost = JSON.parse(dungeon.entry_cost || '{}');
+    const actualCost = baseEntryCost.spirit_stones ? Math.floor(baseEntryCost.spirit_stones * diff.costScale) : 0;
+    if (actualCost > 0) {
       const playerStorage = require('./storage').playerStorage;
-      const hasEnough = await playerStorage.hasEnoughSpiritStones(player_id, entryCost.spirit_stones);
+      const hasEnough = await playerStorage.hasEnoughSpiritStones(player_id, actualCost);
       if (!hasEnough) {
         return res.status(400).json({
           success: false,
-          message: `需要 ${entryCost.spirit_stones} 灵石才能进入此副本`
+          message: `需要 ${actualCost} 灵石才能进入此副本（${diff.name}难度）`
         });
       }
-      // 扣除灵石
-      await playerStorage.deductSpiritStones(player_id, entryCost.spirit_stones);
+      await playerStorage.deductSpiritStones(player_id, actualCost);
     }
     
-    // 初始化玩家HP（基于推荐的战斗力）
-    const baseHp = dungeon.recommended_power || 100;
+    // 初始化玩家HP和怪物属性（含难度缩放）
+    const baseHp = Math.floor((dungeon.recommended_power || 100) * diff.multiplier);
     
     // 记录进入次数
     await dungeonStorage.updatePlayerDungeonRecord(player_id, dungeon_id, 1, 0, 0, 999999);
     
-    // 创建挑战记录
-    await dungeonStorage.startChallenge(player_id, dungeon_id, 1, baseHp);
+    // 创建挑战记录（存储难度）
+    await dungeonStorage.startChallenge(player_id, dungeon_id, 1, baseHp, diffKey);
     
-    // 返回副本信息和初始状态
+    // 返回副本信息（含难度缩放后的怪物）
     const monsters = JSON.parse(dungeon.monsters || '[]');
-    const firstMonster = monsters[0] || { name: '怪物', hp: 100, atk: 10, exp: 10 };
+    const scaledMonsters = monsters.map(m => ({
+      name: m.name,
+      hp: Math.floor(m.hp * diff.multiplier),
+      atk: Math.floor(m.atk * diff.multiplier),
+      exp: Math.floor(m.exp * diff.rewardScale)
+    }));
+    const firstMonster = scaledMonsters[0] || { name: '怪物', hp: Math.floor(100 * diff.multiplier), atk: Math.floor(10 * diff.multiplier), exp: 10 };
+    
+    // 难度缩放后的奖励
+    const baseRewards = JSON.parse(dungeon.rewards || '{}');
+    const scaledRewards = {
+      exp: Math.floor((baseRewards.exp || 0) * diff.rewardScale),
+      spirit_stones: Math.floor((baseRewards.spirit_stones || 0) * diff.rewardScale),
+      items: baseRewards.items || []
+    };
     
     res.json({
       success: true,
-      message: `成功进入副本：${dungeon.name}`,
+      message: `成功进入副本：${dungeon.name} [${diff.icon} ${diff.name}]`,
       data: {
         dungeon_id: dungeon.id,
         dungeon_name: dungeon.name,
         dungeon_icon: dungeon.icon,
         difficulty: dungeon.difficulty,
+        difficulty_key: diffKey,
+        difficulty_name: diff.name,
         stages: dungeon.stages,
         current_stage: 1,
         current_hp: baseHp,
         max_hp: baseHp,
         monster: firstMonster,
-        rewards: JSON.parse(dungeon.rewards || '{}'),
+        rewards: scaledRewards,
         time_limit: dungeon.time_limit,
-        entry_cost: entryCost
+        entry_cost: { spirit_stones: actualCost }
       }
     });
   } catch (error) {
