@@ -120,6 +120,7 @@ app.use('/api/spirit-root', require('./routes/spirit_root'));
 app.use('/api/spirit-stone', require('./routes/spirit_stone_exchange'));
 app.use('/api/adventure', require('./routes/adventure'));
 app.use('/api/battle', require('./routes/battle'));
+app.use('/api/attributes', require('./routes/attributes'));
 app.use('/api/shop', require('./routes/shop'));
 app.use('/api/market', require('./routes/market'));
 app.use('/api/material-exchange', require('./routes/material_exchange'));
