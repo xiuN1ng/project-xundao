@@ -158,6 +158,7 @@ app.use('/api/hotupdate', require('./routes/hotupdate'));
 // 新功能
 app.use('/api/dailyQuest', require('./routes/dailyQuest'));
 app.use('/api/daily-quest', require('./routes/dailyQuest'));
+app.use('/api/daily-mission', require('./routes/dailyMission'));
 app.use('/api/achievement', require('./routes/achievement'));
 app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/guild', require('./routes/guild'));
