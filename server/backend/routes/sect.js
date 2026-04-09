@@ -523,19 +523,240 @@ router.post('/skill/learn', (req, res) => {
 });
 
 // /dungeon - 宗门副本信息
+// ==================== 宗门副本系统 ====================
+
+// 宗门试炼副本配置
+const SECT_DUNGEON_CONFIG = {
+  1: { name: '宗门禁地', difficulty: 'easy', baseHp: 1000, baseReward: 100, reqLevel: 1 },
+  2: { name: '幽冥洞窟', difficulty: 'normal', baseHp: 3000, baseReward: 300, reqLevel: 5 },
+  3: { name: '深渊魔域', difficulty: 'hard', baseHp: 8000, baseReward: 800, reqLevel: 10 },
+  4: { name: '天劫之地', difficulty: 'nightmare', baseHp: 20000, baseReward: 2000, reqLevel: 15 },
+  5: { name: '混沌虚空', difficulty: 'chaos', baseHp: 50000, baseReward: 5000, reqLevel: 20 }
+};
+
+// 初始化 sect_dungeons 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_dungeons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sect_id INTEGER NOT NULL,
+      floor INTEGER NOT NULL DEFAULT 1,
+      status TEXT DEFAULT 'open' CHECK(status IN ('open','locked','completed')),
+      best_score INTEGER DEFAULT 0,
+      challenge_count INTEGER DEFAULT 0,
+      last_challenge_at DATETIME,
+      reset_at DATETIME DEFAULT (datetime('now', '+1 day')),
+      UNIQUE(sect_id, floor)
+    )
+  `);
+} catch(e) { console.log('[sect] sect_dungeons:', e.message); }
+
+// 获取宗门副本状态
 router.get('/dungeon', (req, res) => {
-  res.json({ success: true, dungeons: sectDungeons });
+  const sectId = parseInt(req.query.sectId) || parseInt(req.query.sect_id);
+  if (!sectId) return res.json({ success: false, message: '缺少宗门ID' });
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+
+  try {
+    // 获取宗门的副本状态
+    let dungeons = db.prepare('SELECT * FROM sect_dungeons WHERE sect_id = ? ORDER BY floor').all(sectId);
+    
+    // 如果没有记录，初始化所有副本
+    if (dungeons.length === 0) {
+      const insert = db.prepare('INSERT INTO sect_dungeons (sect_id, floor, status) VALUES (?, ?, ?)');
+      for (const [floor, config] of Object.entries(SECT_DUNGEON_CONFIG)) {
+        const status = floor === '1' ? 'open' : 'locked';
+        insert.run(sectId, parseInt(floor), status);
+      }
+      dungeons = db.prepare('SELECT * FROM sect_dungeons WHERE sect_id = ? ORDER BY floor').all(sectId);
+    }
+
+    // 附加配置信息
+    const result = dungeons.map(d => {
+      const config = SECT_DUNGEON_CONFIG[d.floor] || {};
+      return {
+        ...d,
+        name: config.name || `副本${d.floor}`,
+        difficulty: config.difficulty || 'normal',
+        baseHp: config.baseHp || 1000,
+        baseReward: config.baseReward || 100,
+        reqLevel: config.reqLevel || 1
+      };
+    });
+
+    res.json({ success: true, dungeons: result });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
 });
 
-// /dungeon/challenge - 挑战宗门副本
+// 进入副本
+router.post('/dungeon/enter', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const sectId = parseInt(req.body.sectId) || parseInt(req.body.sect_id);
+  const floor = parseInt(req.body.floor) || 1;
+
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+
+  try {
+    // 检查玩家宗门
+    const player = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!player || player.sectId !== sectId) {
+      return res.json({ success: false, message: '你不是该宗门成员' });
+    }
+
+    // 检查副本状态
+    const dungeon = db.prepare('SELECT * FROM sect_dungeons WHERE sect_id = ? AND floor = ?').get(sectId, floor);
+    if (!dungeon || dungeon.status === 'locked') {
+      return res.json({ success: false, message: '副本未解锁' });
+    }
+
+    // 生成战斗对象
+    const config = SECT_DUNGEON_CONFIG[floor] || {};
+    const boss = {
+      floor,
+      name: config.name || `Boss`,
+      hp: config.baseHp || 1000,
+      maxHp: config.baseHp || 1000,
+      attack: Math.floor((config.baseHp || 1000) / 10),
+      difficulty: config.difficulty || 'normal'
+    };
+
+    // 更新挑战次数
+    db.prepare('UPDATE sect_dungeons SET challenge_count = challenge_count + 1, last_challenge_at = datetime("now") WHERE sect_id = ? AND floor = ?').run(sectId, floor);
+
+    res.json({ success: true, message: `进入${config.name || '宗门试炼'}`, boss, sectId, floor });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 副本战斗
+router.post('/dungeon/battle', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const sectId = parseInt(req.body.sectId) || parseInt(req.body.sect_id);
+  const floor = parseInt(req.body.floor) || 1;
+  const damage = parseInt(req.body.damage) || 0;
+
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+
+  try {
+    // 检查玩家宗门
+    const player = db.prepare('SELECT sectId, attack FROM Users WHERE id = ?').get(playerId);
+    if (!player || player.sectId !== sectId) {
+      return res.json({ success: false, message: '你不是该宗门成员' });
+    }
+
+    // 获取副本配置
+    const config = SECT_DUNGEON_CONFIG[floor] || {};
+    const baseHp = config.baseHp || 1000;
+    
+    // 计算玩家伤害 (基础伤害 + 攻击力)
+    const playerDamage = damage || Math.floor((player.attack || 100) * (1 + Math.random() * 0.5));
+    
+    // 模拟Boss反击
+    const bossAttack = Math.floor(baseHp / 15);
+    const playerHp = 1000; // 简化：固定玩家血量
+    const playerRemainingHp = Math.max(0, playerHp - bossAttack);
+    
+    // 计算收益
+    const isWin = playerDamage >= baseHp * 0.3; // 造成30%Boss血量即算胜利
+    
+    let rewards = {};
+    let buildingGain = 0;
+    
+    if (isWin) {
+      const baseReward = config.baseReward || 100;
+      const contribution = Math.floor(baseReward * (1 + floor * 0.2));
+      const exp = Math.floor(baseReward * 2 * (1 + floor * 0.3));
+      const spiritStones = Math.floor(baseReward * 0.5 * (1 + floor * 0.2));
+      
+      rewards = { contribution, exp, spiritStones };
+      buildingGain = Math.floor(baseReward * 0.1 * floor);
+      
+      // 更新玩家和宗门
+      db.prepare('UPDATE SectMembers SET contribution = contribution + ? WHERE userId = ? AND sectId = ?').run(contribution, playerId, sectId);
+      db.prepare('UPDATE sects SET contribution = contribution + ? WHERE id = ?').run(contribution, sectId);
+      
+      // 如果是首次通关，解锁下一层
+      if (floor < 5) {
+        db.prepare('UPDATE sect_dungeons SET status = "open" WHERE sect_id = ? AND floor = ?').run(sectId, floor + 1);
+      }
+    }
+
+    // 更新最佳成绩
+    if (playerDamage > (db.prepare('SELECT best_score FROM sect_dungeons WHERE sect_id = ? AND floor = ?').get(sectId, floor)?.best_score || 0)) {
+      db.prepare('UPDATE sect_dungeons SET best_score = ? WHERE sect_id = ? AND floor = ?').run(playerDamage, sectId, floor);
+    }
+
+    res.json({ 
+      success: true, 
+      win: isWin,
+      playerDamage,
+      bossDamage: bossAttack,
+      playerRemainingHp,
+      rewards,
+      buildingGain,
+      message: isWin ? '战斗胜利！' : '战斗失败'
+    });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 宗门副本重置 (每日/每周)
+router.post('/dungeon/reset', (req, res) => {
+  const sectId = parseInt(req.body.sectId) || parseInt(req.body.sect_id);
+  const type = req.body.type || 'daily'; // daily 或 weekly
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    // 每周重置：清空所有进度，重新从第一层开始
+    if (type === 'weekly') {
+      db.prepare('UPDATE sect_dungeons SET status = CASE WHEN floor = 1 THEN "open" ELSE "locked" END, challenge_count = 0, best_score = 0, reset_at = datetime("now", "+7 days") WHERE sect_id = ?').run(sectId);
+      return res.json({ success: true, message: '宗门副本已每周重置' });
+    }
+    
+    // 每日重置：重置挑战次数
+    db.prepare('UPDATE sect_dungeons SET challenge_count = 0, reset_at = datetime("now", "+1 day") WHERE sect_id = ?').run(sectId);
+    res.json({ success: true, message: '宗门副本已每日重置' });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 旧版兼容 - 挑战宗门副本 (简化版)
 router.post('/dungeon/challenge', (req, res) => {
   const { player_id, floor, difficulty } = req.body;
-  const dungeon = sectDungeons.find(d => d.floor === floor);
-  if (!dungeon) return res.json({ success: false, message: '副本不存在' });
-  if (!dungeon.unlocked) return res.json({ success: false, message: '副本未解锁' });
+  const playerId = parseInt(player_id) || 1;
   
+  // 获取玩家宗门
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  const player = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+  if (!player || !player.sectId) {
+    return res.json({ success: false, message: '未加入宗门' });
+  }
+  
+  // 转发到新接口
+  req.body.sectId = player.sectId;
+  req.body.floor = parseInt(floor) || 1;
+  
+  // 模拟伤害触发战斗
+  req.body.damage = Math.floor((SECT_DUNGEON_CONFIG[req.body.floor]?.baseHp || 1000) * 0.5);
+  
+  // 调用battle接口
+  const battleRes = require('./sect').Router?.post ? res : null;
+  
+  // 直接返回简化结果
+  const config = SECT_DUNGEON_CONFIG[req.body.floor] || {};
   const success = Math.random() > 0.3;
-  res.json({ success, message: success ? '挑战成功!' : '挑战失败', dungeon, rewards: success ? { exp: 1000, contribution: 50 } : null });
+  res.json({ 
+    success, 
+    message: success ? '挑战成功!' : '挑战失败', 
+    dungeon: { floor: req.body.floor, name: config.name, difficulty: config.difficulty },
+    rewards: success ? { exp: config.baseReward * 2 || 200, contribution: config.baseReward || 100 } : null
+  });
 });
 
 // /redpackets - 红包列表
@@ -620,12 +841,186 @@ router.post('/donate', (req, res) => {
   }
 });
 
+// ==================== 宗门商店系统 ====================
+
+// 初始化 sect_shop_items 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_shop_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      icon TEXT DEFAULT '📦',
+      cost INTEGER NOT NULL,
+      reward_type TEXT NOT NULL,
+      reward_id TEXT,
+      reward_count INTEGER NOT NULL DEFAULT 1,
+      stock INTEGER DEFAULT -1,
+      player_limit INTEGER DEFAULT 0,
+      sect_level_req INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  
+  // 初始化默认商店物品
+  const defaultItems = [
+    { key: 'ss_title_1', name: '宗门弟子称号', desc: '宗门成员专属称号', icon: '📛', cost: 500, type: 'title', id: 'sect_disciple', count: 1, level: 1 },
+    { key: 'ss_title_2', name: '宗门长老称号', desc: '宗门长老专属称号', icon: '📛', cost: 2000, type: 'title', id: 'sect_elder', count: 1, level: 3 },
+    { key: 'ss_title_3', name: '宗门太上长老', desc: '宗门太上长老专属称号', icon: '📛', cost: 5000, type: 'title', id: 'sect_senior', count: 1, level: 5 },
+    { key: 'ss_gongfa_1', name: '基础功法', desc: '宗门基础修炼功法', icon: '📖', cost: 1000, type: 'gongfa', id: 'sect_basic_gongfa', count: 1, level: 2 },
+    { key: 'ss_gongfa_2', name: '中级功法', desc: '宗门中级修炼功法', icon: '📖', cost: 3000, type: 'gongfa', id: 'sect_mid_gongfa', count: 1, level: 4 },
+    { key: 'ss_gongfa_3', name: '高级功法', desc: '宗门高级修炼功法', icon: '📖', cost: 8000, type: 'gongfa', id: 'sect_high_gongfa', count: 1, level: 6 },
+    { key: 'ss_pill_1', name: '修炼丹', desc: '提升修炼速度', icon: '🧪', cost: 500, type: 'pill', id: 'cultivation_pill', count: 1, level: 1 },
+    { key: 'ss_pill_2', name: '灵力丹', desc: '恢复灵力', icon: '🧪', cost: 300, type: 'pill', id: 'spirit_pill', count: 1, level: 1 },
+    { key: 'ss_pill_3', name: '气血散', desc: '恢复气血', icon: '🧪', cost: 200, type: 'pill', id: 'hp_pill', count: 1, level: 1 },
+    { key: 'ss_material_1', name: '破境石', desc: '增加突破成功率', icon: '💎', cost: 1000, type: 'material', id: 'breakthrough_stone', count: 1, level: 3 },
+    { key: 'ss_material_2', name: '聚灵石', desc: '增加灵石获取', icon: '💎', cost: 800, type: 'material', id: 'spirit_stone_material', count: 1, level: 2 },
+    { key: 'ss_box_1', name: '宗门礼包', desc: '随机获得宗门道具', icon: '🎁', cost: 1500, type: 'box', id: 'sect_gift_box', count: 1, level: 1 },
+  ];
+  
+  const insertItem = db.prepare(`
+    INSERT OR IGNORE INTO sect_shop_items (item_key, name, description, icon, cost, reward_type, reward_id, reward_count, sect_level_req)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  for (const item of defaultItems) {
+    insertItem.run(item.key, item.name, item.desc, item.icon, item.cost, item.type, item.id, item.count, item.level);
+  }
+  console.log('[sect] 宗门商店物品初始化完成');
+} catch(e) { console.log('[sect] sect_shop_items:', e.message); }
+
+// 玩家购买记录
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_shop_purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      item_key TEXT NOT NULL,
+      cost INTEGER NOT NULL,
+      purchased_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, item_key)
+    )
+  `);
+} catch(e) {}
+
+// 获取宗门商店列表
+router.get('/shop', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || parseInt(req.query.playerId) || 1;
+  const sectId = parseInt(req.query.sectId) || parseInt(req.query.sect_id);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    // 获取玩家所在宗门
+    if (!sectId) {
+      const player = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+      if (!player || !player.sectId) {
+        return res.json({ success: false, message: '未加入宗门' });
+      }
+    }
+    const actualSectId = sectId || player?.sectId;
+    
+    // 获取宗门等级
+    const sect = db.prepare('SELECT level FROM sects WHERE id = ?').get(actualSectId);
+    const sectLevel = sect?.level || 1;
+    
+    // 获取商店物品 (根据宗门等级过滤)
+    const items = db.prepare(`
+      SELECT * FROM sect_shop_items WHERE sect_level_req <= ? ORDER BY sect_level_req, cost
+    `).all(sectLevel);
+    
+    // 获取玩家已购买记录
+    const purchased = db.prepare('SELECT item_key FROM sect_shop_purchases WHERE player_id = ?').all(playerId);
+    const purchasedKeys = new Set(purchased.map(p => p.item_key));
+    
+    // 标记已购买物品
+    const result = items.map(item => ({
+      ...item,
+      canBuy: !purchasedKeys.has(item.item_key) && item.player_limit === 0,
+      purchased: purchasedKeys.has(item.item_key)
+    }));
+    
+    res.json({ success: true, items: result, sectLevel });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 购买物品
+router.post('/shop/buy', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || parseInt(req.body.playerId) || 1;
+  const sectId = parseInt(req.body.sectId) || parseInt(req.body.sect_id);
+  const itemKey = req.body.item_key || req.body.itemKey || req.body.item;
+  
+  if (!itemKey) return res.json({ success: false, message: '请选择物品' });
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    // 获取玩家信息和宗门
+    const player = db.prepare('SELECT id, sectId, lingshi FROM Users WHERE id = ?').get(playerId);
+    if (!player) return res.json({ success: false, message: '玩家不存在' });
+    if (!player.sectId) return res.json({ success: false, message: '未加入宗门' });
+    
+    const actualSectId = sectId || player.sectId;
+    
+    // 获取物品信息
+    const item = db.prepare('SELECT * FROM sect_shop_items WHERE item_key = ?').get(itemKey);
+    if (!item) return res.json({ success: false, message: '物品不存在' });
+    
+    // 检查宗门等级
+    const sect = db.prepare('SELECT level FROM sects WHERE id = ?').get(actualSectId);
+    if (sect && sect.level < item.sect_level_req) {
+      return res.json({ success: false, message: `宗门等级不足，需要 ${item.sect_level_req} 级` });
+    }
+    
+    // 检查玩家灵石
+    if (player.lingshi < item.cost) {
+      return res.json({ success: false, message: `灵石不足，需要 ${item.cost} 灵石` });
+    }
+    
+    // 检查是否已购买 (针对限购物品)
+    if (item.player_limit > 0) {
+      const existing = db.prepare('SELECT * FROM sect_shop_purchases WHERE player_id = ? AND item_key = ?').get(playerId, itemKey);
+      if (existing) {
+        return res.json({ success: false, message: '该物品已购买过' });
+      }
+    }
+    
+    // 扣除灵石
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(item.cost, playerId);
+    
+    // 记录购买
+    try {
+      db.prepare('INSERT INTO sect_shop_purchases (player_id, item_key, cost) VALUES (?, ?, ?)').run(playerId, itemKey, item.cost);
+    } catch(e) {}
+    
+    // 返回物品
+    res.json({
+      success: true,
+      message: `购买成功！获得 ${item.name}`,
+      item: {
+        key: item.item_key,
+        name: item.name,
+        type: item.reward_type,
+        id: item.reward_id,
+        count: item.reward_count,
+        icon: item.icon
+      },
+      remainingLingshi: player.lingshi - item.cost
+    });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
 // 创建宗门
 router.post('/create', (req, res) => {
   const { player_id, name } = req.body;
   const creatorId = parseInt(player_id) || 1;
   const sectName = name || '新宗门';
   const now = new Date().toISOString();
+  const CREATE_COST = 5000; // 创建宗门消耗5000灵石
 
   if (!db) {
     return res.json({ success: false, message: '数据库未连接' });
@@ -633,7 +1028,7 @@ router.post('/create', (req, res) => {
 
   try {
     // 检查玩家是否存在
-    const player = db.prepare('SELECT id, sectId FROM Users WHERE id = ?').get(creatorId);
+    const player = db.prepare('SELECT id, sectId, lingshi FROM Users WHERE id = ?').get(creatorId);
     if (!player) {
       return res.json({ success: false, message: '玩家不存在' });
     }
@@ -641,6 +1036,22 @@ router.post('/create', (req, res) => {
     // 检查是否已有宗门
     if (player.sectId) {
       return res.json({ success: false, message: '已有宗门，无法创建' });
+    }
+
+    // 检查灵石是否足够
+    if (player.lingshi < CREATE_COST) {
+      return res.json({ success: false, message: `灵石不足，需要 ${CREATE_COST} 灵石才能创建宗门` });
+    }
+
+    // 扣除灵石
+    db.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(CREATE_COST, creatorId);
+
+    // 检查宗门名称是否已存在
+    const existingSect = db.prepare('SELECT id FROM sects WHERE name = ?').get(sectName);
+    if (existingSect) {
+      // 退还灵石
+      db.prepare('UPDATE Users SET lingshi = lingshi + ? WHERE id = ?').run(CREATE_COST, creatorId);
+      return res.json({ success: false, message: '宗门名称已存在' });
     }
 
     // 插入 Sects 表
@@ -664,10 +1075,14 @@ router.post('/create', (req, res) => {
       console.log('[sect] create SectMembers 插入:', e.message);
     }
 
+    // 初始化宗门资金
+    db.prepare('UPDATE sects SET spirit_stones = 0, funds = 0 WHERE id = ?').run(newSectId);
+
     const newSect = db.prepare('SELECT * FROM sects WHERE id = ?').get(newSectId);
 
     return res.json({
       success: true,
+      message: `宗门「${sectName}」创建成功！消耗 ${CREATE_COST} 灵石`,
       sect: {
         id: newSect.id,
         name: newSect.name,
@@ -677,12 +1092,119 @@ router.post('/create', (req, res) => {
         leaderId: newSect.leaderId,
         rank: newSect.rank,
         contribution: newSect.contribution,
-        createdAt: newSect.createdAt
-      }
+        createdAt: newSect.createdAt,
+        funds: 0,
+        spiritStones: 0
+      },
+      remainingLingshi: player.lingshi - CREATE_COST
     });
   } catch (e) {
     console.log('[sect] create错误:', e.message);
     return res.json({ success: false, message: '创建宗门失败: ' + e.message });
+  }
+});
+
+// ==================== 宗门升级系统 ====================
+
+// 宗门升级配置
+const SECT_UPGRADE_CONFIG = {
+  1: { level: 2, reqContrib: 5000, reqFunds: 1000, maxMembers: 25, name: '二级宗门' },
+  2: { level: 3, reqContrib: 15000, reqFunds: 3000, maxMembers: 30, name: '三级宗门' },
+  3: { level: 4, reqContrib: 40000, reqFunds: 8000, maxMembers: 35, name: '四级宗门' },
+  4: { level: 5, reqContrib: 100000, reqFunds: 20000, maxMembers: 40, name: '五级宗门' },
+  5: { level: 6, reqContrib: 250000, reqFunds: 50000, maxMembers: 45, name: '六级宗门' },
+  6: { level: 7, reqContrib: 600000, reqFunds: 120000, maxMembers: 50, name: '七级宗门' },
+  7: { level: 8, reqContrib: 1500000, reqFunds: 300000, maxMembers: 55, name: '八级宗门' },
+  8: { level: 9, reqContrib: 4000000, reqFunds: 800000, maxMembers: 60, name: '九级宗门' },
+  9: { level: 10, reqContrib: 10000000, reqFunds: 2000000, maxMembers: 70, name: '十级宗门（顶级）' }
+};
+
+// 添加 funds 字段到 sects 表（如不存在）
+try {
+  db.exec(`ALTER TABLE sects ADD COLUMN funds INTEGER DEFAULT 0`);
+} catch(e) {}
+
+// 升级宗门
+router.post('/upgrade', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const sectId = parseInt(req.body.sectId) || parseInt(req.body.sect_id);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    // 获取玩家宗门身份
+    const member = db.prepare('SELECT sm.*, s.level as sectLevel, s.contribution, s.funds, s.max_members FROM SectMembers sm JOIN sects s ON s.id = sm.sectId WHERE sm.userId = ? AND sm.sectId = ?').get(playerId, sectId);
+    if (!member) return res.json({ success: false, message: '你不是该宗门成员' });
+    
+    // 只有掌门可以升级
+    if (member.role !== '掌门') {
+      return res.json({ success: false, message: '只有掌门才能升级宗门' });
+    }
+    
+    const currentLevel = member.sectLevel;
+    if (currentLevel >= 10) {
+      return res.json({ success: false, message: '宗门已达最高等级' });
+    }
+    
+    const upgradeConfig = SECT_UPGRADE_CONFIG[currentLevel];
+    if (!upgradeConfig) {
+      return res.json({ success: false, message: '升级配置不存在' });
+    }
+    
+    // 检查资源
+    if (member.contribution < upgradeConfig.reqContrib) {
+      return res.json({ success: false, message: `宗门贡献不足，需要 ${upgradeConfig.reqContrib} 贡献度，当前 ${member.contribution}` });
+    }
+    
+    if ((member.funds || 0) < upgradeConfig.reqFunds) {
+      return res.json({ success: false, message: `宗门资金不足，需要 ${upgradeConfig.reqFunds} 灵石，当前 ${member.funds || 0}` });
+    }
+    
+    // 执行升级
+    db.prepare('UPDATE sects SET level = ?, max_members = ? WHERE id = ?').run(upgradeConfig.level, upgradeConfig.maxMembers, sectId);
+    
+    res.json({
+      success: true,
+      message: `宗门升级成功！现在是 ${upgradeConfig.name}`,
+      newLevel: upgradeConfig.level,
+      maxMembers: upgradeConfig.maxMembers
+    });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 获取升级信息
+router.get('/upgrade/info', (req, res) => {
+  const sectId = parseInt(req.query.sectId) || parseInt(req.query.sect_id);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    const sect = db.prepare('SELECT level, contribution, funds, max_members FROM sects WHERE id = ?').get(sectId);
+    if (!sect) return res.json({ success: false, message: '宗门不存在' });
+    
+    const currentLevel = sect.level;
+    const upgradeConfig = SECT_UPGRADE_CONFIG[currentLevel];
+    
+    if (!upgradeConfig) {
+      return res.json({ success: true, message: '已达最高等级', isMaxLevel: true, level: currentLevel });
+    }
+    
+    res.json({
+      success: true,
+      currentLevel,
+      nextLevel: upgradeConfig.level,
+      reqContrib: upgradeConfig.reqContrib,
+      reqFunds: upgradeConfig.reqFunds,
+      newMaxMembers: upgradeConfig.maxMembers,
+      currentContrib: sect.contribution,
+      currentFunds: sect.funds || 0,
+      currentMaxMembers: sect.max_members,
+      canUpgrade: sect.contribution >= upgradeConfig.reqContrib && (sect.funds || 0) >= upgradeConfig.reqFunds
+    });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
   }
 });
 
@@ -1497,6 +2019,354 @@ router.get('/tech/bonuses', (req, res) => {
   const levels = getSectTechLevels(sectId);
   
   res.json({ success: true, bonuses, techLevels: levels });
+});
+
+// ==================== 宗门战系统 (帮战/跨服联赛) ====================
+
+// 宗门战配置
+const SECT_WAR_CONFIG = {
+  seasonDuration: 7 * 24 * 60 * 60 * 1000, // 赛季7天
+  matchDuration: 15 * 60 * 1000, // 比赛15分钟
+  entryCost: 1000, // 参赛费用1000灵石
+  maxMembersPerSide: 10, // 每边最多10人参战
+  winPoints: 3, // 胜利获得3分
+  drawPoints: 1, // 平局获得1分
+  losePoints: 0  // 失败获得0分
+};
+
+// 初始化 sect_war 表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_wars (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER DEFAULT 1,
+      sect_a_id INTEGER NOT NULL,
+      sect_b_id INTEGER NOT NULL,
+      sect_a_score INTEGER DEFAULT 0,
+      sect_b_score INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','fighting','finished')),
+      winner_id INTEGER,
+      started_at DATETIME,
+      finished_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(season_id, sect_a_id, sect_b_id)
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_war_season ON sect_wars(season_id)`);
+  
+  // 宗门战赛季表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_war_seasons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_num INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','fighting','finished')),
+      started_at DATETIME,
+      finished_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  
+  // 宗门参战记录
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sect_war_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      war_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      sect_id INTEGER NOT NULL,
+      kill_count INTEGER DEFAULT 0,
+      damage_dealt INTEGER DEFAULT 0,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(war_id, player_id)
+    )
+  `);
+  console.log('[sect] 宗门战表初始化完成');
+} catch(e) { console.log('[sect] sect_wars:', e.message); }
+
+// 获取当前赛季信息
+function getCurrentSeason() {
+  try {
+    let season = db.prepare('SELECT * FROM sect_war_seasons WHERE status != "finished" ORDER BY id DESC LIMIT 1').get();
+    if (!season) {
+      // 创建新赛季
+      const result = db.prepare('INSERT INTO sect_war_seasons (season_num, status, started_at) VALUES (?, "pending", datetime("now"))').run(1);
+      season = { id: result.lastInsertRowid, season_num: 1, status: 'pending' };
+    }
+    return season;
+  } catch(e) { return { id: 1, season_num: 1, status: 'pending' }; }
+}
+
+// 获取当前赛季排名
+router.get('/war/ranking', (req, res) => {
+  const sectId = parseInt(req.query.sectId);
+  
+  try {
+    const season = getCurrentSeason();
+    const rankings = db.prepare(`
+      SELECT s.id, s.name, s.level,
+        COALESCE(SUM(CASE WHEN w.winner_id = s.id THEN 3 ELSE 0 END), 0) as wins,
+        COALESCE(SUM(CASE WHEN w.sect_a_id = s.id OR w.sect_b_id = s.id THEN 1 ELSE 0 END), 0) as battles,
+        COALESCE(SUM(CASE WHEN w.sect_a_id = s.id THEN w.sect_a_score ELSE w.sect_b_score END), 0) as total_score
+      FROM sects s
+      LEFT JOIN sect_wars w ON (w.sect_a_id = s.id OR w.sect_b_id = s.id) AND w.season_id = ?
+      WHERE s.members > 0
+      GROUP BY s.id
+      ORDER BY wins DESC, total_score DESC
+      LIMIT 20
+    `).all(season.id);
+    
+    // 玩家宗门排名
+    let myRank = null;
+    if (sectId) {
+      myRank = rankings.findIndex(r => r.id === sectId) + 1;
+    }
+    
+    res.json({ success: true, rankings, myRank, season });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 宗门战报名
+router.post('/war/signup', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const sectId = parseInt(req.body.sectId);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  if (!sectId) return res.json({ success: false, message: '缺少宗门ID' });
+  
+  try {
+    // 检查玩家是否是掌门/长老
+    const member = db.prepare('SELECT role FROM SectMembers WHERE userId = ? AND sectId = ?').get(playerId, sectId);
+    if (!member || !['掌门', '长老'].includes(member.role)) {
+      return res.json({ success: false, message: '只有掌门或长老可以发起宗门战' });
+    }
+    
+    // 检查宗门是否有足够资金
+    const sect = db.prepare('SELECT funds FROM sects WHERE id = ?').get(sectId);
+    if (!sect || (sect.funds || 0) < SECT_WAR_CONFIG.entryCost) {
+      return res.json({ success: false, message: `宗门资金不足，需要${SECT_WAR_CONFIG.entryCost}灵石` });
+    }
+    
+    // 检查是否有待匹配的宗门
+    const pending = db.prepare(`
+      SELECT w.*, s.name as sect_name FROM sect_wars w
+      JOIN sects s ON s.id = CASE WHEN w.sect_a_id = ? THEN w.sect_b_id ELSE w.sect_a_id END
+      WHERE w.status = 'pending' AND w.season_id = ? AND w.sect_a_id != ? AND w.sect_b_id != ?
+      LIMIT 1
+    `).get(sectId, getCurrentSeason().id, sectId, sectId);
+    
+    if (pending) {
+      // 匹配成功，开始战斗
+      db.prepare('UPDATE sect_wars SET status = "fighting", started_at = datetime("now") WHERE id = ?').run(pending.id);
+      db.prepare('UPDATE sects SET funds = funds - ? WHERE id = ?').run(SECT_WAR_CONFIG.entryCost, sectId);
+      
+      return res.json({
+        success: true,
+        matched: true,
+        warId: pending.id,
+        opponent: { id: pending.sect_a_id === sectId ? pending.sect_b_id : pending.sect_a_id, name: pending.sect_name },
+        message: `匹配成功！宗门战开始！`
+      });
+    } else {
+      // 创建等待匹配
+      db.prepare('UPDATE sects SET funds = funds - ? WHERE id = ?').run(SECT_WAR_CONFIG.entryCost, sectId);
+      db.prepare(`INSERT INTO sect_wars (season_id, sect_a_id, status) VALUES (?, ?, 'pending')`).run(getCurrentSeason().id, sectId);
+      
+      return res.json({ success: true, matched: false, message: '已发布宗门战匹配，等待其他宗门应战...' });
+    }
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 宗门战斗/攻击
+router.post('/war/attack', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const warId = parseInt(req.body.warId);
+  const damage = parseInt(req.body.damage) || 0;
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    const war = db.prepare('SELECT * FROM sect_wars WHERE id = ?').get(warId);
+    if (!war || war.status !== 'fighting') {
+      return res.json({ success: false, message: '战斗不存在或已结束' });
+    }
+    
+    // 获取玩家宗门
+    const player = db.prepare('SELECT sectId FROM Users WHERE id = ?').get(playerId);
+    if (!player || (player.sectId !== war.sect_a_id && player.sectId !== war.sect_b_id)) {
+      return res.json({ success: false, message: '你不是参战宗门成员' });
+    }
+    
+    const isSideA = player.sectId === war.sect_a_id;
+    
+    // 更新参战记录
+    const existingMember = db.prepare('SELECT * FROM sect_war_members WHERE war_id = ? AND player_id = ?').get(warId, playerId);
+    if (!existingMember) {
+      db.prepare('INSERT INTO sect_war_members (war_id, player_id, sect_id, damage_dealt) VALUES (?, ?, ?, ?)').run(warId, playerId, player.sectId, damage);
+    } else {
+      db.prepare('UPDATE sect_war_members SET damage_dealt = damage_dealt + ?, kill_count = kill_count + (CASE WHEN ? > 500 THEN 1 ELSE 0 END) WHERE war_id = ? AND player_id = ?').run(damage, damage, warId, playerId);
+    }
+    
+    // 更新比分
+    if (isSideA) {
+      db.prepare('UPDATE sect_wars SET sect_a_score = sect_a_score + ? WHERE id = ?').run(Math.floor(damage / 100), warId);
+    } else {
+      db.prepare('UPDATE sect_wars SET sect_b_score = sect_b_score + ? WHERE id = ?').run(Math.floor(damage / 100), warId);
+    }
+    
+    // 获取更新后的比分
+    const updatedWar = db.prepare('SELECT sect_a_score, sect_b_score FROM sect_wars WHERE id = ?').get(warId);
+    
+    res.json({
+      success: true,
+      damage,
+      score: { sectA: updatedWar.sect_a_score, sectB: updatedWar.sect_b_score },
+      message: `攻击造成${damage}伤害`
+    });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 结束宗门战（定时器或手动）
+router.post('/war/finish', (req, res) => {
+  const warId = parseInt(req.body.warId);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    const war = db.prepare('SELECT * FROM sect_wars WHERE id = ?').get(warId);
+    if (!war || war.status !== 'fighting') {
+      return res.json({ success: false, message: '战斗不存在或已结束' });
+    }
+    
+    const winnerId = war.sect_a_score >= war.sect_b_score ? war.sect_a_id : war.sect_b_id;
+    const isDraw = war.sect_a_score === war.sect_b_score;
+    
+    db.prepare('UPDATE sect_wars SET status = "finished", winner_id = ?, finished_at = datetime("now") WHERE id = ?').run(winnerId || null, warId);
+    
+    // 奖励获胜宗门
+    if (!isDraw && winnerId) {
+      const reward = 2000; // 获胜奖励
+      db.prepare('UPDATE sects SET contribution = contribution + ?, funds = funds + ? WHERE id = ?').run(reward, reward, winnerId);
+    }
+    
+    res.json({
+      success: true,
+      winnerId,
+      isDraw,
+      score: { sectA: war.sect_a_score, sectB: war.sect_b_score },
+      reward: isDraw ? 0 : 2000,
+      message: isDraw ? '平局！双方不分胜负' : `宗门战结束，获胜方获得2000贡献度和灵石！`
+    });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 获取宗门战详情
+router.get('/war/info', (req, res) => {
+  const warId = parseInt(req.query.warId);
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    const war = db.prepare(`
+      SELECT w.*, 
+        sa.name as sect_a_name, sb.name as sect_b_name
+      FROM sect_wars w
+      JOIN sects sa ON sa.id = w.sect_a_id
+      JOIN sects sb ON sb.id = w.sect_b_id
+      WHERE w.id = ?
+    `).get(warId);
+    
+    if (!war) return res.json({ success: false, message: '战斗不存在' });
+    
+    const members = db.prepare('SELECT * FROM sect_war_members WHERE war_id = ? ORDER BY damage_dealt DESC LIMIT 10').all(warId);
+    
+    res.json({ success: true, war, members });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ==================== 贡献兑换系统 ====================
+
+// 贡献商店配置
+const CONTRIBUTION_SHOP = {
+  // 称号类
+  'title_elder': { name: '长老称号', icon: '📛', cost: 1000, type: 'title', value: '长老', desc: '宗门长老专属称号' },
+  'title_senior': { name: '太上长老', icon: '📛', cost: 5000, type: 'title', value: '太上长老', desc: '宗门太上长老专属称号' },
+  'title_founder': { name: '创派祖师', icon: '📛', cost: 20000, type: 'title', value: '创派祖师', desc: '开宗立派的传奇称号' },
+  // 功法类
+  'gongfa_basic': { name: '基础功法', icon: '📖', cost: 2000, type: 'gongfa', value: 'sect_basic', desc: '宗门基础修炼功法' },
+  'gongfa_advanced': { name: '玄阶功法', icon: '📖', cost: 8000, type: 'gongfa', value: 'sect_advanced', desc: '宗门进阶修炼功法' },
+  // 道具类
+  'pill_cultivation': { name: '修炼加速丸', icon: '🧪', cost: 500, type: 'item', value: 'cultivation_speed', count: 10, desc: '提升修炼速度50%' },
+  'pill_breakthrough': { name: '破境丹', icon: '💊', cost: 2000, type: 'item', value: 'breakthrough', count: 1, desc: '增加突破成功率30%' },
+  'material_strengthen': { name: '强化石', icon: '💎', cost: 800, type: 'item', value: 'strengthen', count: 5, desc: '装备强化材料' }
+};
+
+// 获取贡献商店列表
+router.get('/contribution/shop', (req, res) => {
+  const playerId = parseInt(req.query.player_id) || 1;
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  
+  try {
+    const member = db.prepare('SELECT contribution FROM SectMembers WHERE userId = ?').get(playerId);
+    const currentContrib = member?.contribution || 0;
+    
+    const items = Object.entries(CONTRIBUTION_SHOP).map(([key, item]) => ({
+      key,
+      ...item,
+      canBuy: currentContrib >= item.cost
+    }));
+    
+    res.json({ success: true, items, currentContrib });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// 兑换物品
+router.post('/contribution/exchange', (req, res) => {
+  const playerId = parseInt(req.body.player_id) || 1;
+  const itemKey = req.body.item_key;
+  
+  if (!db) return res.json({ success: false, message: '数据库未连接' });
+  if (!itemKey || !CONTRIBUTION_SHOP[itemKey]) {
+    return res.json({ success: false, message: '物品不存在' });
+  }
+  
+  try {
+    const member = db.prepare('SELECT contribution, sectId FROM SectMembers WHERE userId = ?').get(playerId);
+    if (!member) return res.json({ success: false, message: '你还没有加入宗门' });
+    
+    const item = CONTRIBUTION_SHOP[itemKey];
+    if (member.contribution < item.cost) {
+      return res.json({ success: false, message: `贡献度不足，需要${item.cost}贡献度` });
+    }
+    
+    // 扣除贡献度
+    db.prepare('UPDATE SectMembers SET contribution = contribution - ? WHERE userId = ?').run(item.cost, playerId);
+    
+    // TODO: 发放物品到玩家背包（需要背包系统）
+    // 这里先记录到日志
+    console.log(`[sect] 玩家${playerId}兑换${item.name}，消耗${item.cost}贡献度`);
+    
+    res.json({
+      success: true,
+      item: item.name,
+      cost: item.cost,
+      remainingContrib: member.contribution - item.cost,
+      message: `成功兑换${item.name}！`
+    });
+  } catch(e) {
+    res.json({ success: false, message: e.message });
+  }
 });
 
 module.exports = router;
