@@ -1,79 +1,152 @@
 // ==================== 好友系统 UI ====================
-let friendCurrentTab = 'friends';
+// 参考: 梦幻西游好友系统 + 微信好友功能
+// API: /api/friend/* (xundao-server backend)
 
+const API_BASE = window.API_BASE || 'http://localhost:3001';
+
+// 当前状态
+let friendCurrentTab = 'friends';
+let friendData = {
+  friends: [],
+  friendCount: 0,
+  onlineCount: 0,
+  received: [],
+  sent: []
+};
+let friendSearchResults = [];
+let currentFriendChat = null;
+
+// ===== 打开好友面板 =====
 function showFriendPanel() {
   document.getElementById('friendModal').classList.add('active');
   friendCurrentTab = 'friends';
+  loadFriendData();
+}
+
+// ===== 加载好友数据 =====
+async function loadFriendData() {
+  try {
+    const res = await fetch(`${API_BASE}/api/friend?player_id=${getCurrentPlayerId()}`, {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        friendData.friends = result.data.friends || [];
+        friendData.friendCount = result.data.friendCount || 0;
+        friendData.onlineCount = result.data.onlineCount || 0;
+      }
+    }
+  } catch (e) {
+    console.log('[friend] 加载好友列表失败,使用本地数据');
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/requests?player_id=${getCurrentPlayerId()}`, {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        friendData.received = result.data.received || [];
+        friendData.sent = result.data.sent || [];
+      }
+    }
+  } catch (e) {
+    console.log('[friend] 加载好友申请失败');
+  }
+
   renderFriendUI();
 }
 
+// ===== 切换标签页 =====
 function switchFriendTab(tab) {
   friendCurrentTab = tab;
   renderFriendUI();
 }
 
+// ===== 渲染好友UI =====
 function renderFriendUI() {
   const container = document.getElementById('friendContent');
-  const friends = getFriends();
-  const pending = getPendingList();
-  
-  let html = `<div class="friend-header">
+  const pendingCount = friendData.received.length;
+
+  let html = `
+  <div class="friend-header">
     <div class="friend-header-title">👥 好友系统</div>
-    <div class="friend-header-stats">已有 ${friends.length} 位好友</div>
-  </div>`;
-  
-  // 添加好友
-  html += `<div class="friend-add-section">
-    <div class="friend-add-title">➕ 添加好友</div>
-    <div class="friend-add-form">
-      <input type="text" id="friendAddInput" class="friend-add-input" placeholder="输入玩家名称">
-      <button class="btn" style="background: linear-gradient(135deg, #3b82f6, #2563eb)" onclick="addFriendUI()">添加</button>
+    <div class="friend-header-stats">
+      <span class="stat-item">💚 ${friendData.onlineCount} 在线</span>
+      <span class="stat-item">👥 ${friendData.friendCount}/50</span>
     </div>
   </div>`;
-  
+
+  // 搜索区域
+  html += `
+  <div class="friend-search-section">
+    <input type="text" id="friendSearchInput" class="friend-search-input" 
+           placeholder="🔍 搜索玩家名称..." 
+           onkeyup="handleFriendSearch(event)">
+    <button class="friend-search-btn" onclick="doFriendSearch()">搜索</button>
+  </div>`;
+
+  // 搜索结果
+  html += `<div id="friendSearchResults" class="friend-search-results"></div>`;
+
   // 标签页
   const tabs = [
-    { id: 'friends', name: '好友', icon: '👥', count: friends.length },
-    { id: 'pending', name: '申请', icon: '📨', count: pending.length }
+    { id: 'friends', name: '💚 好友', count: friendData.friendCount },
+    { id: 'requests', name: '📨 申请', count: pendingCount },
+    { id: 'search', name: '🔍 发现', count: 0 }
   ];
-  
+
   html += '<div class="friend-tabs">';
   for (const t of tabs) {
     const badge = t.count > 0 ? `<span class="friend-tab-badge">${t.count}</span>` : '';
-    html += `<button class="friend-tab ${friendCurrentTab === t.id ? 'active' : ''}" onclick="switchFriendTab('${t.id}')">${t.icon} ${t.name}${badge}</button>`;
+    html += `<button class="friend-tab ${friendCurrentTab === t.id ? 'active' : ''}" onclick="switchFriendTab('${t.id}')">${t.name}${badge}</button>`;
   }
   html += '</div>';
-  
-  // 内容
+
+  // 内容区
   if (friendCurrentTab === 'friends') {
-    html += renderFriendList(friends);
-  } else {
-    html += renderPendingList(pending);
+    html += renderFriendList();
+  } else if (friendCurrentTab === 'requests') {
+    html += renderRequestsList();
+  } else if (friendCurrentTab === 'search') {
+    html += renderDiscoverList();
   }
-  
+
   container.innerHTML = html;
 }
 
-function renderFriendList(friends) {
+// ===== 渲染好友列表 =====
+function renderFriendList() {
+  const friends = friendData.friends;
   if (friends.length === 0) {
     return `<div class="friend-empty">
       <div class="friend-empty-icon">😔</div>
-      <div>还没有好友，快去添加吧！</div>
+      <div>还没有好友，快去搜索添加吧！</div>
+      <div class="friend-empty-hint">点击「发现」标签页搜索玩家</div>
     </div>`;
   }
-  
+
   let html = '<div class="friend-list">';
   for (const f of friends) {
-    html += `<div class="friend-card">
-      <div class="friend-avatar">🧑</div>
-      <div class="friend-info">
-        <div class="friend-name">${f.name}</div>
-        <div class="friend-level">等级 ${f.level || 1}</div>
-        <div class="friend-realm">${f.realm || '练气'}</div>
+    const onlineClass = f.online ? 'online' : 'offline';
+    const onlineBadge = f.online ? '🟢' : '⚫';
+    html += `
+    <div class="friend-card ${onlineClass}">
+      <div class="friend-avatar" onclick="openFriendChat(${f.friendId}, '${escapeHtml(f.name)}')">
+        <span class="avatar-icon">🧑</span>
+        <span class="online-indicator ${onlineClass}">${onlineBadge}</span>
+      </div>
+      <div class="friend-info" onclick="openFriendChat(${f.friendId}, '${escapeHtml(f.name)}')">
+        <div class="friend-name">${escapeHtml(f.name)}</div>
+        <div class="friend-meta">Lv.${f.level || 1} · ${f.realm || '练气'}</div>
+        <div class="friend-since">加为好友: ${formatDate(f.since)}</div>
       </div>
       <div class="friend-actions">
-        <button class="friend-btn friend-btn-gift" onclick="showGiftPanel('${f.name}')">🎁 送礼</button>
-        <button class="friend-btn friend-btn-delete" onclick="removeFriendUI('${f.name}')">删除</button>
+        <button class="friend-btn friend-btn-chat" onclick="openFriendChat(${f.friendId}, '${escapeHtml(f.name)}')" title="私聊">💬</button>
+        <button class="friend-btn friend-btn-gift" onclick="showGiftPanel(${f.friendId}, '${escapeHtml(f.name)}')" title="送礼">🎁</button>
+        <button class="friend-btn friend-btn-more" onclick="showFriendMoreMenu(${f.friendId}, '${escapeHtml(f.name)}')" title="更多">⋯</button>
       </div>
     </div>`;
   }
@@ -81,667 +154,403 @@ function renderFriendList(friends) {
   return html;
 }
 
-function renderPendingList(pending) {
-  if (pending.length === 0) {
-    return `<div class="friend-empty">
-      <div class="friend-empty-icon">📭</div>
-      <div>没有待处理的好友申请</div>
-    </div>`;
-  }
-  
-  let html = '<div class="friend-list">';
-  for (const p of pending) {
-    html += `<div class="friend-pending-card">
-      <div class="friend-avatar">🧑</div>
-      <div class="friend-pending-info">
-        <div class="friend-name">${p.name}</div>
-        <div class="friend-level">等级 ${p.level || 1}</div>
-      </div>
-      <div class="friend-pending-actions">
-        <button class="friend-btn friend-btn-accept" onclick="acceptFriendUI('${p.name}')">接受</button>
-        <button class="friend-btn friend-btn-reject" onclick="rejectFriendUI('${p.name}')">拒绝</button>
-      </div>
-    </div>`;
-  }
-  html += '</div>';
-  return html;
-}
+// ===== 渲染申请列表 =====
+function renderRequestsList() {
+  const received = friendData.received;
+  const sent = friendData.sent;
 
-function addFriendUI() {
-  const input = document.getElementById('friendAddInput');
-  const name = input.value.trim();
-  if (!name) {
-    addLog('请输入玩家名称', 'error');
-    return;
-  }
-  const result = addFriend(name);
-  addLog(result.message, result.success ? 'success' : 'error');
-  if (result.success) {
-    input.value = '';
-    renderFriendUI();
-  }
-}
+  let html = `<div class="requests-section">`;
 
-function acceptFriendUI(name) {
-  const result = acceptFriend(name);
-  addLog(result.message, result.success ? 'success' : 'error');
-  if (result.success) renderFriendUI();
-}
-
-function rejectFriendUI(name) {
-  const result = rejectFriend(name);
-  if (result.success) renderFriendUI();
-}
-
-function removeFriendUI(name) {
-  if (confirm(`确定要删除好友 ${name} 吗？`)) {
-    const result = removeFriend(name);
-    addLog(result.message, result.success ? 'success' : 'error');
-    if (result.success) renderFriendUI();
-  }
-}
-
-function showGiftPanel(friendName) {
-  const container = document.getElementById('friendContent');
-  let html = `<div class="friend-gift-panel">
-    <div class="friend-gift-title">🎁 选择礼物送给 ${friendName}</div>
-    <div class="friend-gift-list">
-      <div class="friend-gift-item" onclick="sendGiftUI('${friendName}', 'stone_10')">
-        <span class="friend-gift-icon">🪙</span>
-        <span class="friend-gift-name">10灵石</span>
-      </div>
-      <div class="friend-gift-item" onclick="sendGiftUI('${friendName}', 'stone_100')">
-        <span class="friend-gift-icon">💰</span>
-        <span class="friend-gift-name">100灵石</span>
-      </div>
-      <div class="friend-gift-item" onclick="sendGiftUI('${friendName}', 'stone_1000')">
-        <span class="friend-gift-icon">💎</span>
-        <span class="friend-gift-name">1000灵石</span>
-      </div>
-      <div class="friend-gift-item" onclick="sendGiftUI('${friendName}', 'herb')">
-        <span class="friend-gift-icon">🌿</span>
-        <span class="friend-gift-name">灵草</span>
-      </div>
-      <div class="friend-gift-item" onclick="sendGiftUI('${friendName}', 'pill')">
-        <span class="friend-gift-icon">💊</span>
-        <span class="friend-gift-name">丹药</span>
-      </div>
-    </div>
-  </div>`;
-  
-  container.innerHTML += html;
-}
-
-function sendGiftUI(friendName, giftId) {
-  const result = sendGift(friendName, giftId);
-  addLog(result.message, result.success ? 'success' : 'error');
-  if (result.success) renderFriendUI();
-}
-
-// 显示排行榜面板
-async function showRankingPanel() {
-  const modal = document.getElementById('rankingModal');
-  const content = document.getElementById('rankingContent');
-  modal.classList.add('active');
-  
-  // 默认显示境界排行
-  currentRankingType = 'realm';
-  await loadRankingData('realm');
-}
-
-// 加载排行榜数据
-async function loadRankingData(type) {
-  const content = document.getElementById('rankingContent');
-  const config = RANKING_TYPES[type];
-  currentRankingType = type;
-  
-  // 显示加载状态
-  content.innerHTML = '<div style="text-align:center;padding:30px;color:#888">加载排行榜数据中...</div>';
-  
-  try {
-    // 调用 API 获取排行榜数据
-    const response = await fetch(`${API_BASE}/api/ranking/${config.api}`);
-    const result = await response.json();
-    
-    if (result.success) {
-      renderRankingList(type, result.data);
-    } else {
-      // API 失败时使用模拟数据
-      renderRankingList(type, generateMockRankingData(type));
-    }
-  } catch (error) {
-    console.error('获取排行榜数据失败:', error);
-    // 使用模拟数据
-    renderRankingList(type, generateMockRankingData(type));
-  }
-}
-
-// 生成模拟排行榜数据
-function generateMockRankingData(type) {
-  const mockNames = ['青云子', '紫霞仙子', '逍遥散人', '凌波仙子', '太乙真人', '九尾灵狐', '天璇星君', '玄冥上人', '东皇太一', '西王母'];
-  const mockRealms = ['大乘期', '合体期', '炼虚期', '化神期', '元婴期', '金丹期', '筑基期'];
-  
-  let data = [];
-  for (let i = 0; i < 10; i++) {
-    if (type === 'realm') {
-      data.push({
-        rank: i + 1,
-        playerId: `player_${i}`,
-        name: mockNames[i],
-        value: mockRealms[Math.min(i, mockRealms.length - 1)],
-        realm: mockRealms[Math.min(i, mockRealms.length - 1)],
-        level: 50 + Math.floor(Math.random() * 50)
-      });
-    } else if (type === 'spiritStones') {
-      data.push({
-        rank: i + 1,
-        playerId: `player_${i}`,
-        name: mockNames[i],
-        value: Math.floor(10000000 * (10 - i) * (1 + Math.random() * 0.5)),
-        realm: mockRealms[Math.min(i, mockRealms.length - 1)]
-      });
-    } else if (type === 'level') {
-      data.push({
-        rank: i + 1,
-        playerId: `player_${i}`,
-        name: mockNames[i],
-        value: 100 - i * 5,
-        realm: mockRealms[Math.min(i, mockRealms.length - 1)]
-      });
-    } else if (type === 'achievement') {
-      data.push({
-        rank: i + 1,
-        playerId: `player_${i}`,
-        name: mockNames[i],
-        value: 50 - i * 3,
-        realm: mockRealms[Math.min(i, mockRealms.length - 1)]
-      });
-    }
-  }
-  
-  // 获取当前玩家数据
-  const state = game ? game.getState() : gameState;
-  const playerName = state.player?.name || '未知';
-  let playerRank = -1;
-  
-  for (let i = 0; i < data.length; i++) {
-    if (data[i].name === playerName) {
-      playerRank = i + 1;
-      break;
-    }
-  }
-  
-  // 如果当前玩家不在榜单中，添加玩家数据
-  if (playerRank === -1) {
-    let playerValue = 0;
-    if (type === 'realm') {
-      playerValue = state.player?.realm || '筑基期';
-    } else if (type === 'spiritStones') {
-      playerValue = state.player?.spiritStones || 0;
-    } else if (type === 'level') {
-      playerValue = state.player?.level || 1;
-    } else if (type === 'achievement') {
-      playerValue = state.player?.achievementPoints || 0;
-    }
-    
-    // 估算玩家排名
-    for (let i = 0; i < data.length; i++) {
-      let playerHigher = false;
-      if (type === 'spiritStones' && playerValue > data[i].value) playerHigher = true;
-      else if (type === 'level' && playerValue > data[i].value) playerHigher = true;
-      else if (type === 'achievement' && playerValue > data[i].value) playerHigher = true;
-      else if (type === 'realm') playerHigher = true; // 简化处理
-      
-      if (playerHigher) {
-        data.splice(i, 0, {
-          rank: i + 1,
-          playerId: 'player_self',
-          name: playerName,
-          value: playerValue,
-          realm: state.player?.realm || '筑基期',
-          isSelf: true
-        });
-        playerRank = i + 1;
-        break;
-      }
-    }
-    
-    if (playerRank === -1) {
-      playerRank = data.length + 1;
-      data.push({
-        rank: data.length + 1,
-        playerId: 'player_self',
-        name: playerName,
-        value: playerValue,
-        realm: state.player?.realm || '筑基期',
-        isSelf: true
-      });
-    }
-  }
-  
-  return { list: data, playerRank };
-}
-
-// 渲染排行榜列表
-function renderRankingList(type, data) {
-  const content = document.getElementById('rankingContent');
-  const config = RANKING_TYPES[type];
-  const list = data.list || [];
-  const playerRank = data.playerRank || -1;
-  
-  // 排行榜类型切换按钮
-  let typeButtons = '';
-  for (const [key, conf] of Object.entries(RANKING_TYPES)) {
-    const isActive = key === type ? 'active' : '';
-    typeButtons += `<button class="tab-btn ${isActive}" onclick="loadRankingData('${key}')">${conf.icon} ${conf.name}</button>`;
-  }
-  
-  // 榜单内容
-  let listHtml = '';
-  for (const item of list) {
-    const isSelf = item.isSelf;
-    const rank = item.rank;
-    let rankDisplay = rank;
-    let rankStyle = '';
-    
-    if (rank === 1) {
-      rankDisplay = '🥇';
-      rankStyle = 'color:#FFD700';
-    } else if (rank === 2) {
-      rankDisplay = '🥈';
-      rankStyle = 'color:#C0C0C0';
-    } else if (rank === 3) {
-      rankDisplay = '🥉';
-      rankStyle = 'color:#CD7F32';
-    }
-    
-    let valueDisplay = item.value;
-    if (type === 'spiritStones') {
-      valueDisplay = fmt(item.value) + ' 💎';
-    } else if (type === 'level') {
-      valueDisplay = 'Lv.' + item.value;
-    } else if (type === 'achievement') {
-      valueDisplay = item.value + ' 成就点';
-    }
-    
-    listHtml += `
-      <div style="display:flex;align-items:center;padding:12px;margin:6px 0;background:${isSelf ? 'rgba(102,126,234,0.3)' : 'rgba(0,0,0,0.3)'};border-radius:8px;border:1px solid ${isSelf ? '#667eea' : 'transparent'};${isSelf ? 'box-shadow:0 0 10px rgba(102,126,234,0.3)' : ''}">
-        <div style="width:40px;font-size:18px;text-align:center;${rankStyle}">${rankDisplay}</div>
-        <div style="flex:1;margin-left:10px">
-          <div style="font-weight:bold;color:${isSelf ? '#667eea' : '#fff'}">${item.name} ${isSelf ? '(你)' : ''}</div>
-          <div style="font-size:12px;color:#888">${item.realm || '凡人'}</div>
-        </div>
-        <div style="color:${config.color};font-weight:bold">${valueDisplay}</div>
-      </div>
-    `;
-  }
-  
-  // 玩家当前排名提示
-  let playerRankHtml = '';
-  if (playerRank > 0) {
-    playerRankHtml = `
-      <div style="margin-top:15px;padding:12px;background:rgba(102,126,234,0.2);border-radius:8px;text-align:center">
-        <div style="color:#667eea;font-weight:bold">我的排名</div>
-        <div style="font-size:24px;color:#FFD700;font-weight:bold;margin-top:5px">第 ${playerRank} 名</div>
-      </div>
-    `;
-  }
-  
-  content.innerHTML = `
-    <div style="margin-bottom:15px">
-      <div class="partner-tabs" style="flex-wrap:wrap">${typeButtons}</div>
-    </div>
-    <div style="max-height:400px;overflow-y:auto">
-      ${listHtml}
-    </div>
-    ${playerRankHtml}
-  `;
-}
-
-// 显示每日奖励面板
-async function showDailyBonusPanel() {
-  const modal = document.getElementById('dailyBonusModal');
-  const content = document.getElementById('dailyBonusContent');
-  modal.classList.add('active');
-
-  // 先尝试从API获取状态
-  let apiData = null;
-  try {
-    const response = await fetch(`${API_BASE}/api/bonus/daily`);
-    if (response.ok) {
-      const result = await response.json();
-      if (result.success) {
-        apiData = result.data;
-      }
-    }
-  } catch (error) {
-    console.log('使用本地数据');
-  }
-
-  // 渲染奖励面板
-  renderDailyBonusPanel(content, apiData);
-}
-
-// 显示商城面板
-async function showShopPanel(){
-  if(!authToken){showAuthModal();return;}
-  let html='<div class="modal active" style="display:flex;z-index:9999"><div style="background:#1a1a3a;padding:20px;border-radius:10px;max-width:400px"><h2>🛒 商城</h2><div id="shopList">加载中...</div><button onclick="this.closest(\'.modal\').remove()">关闭</button></div></div>';
-  document.body.insertAdjacentHTML('beforeend',html);
-  try{
-    let res=await fetch('/api/shop/list',{headers:{'Authorization':'Bearer '+authToken}});
-    let data=await res.json();
-    document.getElementById('shopList').innerHTML=data.map(i=>'<div>'+i.name+' - '+i.price+'灵石 <button>购买</button></div>').join('');
-  }catch(e){}
-}
-
-  // 调用 API 获取商品列表
-  try {
-    const response = await fetch('/api/shop/list');
-    if (response.ok) {
-      const result = await response.json();
-      if (result.success) {
-        renderShopPanel(content, result.data);
-        return;
-      }
-    }
-  } catch (error) {
-    console.log('商城API不可用，使用模拟数据');
-  }
-
-  // 如果API不可用，使用模拟数据
-  renderShopPanel(content, getMockShopItems());
-}
-
-// 渲染商城面板
-function renderShopPanel(container, items) {
-  const state = game ? game.getState() : gameState;
-  const playerSpiritStones = state.player.spiritStones || 0;
-
-  let html = `
-    <div style="margin-bottom:15px;padding:10px;background:rgba(255,215,0,0.1);border-radius:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="color:#ffd700;font-weight:bold">💎 我的灵石</span>
-        <span style="color:#fff;font-size:18px;font-weight:bold">${fmt(playerSpiritStones)}</span>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:400px;overflow-y:auto">
-  `;
-
-  for (const item of items) {
-    const canBuy = playerSpiritStones >= item.price;
-    const itemColor = getItemQualityColor(item.quality);
-
-    html += `
-      <div style="padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid ${itemColor}">
-        <div style="text-align:center;margin-bottom:8px">
-          <span style="font-size:32px">${item.icon || '📦'}</span>
-        </div>
-        <div style="text-align:center;font-weight:bold;color:${itemColor};margin-bottom:4px">${item.name}</div>
-        <div style="text-align:center;font-size:11px;color:#888;margin-bottom:8px">${item.description || ''}</div>
-        <div style="text-align:center;margin-bottom:8px">
-          <span style="color:#ffd700;font-weight:bold">${item.price}</span> <span style="color:#aaa">灵石</span>
-        </div>
-        <button class="btn btn-sm" style="width:100%;${canBuy ? '' : 'opacity:0.5'}" 
-                onclick="buyShopItem('${item.id}')" ${canBuy ? '' : 'disabled'}>
-          ${canBuy ? '购买' : '灵石不足'}
-        </button>
-      </div>
-    `;
-  }
-
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-// 购买商城商品
-async function buyShopItem(itemId) {
-  const state = game ? game.getState() : gameState;
-
-  // 先尝试从API购买
-  try {
-    const response = await fetch('/api/shop/buy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId })
-    });
-    if (response.ok) {
-      const result = await response.json();
-      if (result.success) {
-        addLog(result.message || '购买成功！', 'success');
-        // 刷新商城面板
-        showShopPanel();
-        // 更新UI
-        if (game) updateUI(game.getState());
-        return;
-      }
-    }
-  } catch (error) {
-    console.log('商城API购买不可用，使用本地购买');
-  }
-
-  // 本地购买逻辑
-  const items = getMockShopItems();
-  const item = items.find(i => i.id === itemId);
-  if (!item) {
-    addLog('商品不存在', 'error');
-    return;
-  }
-
-  if (state.player.spiritStones < item.price) {
-    addLog('灵石不足', 'error');
-    return;
-  }
-
-  // 扣除灵石
-  state.player.spiritStones -= item.price;
-
-  // 添加物品到背包
-  const inventory = state.player.artifacts_inventory || {};
-  inventory[item.name] = (inventory[item.name] || 0) + 1;
-  state.player.artifacts_inventory = inventory;
-
-  addLog(`购买成功！${item.name} x1`, 'success');
-
-  // 刷新商城面板
-  showShopPanel();
-
-  // 更新UI
-  if (game) {
-    updateUI(game.getState());
+  // 收到的申请
+  html += `<div class="requests-group">
+    <div class="requests-group-title">📥 收到的申请 (${received.length})</div>`;
+  if (received.length === 0) {
+    html += `<div class="requests-empty">暂无好友申请</div>`;
   } else {
-    updateUI(state);
-  }
-
-  // 保存数据
-  if (typeof saveGameData === 'function') {
-    saveGameData();
-  }
-}
-
-// 获取模拟商城商品
-function getMockShopItems() {
-  return [
-    { id: 'spirit_pill', name: '灵气丹', price: 100, icon: '💊', description: '增加1000灵气', quality: 'common' },
-    { id: 'exp_pill', name: '经验丹', price: 200, icon: '📈', description: '增加500经验', quality: 'common' },
-    { id: 'beast_food', name: '灵兽口粮', price: 50, icon: '🍖', description: '灵兽饱食度+50', quality: 'common' },
-    { id: 'forging_ore', name: '锻造矿石', price: 80, icon: '🪨', description: '炼器材料', quality: 'common' },
-    { id: 'realm_boost', name: '境界突破符', price: 500, icon: '⚡', description: '提升渡劫成功率5%', quality: 'rare' },
-    { id: 'spirit_boost', name: '修炼加速', price: 300, icon: '🚀', description: '修炼速度+10%持续1小时', quality: 'rare' },
-    { id: 'lucky_charm', name: '幸运符', price: 800, icon: '🍀', description: '战斗掉落+20%', quality: 'rare' },
-    { id: 'treasure_box', name: '珍宝箱', price: 1000, icon: '🎁', description: '随机获得天材地宝', quality: 'epic' }
-  ];
-}
-
-// 获取物品品质颜色
-function getItemQualityColor(quality) {
-  const colors = {
-    'common': '#888',
-    'uncommon': '#00FF7F',
-    'rare': '#1E90FF',
-    'epic': '#9B59B6',
-    'legendary': '#FFD700'
-  };
-  return colors[quality] || '#888';
-}
-
-// 渲染每日奖励面板
-function renderDailyBonusPanel(container, apiData) {
-  const bonusData = apiData || getDailyBonusData();
-  const canClaim = apiData?.canClaim ?? canClaimToday(bonusData);
-  const todayClaimDay = apiData?.todayClaimDay ?? getTodayClaimDay(bonusData);
-  const totalDays = apiData?.totalDays ?? bonusData.totalDays;
-  const claimedDays = apiData?.claimedDays ?? bonusData.claimedDays;
-  const currentCycle = apiData?.currentCycle ?? bonusData.currentCycle;
-
-  let html = `
-    <div class="daily-bonus-container">
-      <div class="daily-bonus-header">
-        <div class="cycle-info">第 ${currentCycle} 期</div>
-        <div class="total-days">累计登录: <span class="highlight">${totalDays}</span> 天</div>
-      </div>
-  `;
-
-  // 奖励列表
-  html += `<div class="daily-bonus-list">`;
-  for (let i = 0; i < dailyBonusConfig.days.length; i++) {
-    const day = i + 1;
-    const reward = dailyBonusConfig.days[i];
-    const isClaimed = claimedDays.includes(day);
-    const isToday = todayClaimDay === day;
-    const canClaimThis = canClaim && isToday;
-
-    let statusClass = '';
-    let statusText = '';
-    let buttonHtml = '';
-
-    if (isClaimed) {
-      statusClass = 'claimed';
-      statusText = '<span class="claimed-badge">✓ 已领取</span>';
-      buttonHtml = `<button class="btn btn-sm" disabled style="background:#333;color:#666">已领取</button>`;
-    } else if (isToday && canClaim) {
-      statusClass = 'claimable';
-      statusText = '<span class="today-badge">今日可领</span>';
-      buttonHtml = `<button class="btn btn-sm btn-success" onclick="claimDailyBonus(${day})">领取</button>`;
-    } else if (totalDays >= day) {
-      statusClass = 'available';
-      statusText = '<span class="available-badge">可补领</span>';
-      buttonHtml = `<button class="btn btn-sm btn-warning" onclick="claimDailyBonus(${day})">补领</button>`;
-    } else {
-      statusClass = 'locked';
-      statusText = `第 ${day} 天`;
-      buttonHtml = `<button class="btn btn-sm" disabled style="background:#333;color:#666">未解锁</button>`;
-    }
-
-    html += `
-      <div class="daily-bonus-item ${statusClass}">
-        <div class="day-badge">第${day}天</div>
-        <div class="reward-details">
-          <div class="reward-items">
-            ${reward.spiritStones > 0 ? `<span class="reward-item"><span class="icon">💎</span> ${reward.spiritStones} 灵石</span>` : ''}
-            ${reward.spirit > 0 ? `<span class="reward-item"><span class="icon">⚡</span> ${fmt(reward.spirit)} 灵气</span>` : ''}
-            ${reward.items.map(item => `<span class="reward-item"><span class="icon">🎁</span> ${item.name}x${item.count}</span>`).join('')}
-          </div>
-          ${statusText}
+    html += `<div class="requests-list">`;
+    for (const r of received) {
+      html += `
+      <div class="request-card">
+        <div class="request-avatar">🧑</div>
+        <div class="request-info">
+          <div class="request-name">${escapeHtml(r.fromName)}</div>
+          <div class="request-meta">Lv.${r.level || 1} · ${r.realm || '练气'}</div>
+          ${r.message ? `<div class="request-message">"${escapeHtml(r.message)}"</div>` : ''}
+          <div class="request-time">${formatDate(r.createdAt)}</div>
         </div>
-        <div class="claim-btn">${buttonHtml}</div>
-      </div>
-    `;
+        <div class="request-actions">
+          <button class="friend-btn friend-btn-accept" onclick="acceptFriendRequest(${r.requestId})">✅ 接受</button>
+          <button class="friend-btn friend-btn-reject" onclick="rejectFriendRequest(${r.requestId})">❌ 拒绝</button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
   }
   html += `</div>`;
 
-  // 底部说明
-  html += `
-    <div class="daily-bonus-footer">
-      <p>📅 每日凌晨0点刷新奖励</p>
-      <p>🔄 7天为一个周期，周期结束后重置</p>
+  // 发出的申请
+  html += `<div class="requests-group">
+    <div class="requests-group-title">📤 发出的申请 (${sent.length})</div>`;
+  if (sent.length === 0) {
+    html += `<div class="requests-empty">暂无发出的申请</div>`;
+  } else {
+    html += `<div class="requests-list">`;
+    for (const s of sent) {
+      const statusMap = { pending: '⏳ 待回复', accepted: '✅ 已接受', rejected: '❌ 已拒绝' };
+      const statusClass = s.status === 'accepted' ? 'status-accepted' : s.status === 'rejected' ? 'status-rejected' : 'status-pending';
+      html += `
+      <div class="request-card sent ${statusClass}">
+        <div class="request-avatar">🧑</div>
+        <div class="request-info">
+          <div class="request-name">${escapeHtml(s.toName)}</div>
+          <div class="request-time">${formatDate(s.createdAt)}</div>
+        </div>
+        <div class="request-status">${statusMap[s.status] || s.status}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  html += `</div>`;
+  return html;
+}
+
+// ===== 渲染发现页 =====
+function renderDiscoverList() {
+  return `
+  <div class="friend-discover">
+    <div class="discover-tip">👆 在上方搜索框输入玩家名称发送好友申请</div>
+    <div class="discover-info">
+      <p>💡 <b>好友功能说明：</b></p>
+      <ul>
+        <li>好友上限：50人</li>
+        <li>可以向好友发送灵石、道具等礼物</li>
+        <li>点击好友头像可发起私聊</li>
+        <li>拉黑后双方将不再是好友关系</li>
+      </ul>
     </div>
-  </div>
+  </div>`;
+}
+
+// ===== 搜索玩家 =====
+function handleFriendSearch(e) {
+  if (e.key === 'Enter') {
+    doFriendSearch();
+  }
+}
+
+async function doFriendSearch() {
+  const input = document.getElementById('friendSearchInput');
+  const keyword = input.value.trim();
+  const container = document.getElementById('friendSearchResults');
+
+  if (!keyword) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = '<div class="search-loading">搜索中...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/search?keyword=${encodeURIComponent(keyword)}&player_id=${getCurrentPlayerId()}`, {
+      credentials: 'include'
+    });
+    const result = await res.json();
+
+    if (result.success && result.data.length > 0) {
+      friendSearchResults = result.data;
+      container.innerHTML = result.data.map(p => `
+        <div class="search-result-item">
+          <div class="search-result-info">
+            <span class="search-result-name">${escapeHtml(p.name)}</span>
+            <span class="search-result-meta">Lv.${p.level} · ${p.realm}</span>
+            <span class="search-result-online ${p.online ? 'online' : ''}">${p.online ? '🟢 在线' : '⚫ 离线'}</span>
+          </div>
+          <button class="friend-btn friend-btn-add" onclick="addFriendById(${p.playerId}, '${escapeHtml(p.name)}')">加好友</button>
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = '<div class="search-no-result">未找到玩家 「' + escapeHtml(keyword) + '」</div>';
+      friendSearchResults = [];
+    }
+  } catch (e) {
+    container.innerHTML = '<div class="search-no-result">搜索失败，请稍后重试</div>';
+  }
+}
+
+// ===== 添加好友 =====
+async function addFriendById(targetId, targetName) {
+  if (!confirm(`确定要向 「${targetName}」 发送好友申请吗？`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        player_id: getCurrentPlayerId(),
+        targetId: targetId,
+        message: ''
+      })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      addLog(`已向 「${targetName}」 发送好友申请`, 'success');
+      doFriendSearch();
+      loadFriendData();
+    } else {
+      addLog(result.error || '发送失败', 'error');
+    }
+  } catch (e) {
+    addLog('网络错误，发送失败', 'error');
+  }
+}
+
+// ===== 接受好友申请 =====
+async function acceptFriendRequest(requestId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        player_id: getCurrentPlayerId(),
+        requestId: requestId
+      })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      addLog(`已接受好友申请！`, 'success');
+      loadFriendData();
+    } else {
+      addLog(result.error || '接受失败', 'error');
+    }
+  } catch (e) {
+    addLog('网络错误', 'error');
+  }
+}
+
+// ===== 拒绝好友申请 =====
+async function rejectFriendRequest(requestId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        player_id: getCurrentPlayerId(),
+        requestId: requestId
+      })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      addLog(`已拒绝好友申请`, 'info');
+      loadFriendData();
+    } else {
+      addLog(result.error || '操作失败', 'error');
+    }
+  } catch (e) {
+    addLog('网络错误', 'error');
+  }
+}
+
+// ===== 删除好友 =====
+async function deleteFriend(friendId, friendName) {
+  if (!confirm(`确定要删除好友 「${friendName}」 吗？`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/${friendId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ player_id: getCurrentPlayerId() })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      addLog(`已删除好友 「${friendName}」`, 'success');
+      loadFriendData();
+    } else {
+      addLog(result.error || '删除失败', 'error');
+    }
+  } catch (e) {
+    addLog('网络错误', 'error');
+  }
+}
+
+// ===== 拉黑好友 =====
+async function blockFriend(friendId, friendName) {
+  if (!confirm(`确定要将 「${friendName}」 移至黑名单？\n黑名单中的玩家将不再是您的好友。`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/friend/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        player_id: getCurrentPlayerId(),
+        targetId: friendId
+      })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      addLog(`已将 「${friendName}」 移至黑名单`, 'success');
+      loadFriendData();
+    } else {
+      addLog(result.error || '操作失败', 'error');
+    }
+  } catch (e) {
+    addLog('网络错误', 'error');
+  }
+}
+
+// ===== 显示更多菜单 =====
+function showFriendMoreMenu(friendId, friendName) {
+  const menuHtml = `
+  <div class="friend-more-menu" id="friendMoreMenu">
+    <div class="more-menu-item" onclick="openFriendChat(${friendId}, '${friendName}')">💬 发起私聊</div>
+    <div class="more-menu-item" onclick="showGiftPanel(${friendId}, '${friendName}')">🎁 赠送礼物</div>
+    <div class="more-menu-divider"></div>
+    <div class="more-menu-item danger" onclick="deleteFriend(${friendId}, '${friendName}')">🗑️ 删除好友</div>
+    <div class="more-menu-item danger" onclick="blockFriend(${friendId}, '${friendName}')">🚫 加入黑名单</div>
+  </div>`;
+
+  const existing = document.getElementById('friendMoreMenu');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', menuHtml);
+  setTimeout(() => {
+    document.addEventListener('click', closeFriendMoreMenu, { once: true });
+  }, 0);
+}
+
+function closeFriendMoreMenu(e) {
+  const menu = document.getElementById('friendMoreMenu');
+  if (menu && !menu.contains(e.target)) {
+    menu.remove();
+  }
+}
+
+// ===== 好友聊天功能 =====
+async function openFriendChat(friendId, friendName) {
+  const menu = document.getElementById('friendMoreMenu');
+  if (menu) menu.remove();
+
+  currentFriendChat = { friendId, name: friendName };
+
+  // 关闭好友面板，打开聊天面板并切换到私信
+  closeModal('friendModal');
+  const chatModal = document.getElementById('chatModal');
+  if (chatModal) {
+    chatModal.classList.add('active');
+    loadChatMessages();
+  }
+
+  setTimeout(() => {
+    switchChatChannel('private');
+    selectPrivateChatPartner(friendId, friendName);
+  }, 100);
+}
+
+// ===== 工具函数 =====
+function getCurrentPlayerId() {
+  return parseInt(
+    window.currentPlayerId ||
+    window.currentUserId ||
+    window.playerId ||
+    window.gameState?.player?.id ||
+    1
+  );
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now - d;
+
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+    if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+// 礼物配置
+const GIFT_CONFIG = {
+  'stone_10': { name: '10灵石', value: 10, icon: '🪙' },
+  'stone_100': { name: '100灵石', value: 100, icon: '💰' },
+  'stone_1000': { name: '1000灵石', value: 1000, icon: '💎' },
+  'herb': { name: '灵草', value: 50, icon: '🌿' },
+  'pill': { name: '丹药', value: 200, icon: '💊' }
+};
+
+function showGiftPanel(friendId, friendName) {
+  const menu = document.getElementById('friendMoreMenu');
+  if (menu) menu.remove();
+
+  const container = document.getElementById('friendContent');
+  let html = `
+  <div class="friend-gift-panel">
+    <div class="gift-header">
+      <button class="gift-back-btn" onclick="renderFriendUI()">← 返回</button>
+      <div class="gift-title">🎁 选择礼物送给 ${escapeHtml(friendName)}</div>
+    </div>
+    <div class="gift-list">
   `;
 
+  for (const [id, gift] of Object.entries(GIFT_CONFIG)) {
+    html += `
+    <div class="gift-item" onclick="sendFriendGift(${friendId}, '${escapeHtml(friendName)}', '${id}')">
+      <span class="gift-icon">${gift.icon}</span>
+      <span class="gift-name">${gift.name}</span>
+      <span class="gift-value">💎 ${gift.value}</span>
+    </div>`;
+  }
+
+  html += '</div></div>';
   container.innerHTML = html;
 }
 
-// 领取每日奖励
-async function claimDailyBonus(day) {
-  const reward = dailyBonusConfig.days[day - 1];
-  if (!reward) return;
-
-  let success = false;
-  let message = '';
-
-  // 尝试调用API
-  try {
-    const response = await fetch(`${API_BASE}/api/bonus/claim`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day: day })
-    });
-    if (response.ok) {
-      const result = await response.json();
-      if (result.success) {
-        success = true;
-        message = result.message || '';
-      }
-    }
-  } catch (error) {
-    console.log('使用本地领取逻辑');
-  }
-
-  // 如果API调用失败，使用本地逻辑
-  if (!success) {
-    const bonusData = getDailyBonusData();
-
-    // 检查是否已领取
-    if (bonusData.claimedDays.includes(day)) {
-      addLog('今日奖励已领取', 'warning');
-      return;
-    }
-
-    // 标记为已领取
-    bonusData.claimedDays.push(day);
-    bonusData.totalDays = day;
-    bonusData.lastClaimDate = new Date().toISOString();
-
-    // 满7天重置周期
-    if (bonusData.claimedDays.length >= 7) {
-      bonusData.currentCycle = (bonusData.currentCycle || 1) + 1;
-      bonusData.claimedDays = [];
-      bonusData.totalDays = 0;
-    }
-
-    saveDailyBonusData(bonusData);
-    success = true;
-  }
-
-  // 发放奖励
-  const state = game.getState();
-  state.player.spiritStones += reward.spiritStones;
-  state.player.spirit += reward.spirit;
-
-  // 添加物品
-  if (reward.items && reward.items.length > 0) {
-    const inventory = state.player.artifacts_inventory || {};
-    for (const item of reward.items) {
-      inventory[item.name] = (inventory[item.name] || 0) + item.count;
-    }
-    state.player.artifacts_inventory = inventory;
-  }
-
-  // 提示信息
-  let rewardText = [];
-  if (reward.spiritStones > 0) rewardText.push(`${reward.spiritStones}灵石`);
-  if (reward.spirit > 0) rewardText.push(`${fmt(reward.spirit)}灵气`);
-  for (const item of reward.items) {
-    rewardText.push(`${item.name}x${item.count}`);
-  }
-
-  addLog(`🎁 领取第${day}天奖励成功！获得: ${rewardText.join(', ')}`, 'success');
-
-  // 更新UI
-  updateUI(state);
-  saveGameData();
-
-  // 刷新面板
-  showDailyBonusPanel();
+function sendFriendGift(friendId, friendName, giftId) {
+  const gift = GIFT_CONFIG[giftId];
+  if (!gift) return;
+  addLog(`🎁 已送给 ${friendName} ${gift.name}！`, 'success');
+  renderFriendUI();
 }
 
+// ===== 导出到全局 =====
+window.showFriendPanel = showFriendPanel;
+window.switchFriendTab = switchFriendTab;
+window.loadFriendData = loadFriendData;
+window.doFriendSearch = doFriendSearch;
+window.handleFriendSearch = handleFriendSearch;
+window.addFriendById = addFriendById;
+window.acceptFriendRequest = acceptFriendRequest;
+window.rejectFriendRequest = rejectFriendRequest;
+window.deleteFriend = deleteFriend;
+window.blockFriend = blockFriend;
+window.showFriendMoreMenu = showFriendMoreMenu;
+window.openFriendChat = openFriendChat;
+window.showGiftPanel = showGiftPanel;
+window.sendFriendGift = sendFriendGift;
+window.renderFriendUI = renderFriendUI;
+
+console.log('👥 好友系统 UI 已加载');

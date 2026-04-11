@@ -279,3 +279,36 @@ function openChatModal() {
     if (input) input.focus();
   }, 100);
 }
+
+// ===== 好友聊天集成 =====
+// 从好友列表直接发起私聊
+function selectPrivateChatPartner(friendId, friendName) {
+  const select = document.getElementById('privateReceiver');
+  if (!select) {
+    showToast('私信选择器未找到', 'error');
+    return;
+  }
+
+  // 如果下拉选项中不存在该好友，动态添加
+  let exists = false;
+  for (let i = 0; i < select.options.length; i++) {
+    if (parseInt(select.options[i].value) === friendId) {
+      exists = true;
+      break;
+    }
+  }
+
+  if (!exists) {
+    const option = document.createElement('option');
+    option.value = friendId;
+    option.textContent = `${friendName} (好友)`;
+    select.appendChild(option);
+  }
+
+  select.value = friendId;
+  // 触发变更以加载与该好友的私聊历史
+  chatLastId['private'] = 0;
+  loadChatMessages();
+
+  showToast(`正在与 ${friendName} 私聊`, 'info');
+}

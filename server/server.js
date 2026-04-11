@@ -1844,6 +1844,70 @@ function seedSkillsData() {
   }
 
   Logger.info('技能数据种子完成');
+
+  // ============ 奇遇事件表 ============
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_encounter_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      event_name TEXT NOT NULL,
+      rarity TEXT NOT NULL,
+      description TEXT,
+      rewards TEXT,
+      status TEXT DEFAULT 'pending',
+      triggered_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT,
+      claimed_at TEXT,
+      battle_result TEXT,
+      INDEX idx_encounter_player_status (player_id, status),
+      INDEX idx_encounter_player_created (player_id, created_at DESC)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_encounter_stats (
+      player_id INTEGER PRIMARY KEY,
+      total_encounters INTEGER DEFAULT 0,
+      legendary_count INTEGER DEFAULT 0,
+      epic_count INTEGER DEFAULT 0,
+      rare_count INTEGER DEFAULT 0,
+      common_count INTEGER DEFAULT 0,
+      battle_wins INTEGER DEFAULT 0,
+      battle_losses INTEGER DEFAULT 0,
+      total_rewards_lingshi INTEGER DEFAULT 0,
+      total_rewards_cultivation INTEGER DEFAULT 0,
+      last_encounter_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_encounter_cooldown (
+      player_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      last_triggered_at TEXT NOT NULL,
+      PRIMARY KEY (player_id, event_type)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_encounter_buffs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      buff_key TEXT NOT NULL,
+      buff_name TEXT NOT NULL,
+      description TEXT,
+      effect_data TEXT,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      INDEX idx_encounter_buff_player (player_id, expires_at)
+    )
+  `);
+
+  Logger.info('奇遇事件表初始化完成');
 }
 
 // 初始化数据库和数据
@@ -3662,6 +3726,15 @@ try {
   Logger.info('✅ 交易市场系统 API 已加载');
 } catch (e) {
   Logger.info('交易市场API不可用:', e.message);
+}
+
+// ============ 天道轮回转生系统 API ============
+try {
+  const reincarnationRoute = require('./backend/routes/reincarnation');
+  app.use('/api/reincarnation', reincarnationRoute);
+  Logger.info('✅ 天道轮回转生系统 API 已加载');
+} catch (e) {
+  Logger.info('轮回转生系统API不可用:', e.message);
 }
 
 // ============ 位面之子 Buff 系统 API ============
@@ -9084,16 +9157,14 @@ try {
   Logger.warn('⚠ 洞府入侵路由加载失败:', e.message);
 }
 
-// 404处理 - 统一错误响应（必须放在所有路由之后）
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'API端点不存在',
-    path: req.path,
-    method: req.method,
-    hint: '请检查API路径是否正确'
-  });
-});
+// ==================== 奇遇事件路由 ============
+try {
+  const encounterRoute = require('./backend/routes/encounter');
+  app.use('/api/encounter', encounterRoute);
+  Logger.info('✅ 奇遇事件路由已加载 (backend/routes/encounter.js)');
+} catch (e) {
+  Logger.warn('⚠ 奇遇事件路由加载失败:', e.message);
+}
 
 // ==================== 模块化路由加载 ====================
 // 尝试加载模块化路由（可选）
@@ -9146,6 +9217,17 @@ try {
 try {
   const achievementRoute = require('./backend/routes/achievement');
   app.use('/api/ach2', achievementRoute);
+
+  // 背包系统
+  const bagRoute = require('./backend/routes/bag');
+  app.use('/api/bag', bagRoute);
+  Logger.info('✓ 背包系统路由已加载');
+
+  // 宝石镶嵌系统
+  const gemRoute = require('./backend/routes/gem_api');
+  app.use('/api/gem', gemRoute);
+  Logger.info('✓ 宝石镶嵌系统路由已加载');
+
   Logger.info('✓ 成就系统增强路由已加载');
 } catch (e) {
   Logger.warn('⚠ 成就系统增强路由加载失败:', e.message);
@@ -9154,6 +9236,17 @@ try {
 // 导出db实例供其他模块使用
 module.exports = app;
 module.exports.db = db;
+
+// 404处理 - 统一错误响应（必须放在所有路由之后）
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'API端点不存在',
+    path: req.path,
+    method: req.method,
+    hint: '请检查API路径是否正确'
+  });
+});
 
 // 启动服务器（仅在直接运行此文件时）
 if (require.main === module) {

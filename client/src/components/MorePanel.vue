@@ -33,6 +33,7 @@ const items = [
   {path:'/cave',icon:'⛏️',label:'矿洞'},
   {path:'/fishing',icon:'🎣',label:'钓鱼'},
   {path:'/secret',icon:'🔐',label:'密室'},
+  {path:'/marriage',icon:'💍',label:'结婚'},
 ]
 function go(path) { router.push(path) }
 </script>

@@ -638,6 +638,33 @@ const equipmentAPI = {
   },
 };
 
+const reincarnationAPI = {
+  // 获取轮回信息
+  async getInfo() {
+    return apiRequest('/api/reincarnation/info', 'GET');
+  },
+  // 天道感悟
+  async getInsight() {
+    return apiRequest('/api/reincarnation/insight', 'GET');
+  },
+  // 轮回天赋
+  async getTalents() {
+    return apiRequest('/api/reincarnation/talents', 'GET');
+  },
+  // 轮回商店
+  async getShop() {
+    return apiRequest('/api/reincarnation/shop', 'GET');
+  },
+  // 触发轮回
+  async rebirth(confirm = true) {
+    return apiRequest('/api/reincarnation/rebirth', 'POST', { confirm });
+  },
+  // 购买轮回道具
+  async buy(itemId) {
+    return apiRequest('/api/reincarnation/buy', 'POST', { item_id: itemId });
+  },
+};
+
 // 导出所有API模块到全局
 window.shopAPI = shopAPI;
 window.marketAPI = marketAPI;
@@ -655,6 +682,7 @@ window.offlineAPI = offlineAPI;
 window.friendAPI = friendAPI;
 window.alchemyAPI = alchemyAPI;
 window.equipmentAPI = equipmentAPI;
+window.reincarnationAPI = reincarnationAPI;
 window.apiRequest = apiRequest;
 
 console.log('📡 API调用层已加载');

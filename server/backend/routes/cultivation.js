@@ -538,7 +538,17 @@ router.post('/breakthrough', (req, res) => {
     // 同步更新 Users 表（权威源）和 player 表
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, realm_level = ?, level = level + 1 WHERE id = ?').run(nextRealm, nextRealm, userId);
-    
+
+    // ========== 轮回系统：飞升期解锁轮回 ==========
+    if (nextRealm >= 9) {
+      try {
+        db.prepare(`UPDATE reincarnation SET rebirth_available = 1, updated_at = strftime('%s', 'now') WHERE player_id = ?`).run(userId);
+        Logger.info(`[cultivation] 玩家${userId}达到飞升期，轮回已解锁`);
+      } catch (e) {
+        Logger.error('[cultivation] 轮回解锁更新失败:', e.message);
+      }
+    }
+
     // 成就触发：境界突破
     if (achievementTrigger) {
       try {
@@ -612,6 +622,16 @@ router.post('/advance', (req, res) => {
     db.prepare('UPDATE Cultivations SET value = 0, realm = ?, cultivationPower = ?, updatedAt = CURRENT_TIMESTAMP WHERE userId = ?').run(nextRealm, breakthroughCultivationPower, userId);
     db.prepare('UPDATE Users SET realm = ?, level = level + 1, updatedAt = ? WHERE id = ?').run(nextRealm, new Date().toISOString(), userId);
     db.prepare('UPDATE player SET realm = ?, realm_level = ?, level = level + 1 WHERE id = ?').run(nextRealm, nextRealm, userId);
+
+    // ========== 轮回系统：飞升期解锁轮回 ==========
+    if (nextRealm >= 9) {
+      try {
+        db.prepare(`UPDATE reincarnation SET rebirth_available = 1, updated_at = strftime('%s', 'now') WHERE player_id = ?`).run(userId);
+        Logger.info(`[cultivation] 玩家${userId}跃迁至飞升期，轮回已解锁`);
+      } catch (e) {
+        Logger.error('[cultivation] 轮回解锁更新失败(advance):', e.message);
+      }
+    }
 
     if (achievementTrigger) {
       try {

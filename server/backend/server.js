@@ -134,6 +134,14 @@ app.use('/api/artifacts', require('../game/spirit_artifact_api')); // 前端 /ap
 app.use('/api/skill', require('./routes/skill'));
 app.use('/api/meridian', require('./routes/meridian'));
 app.use('/api/lundao', require('./routes/lundao'));
+// 天道轮回转生系统
+try {
+  const reincRouter = require('./routes/reincarnation');
+  app.use('/api/reincarnation', reincRouter);
+  console.log('✅ 天道轮回转生系统路由已加载');
+} catch(e) {
+  console.log('[reincarnation] 路由加载失败:', e.message);
+}
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/equipmentDismantle', require('./routes/equipment_dismantle'));
 app.use('/api/forge', require('./routes/forge'));

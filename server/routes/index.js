@@ -63,6 +63,11 @@ function loadRoutes(app, db, authenticateToken, logger, options = {}) {
       'giftcode': '/api/giftcode',
       'deity': '/api/deity-list',
       'giftCode': '/api/giftCode',
+      'artifact_resonance_api': '/api/artifact-resonance',
+      'pet_talent_api': '/api/pet-talent',
+      'ladder_season_v2_api': '/api/ladder-season-v2',
+      'economy_api': '/api/economy',
+      'random_events_api': '/api/events',
     };
     if (explicitPaths[base]) return explicitPaths[base];
 

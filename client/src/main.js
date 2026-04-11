@@ -35,6 +35,7 @@ const routes = [
   { path: '/cave', component: () => import('./components/CavePanel.vue') },
   { path: '/fishing', component: () => import('./components/FishingPanel.vue') },
   { path: '/secret', component: () => import('./components/SecretPanel.vue') },
+  { path: '/marriage', component: () => import('./components/MarriagePanel.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

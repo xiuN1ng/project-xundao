@@ -179,6 +179,22 @@ router.post('/register',async(req,res)=>{
         VALUES (?, 1000, 0, 1000, 100, 50, 10, 1, 1, ?)
       `).run(userId, now);
 
+      // 初始化轮回数据 (天道轮回转生系统)
+      try {
+        // 尝试兼容旧 reincarnation_data 表，迁移到新的 reincarnation 表
+        const reincModule = require('./reincarnation');
+        if (reincModule.initPlayerReincarnation) {
+          reincModule.initPlayerReincarnation(userId);
+        } else {
+          // 降级: 直接写入 reincarnation 表
+          db.prepare(`INSERT OR IGNORE INTO reincarnation (player_id) VALUES (?)`).run(userId);
+        }
+        console.log(`[auth] 轮回数据初始化: userId=${userId}`);
+      } catch (reincErr) {
+        // 轮回表尚未创建，静默降级(等待auto-registration创建表)
+        console.log(`[auth] 轮回数据初始化跳过(表未就绪): ${reincErr.message}`);
+      }
+
       console.log('[auth] 新用户注册写入DB:', username);
 
       // 发放新手初始装备
@@ -228,6 +244,10 @@ router.post('/login',async(req,res)=>{
       const now = new Date().toISOString();
       db.prepare('UPDATE Users SET updatedAt = ? WHERE id = ?').run(now, user.id);
       db.prepare('UPDATE player SET last_login = ? WHERE user_id = ?').run(now, user.id);
+      // 确保轮回数据存在 (兼容旧用户)
+      try {
+        db.prepare(`INSERT OR IGNORE INTO reincarnation (player_id) VALUES (?)`).run(user.id);
+      } catch(e2) { /* 静默 */ }
     } catch(e) {}
   }
 
