@@ -3332,12 +3332,12 @@ app.post('/api/skills/:skill_id/upgrade', (req, res) => {
   }
 });
 
-// 存储 API - 游戏数据持久化
+// 仓库系统 API - 多页仓库
 try {
-  const storageApi = require('./game/server.storage');
+  const storageApi = require('./backend/routes/storage_api');
   app.use('/api/storage', storageApi);
 } catch (e) {
-  Logger.info('存储API不可用:', e.message);
+  Logger.info('仓库API不可用:', e.message);
 }
 
 // 宗门系统 API

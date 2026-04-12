@@ -343,4 +343,34 @@ router.post('/seven-day/claim', async (req, res) => {
 // 初始化
 initWelfare();
 
+// ========== 别名路由 (兼容旧版前端调用) ==========
+// GET /api/welfare/signin-info → /sign-in
+router.get('/signin-info', (req, res) => {
+  loadDependencies();
+  const playerId = req.query.player_id || req.query.playerId;
+  if (!playerId) return res.status(400).json({ success: false, error: '缺少玩家ID' });
+  const status = welfareStorage.getSignInStatus(playerId);
+  if (!status) return res.status(500).json({ success: false, error: '获取签到状态失败' });
+  res.json({ success: true, data: { playerId: status.playerId, currentStreak: status.currentStreak, totalSignDays: status.totalSignDays, signedToday: status.signedToday, canClaim: status.canClaim, lastSignDate: status.lastSignDate, nextReward: status.nextReward, repairCards: status.repairCards, cycle: 7 } });
+});
+
+// POST /api/welfare/daily-signin → /claim-sign-in
+router.post('/daily-signin', (req, res) => {
+  loadDependencies();
+  const playerId = req.body.player_id || req.body.playerId;
+  if (!playerId) return res.status(400).json({ success: false, error: '缺少玩家ID' });
+  const result = welfareStorage.claimDailyReward(playerId);
+  if (!result.success) return res.status(400).json(result);
+  if (playerStorage && result.rewards) {
+    const lingshiReward = result.rewards.find(r => r.name === '灵石');
+    if (lingshiReward) playerStorage.updateSpiritStones(playerId, lingshiReward.amount);
+  }
+  res.json({ success: true, message: result.message, data: { rewards: result.rewards } });
+});
+
+// GET /api/welfare/signin-rewards → /config
+router.get('/signin-rewards', (req, res) => {
+  res.json({ success: true, data: { cycle: 7, rewards: SIGN_IN_REWARDS.map((r, i) => ({ day: i + 1, lingshi: r.lingshi, equipment: r.equipment, repairCard: r.repairCard })) } });
+});
+
 module.exports = router;
