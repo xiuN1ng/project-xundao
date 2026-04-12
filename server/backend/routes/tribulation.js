@@ -1,818 +1,377 @@
 const express = require('express');
 const router = express.Router();
-const tribulationStorage = require('../../game/tribulation_storage');
-const tribulationSystem = require('../../game/tribulation_system');
+const path = require('path');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const DB_PATH = path.join(DATA_DIR, 'game.db');
 
-// 外部配置引用（从 server.js 运行时注入）
-let TRIBULATION_TYPES = {};
-let DIFFICULTY_CONFIG = {};
-let PROTECTION_ITEMS = {};
-let REALMS = [];
-let dbRef = null;
-
-function configure(refs) {
-  if (refs.TRIBULATION_TYPES) TRIBULATION_TYPES = refs.TRIBULATION_TYPES;
-  if (refs.DIFFICULTY_CONFIG) DIFFICULTY_CONFIG = refs.DIFFICULTY_CONFIG;
-  if (refs.PROTECTION_ITEMS) PROTECTION_ITEMS = refs.PROTECTION_ITEMS;
-  if (refs.REALMS) REALMS = refs.REALMS;
-  if (refs.db) dbRef = refs.db;
-  
-  // 配置存储模块
-  tribulationStorage.configure({
-    TRIBULATION_TYPES,
-    DIFFICULTY_CONFIG,
-    PROTECTION_ITEMS
-  });
+let db = null;
+function getDb() {
+  if (!db) {
+    const Database = require('better-sqlite3');
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('busy_timeout = 5000');
+  }
+  return db;
 }
 
-// ==================== 核心 API ====================
+// 渡劫境界配置
+const TRIBULATION_TYPES = {
+  'qi_refining': {
+    id: 'qi_refining', name: '筑基天劫', icon: '🧘', realm: 9,
+    description: '凝聚灵气，突破筑基境界',
+    baseSuccessRate: 0.70, baseDamage: 300,
+    stages: 3, rewardType: 'realm_advancement',
+    requiredItems: [], difficultyLevels: ['easy', 'normal', 'hard']
+  },
+  'golden_core': {
+    id: 'golden_core', name: '金丹天劫', icon: '☀️', realm: 14,
+    description: '凝炼金丹，突破金丹境界',
+    baseSuccessRate: 0.60, baseDamage: 800,
+    stages: 5, rewardType: 'realm_advancement',
+    requiredItems: [{ id: 'tribulation_pill', name: '渡劫丹', bonus: 0.15 }],
+    difficultyLevels: ['easy', 'normal', 'hard', 'nightmare']
+  },
+  'nascent_soul': {
+    id: 'nascent_soul', name: '元婴天劫', icon: '👶', realm: 19,
+    description: '孕育元婴，突破元婴境界',
+    baseSuccessRate: 0.50, baseDamage: 2000,
+    stages: 7, rewardType: 'realm_advancement',
+    requiredItems: [{ id: 'superior_tribulation_pill', name: '高级渡劫丹', bonus: 0.25 }],
+    difficultyLevels: ['normal', 'hard', 'nightmare', 'hell']
+  },
+  'cultivation_breakthrough': {
+    id: 'cultivation_breakthrough', name: '修为突破', icon: '⚡', realm: 4,
+    description: '小境界突破，稳固修为',
+    baseSuccessRate: 0.80, baseDamage: 100,
+    stages: 1, rewardType: 'cultivation_progress',
+    requiredItems: [], difficultyLevels: ['easy', 'normal']
+  }
+};
 
-// GET /api/tribulation/types - 获取可用的渡劫类型列表
+// 难度加成
+const DIFFICULTY_MODIFIERS = {
+  easy: { damageMult: 0.6, rewardMult: 0.7, successBonus: 0.15 },
+  normal: { damageMult: 1.0, rewardMult: 1.0, successBonus: 0.0 },
+  hard: { damageMult: 1.5, rewardMult: 1.5, successBonus: -0.10 },
+  nightmare: { damageMult: 2.0, rewardMult: 2.5, successBonus: -0.20 },
+  hell: { damageMult: 3.0, rewardMult: 4.0, successBonus: -0.30 }
+};
+
+// 天劫宝箱奖励
+const TRIBULATION_REWARDS = {
+  success: [
+    { type: 'spirit_stones', min: 500, max: 2000, weight: 30 },
+    { type: 'experience', min: 1000, max: 5000, weight: 25 },
+    { type: 'equipment', quality: 'rare', weight: 15 },
+    { type: 'equipment', quality: 'epic', weight: 8 },
+    { type: 'tribulation_pill', count: 1, weight: 12 },
+    { type: 'realm_material', weight: 10 }
+  ],
+  failure: [
+    { type: 'spirit_stones', min: 50, max: 200, weight: 60 },
+    { type: 'experience', min: 100, max: 500, weight: 40 }
+  ]
+};
+
+// 初始化表
+function initTables() {
+  const database = getDb();
+  try {
+    // 确保 tribulation_sessions 表有必要的列
+    const sessionCols = database.prepare('PRAGMA table_info(tribulation_sessions)').all().map(c => c.name);
+    if (!sessionCols.includes('current_stage')) {
+      try { database.exec("ALTER TABLE tribulation_sessions ADD COLUMN current_stage INTEGER DEFAULT 1"); } catch (e) {}
+    }
+    if (!sessionCols.includes('total_stages')) {
+      try { database.exec("ALTER TABLE tribulation_sessions ADD COLUMN total_stages INTEGER DEFAULT 3"); } catch (e) {}
+    }
+    if (!sessionCols.includes('lightning_count')) {
+      try { database.exec("ALTER TABLE tribulation_sessions ADD COLUMN lightning_count INTEGER DEFAULT 0"); } catch (e) {}
+    }
+    // tribulation_records 表 - 添加缺失的列
+    const recCols = database.prepare('PRAGMA table_info(tribulation_records)').all().map(c => c.name);
+    if (!recCols.includes('damage_taken')) {
+      try { database.exec("ALTER TABLE tribulation_records ADD COLUMN damage_taken INTEGER DEFAULT 0"); } catch (e) {}
+    }
+    if (!recCols.includes('reward_items')) {
+      try { database.exec("ALTER TABLE tribulation_records ADD COLUMN reward_items TEXT DEFAULT '[]'"); } catch (e) {}
+    }
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS tribulation_cooldowns (
+        player_id INTEGER PRIMARY KEY,
+        last_tribulation TEXT DEFAULT (datetime('now', '+8 hours')),
+        daily_attempts INTEGER DEFAULT 0,
+        weekly_successes INTEGER DEFAULT 0
+      )
+    `);
+  } catch (e) {
+    console.error('[tribulation] init error:', e.message);
+  }
+}
+initTables();
+
+function extractUserId(req) {
+  return parseInt(req.body?.player_id || req.query?.player_id || req.userId || 1) || 1;
+}
+
+function weightedRandom(rewards) {
+  const total = rewards.reduce((s, r) => s + r.weight, 0);
+  let r = Math.random() * total;
+  for (const reward of rewards) {
+    r -= reward.weight;
+    if (r <= 0) return reward;
+  }
+  return rewards[0];
+}
+
+// GET /api/tribulation/types - 获取渡劫类型配置
 router.get('/types', (req, res) => {
+  const userId = extractUserId(req);
+  const database = getDb();
   try {
-    const { realm_level, player_id } = req.query;
-    let playerRealmLevel = parseInt(realm_level) || 0;
-    
-    // 如果提供了 player_id，从数据库获取玩家境界
-    if (player_id && dbRef) {
-      const player = dbRef.prepare('SELECT realm_level FROM player WHERE id = ?').get(player_id);
-      if (player) playerRealmLevel = player.realm_level;
-    }
-    
-    // 根据玩家境界过滤可用的天劫类型
-    const availableTypes = Object.values(TRIBULATION_TYPES).filter(t => {
-      const minRealm = t.min_realm !== undefined ? t.min_realm : 0;
-      return minRealm <= playerRealmLevel;
-    });
-    
-    res.json({
-      success: true,
-      data: {
-        types: availableTypes,
-        realms: REALMS,
-        difficulties: Object.entries(DIFFICULTY_CONFIG).map(([key, val]) => ({ id: key, ...val })),
-        protection_items: Object.values(PROTECTION_ITEMS)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    const player = database.prepare('SELECT realm FROM player WHERE id = ?').get(userId);
+    const currentRealm = player?.realm || 1;
+    const available = Object.values(TRIBULATION_TYPES).filter(t => t.realm <= currentRealm + 1);
+    res.json({ success: true, types: available, currentRealm, nextTier: TRIBULATION_TYPES['qi_refining'] });
+  } catch (e) {
+    console.error('[tribulation] GET /types error:', e.message);
+    res.json({ success: false, message: e.message });
   }
 });
 
-// GET /api/tribulation/rate - 查询成功率（不开始渡劫）
-router.get('/rate', (req, res) => {
-  try {
-    const { player_id, tribulation_type, difficulty } = req.query;
-    const realmLevel = parseInt(req.query.realm_level) || 0;
-    if (!player_id || !dbRef) {
-      const rateInfo = tribulationStorage.calculateSuccessRateDetailed(realmLevel, tribulation_type || 'golden_trib', difficulty || 'normal');
-      return res.json({ success: true, realm_level: realmLevel, success_rate: rateInfo });
-    }
-    const player = dbRef.prepare('SELECT realm_level FROM player WHERE id=?').get(player_id);
-    const actualRealm = player?.realm_level || 0;
-    const rateInfo = tribulationStorage.calculateSuccessRateDetailed(actualRealm, tribulation_type || 'golden_trib', difficulty || 'normal');
-    res.json({ success: true, player_id: parseInt(player_id), realm_level: actualRealm, success_rate: rateInfo });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// POST /api/tribulation/begin - 开始渡劫（创建动画会话）
-router.post('/begin', (req, res) => {
-  try {
-    const player_id = req.body.player_id ?? req.body.userId ?? 1;
-    const { tribulation_type, difficulty } = req.body;
-    
-    if (!player_id) {
-      return res.status(400).json({ success: false, error: '缺少 player_id' });
-    }
-    
-    if (!tribulation_type) {
-      return res.status(400).json({ success: false, error: '缺少渡劫类型 tribulation_type' });
-    }
-    
-    // 验证天劫类型
-    const tribType = TRIBULATION_TYPES[tribulation_type];
-    if (!tribType) {
-      return res.status(400).json({ success: false, error: '无效的天劫类型' });
-    }
-    
-    // 获取玩家数据
-    let player = null;
-    let actualPlayerId = player_id;
-    
-    if (dbRef) {
-      player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-      if (!player) {
-        // 自动创建玩家
-        const result = dbRef.prepare(
-          'INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)'
-        ).run(`player_${player_id}`, 10000, 1, 0);
-        actualPlayerId = result.lastInsertRowid;
-        player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
-      }
-    }
-    
-    const currentRealm = REALMS[player?.realm_level || 0] || REALMS[0];
-    
-    // 检查是否已达到最高境界
-    if (!currentRealm.next) {
-      return res.status(400).json({ success: false, error: '已达到最高境界，无需渡劫' });
-    }
-    
-    // 检查境界要求
-    if (player?.realm_level < tribType.min_realm) {
-      const minRealmName = REALMS[tribType.min_realm]?.name || '未知';
-      return res.status(400).json({ 
-        success: false, 
-        error: `需要境界达到 ${minRealmName} 才能渡此天劫` 
-      });
-    }
-    
-    // 清理玩家之前的进行中会话
-    const existing = tribulationStorage.getPlayerActiveSession(actualPlayerId);
-    if (existing) {
-      tribulationStorage.completeSession(existing.sessionId, false, null);
-    }
-    
-    // 创建新的渡劫会话
-    const session = tribulationStorage.createSession(actualPlayerId, tribulation_type, difficulty || 'normal');
-    
-    // 计算详细成功率
-    const rateInfo = tribulationStorage.calculateSuccessRateDetailed(
-      player?.realm_level || 0,
-      tribulation_type,
-      difficulty || 'normal'
-    );
-    
-    // 记录到数据库
-    if (dbRef) {
-      dbRef.prepare(`
-        INSERT INTO tribulation_records 
-        (player_id, current_realm, target_realm, tribulation_type, difficulty, status, base_success_rate, bonus_success_rate, final_success_rate)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        actualPlayerId,
-        currentRealm.name,
-        currentRealm.next,
-        tribulation_type,
-        difficulty || 'normal',
-        'pending',
-        rateInfo.baseRate / 100,
-        rateInfo.bonusRate / 100,
-        rateInfo.finalRate / 100
-      );
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        session_id: session.sessionId,
-        tribulation_type: tribType.name,
-        tribulation_id: tribulation_type,
-        difficulty: difficulty || 'normal',
-        current_realm: currentRealm.name,
-        target_realm: currentRealm.next,
-        anim_config: session.phases,
-        total_phases: session.totalPhases,
-        success_rate: rateInfo,
-        expires_at: session.expiresAt
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/tribulation/session/:sessionId - 获取渡劫会话状态和当前阶段
-router.get('/session/:sessionId', (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const session = tribulationStorage.getSession(sessionId);
-    
-    if (!session) {
-      return res.status(404).json({ success: false, error: '渡劫会话不存在或已过期' });
-    }
-    
-    // 获取当前阶段的详细信息
-    const currentPhaseData = session.phases[session.currentPhase] || null;
-    
-    res.json({
-      success: true,
-      data: {
-        session_id: session.sessionId,
-        player_id: session.playerId,
-        status: session.status,
-        current_phase: session.currentPhase,
-        total_phases: session.totalPhases,
-        current_phase_data: currentPhaseData,
-        tribulation_type: session.tribulationType,
-        difficulty: session.difficulty,
-        result: session.result,
-        rewards: session.rewards
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// POST /api/tribulation/advance - 推进到下一动画阶段
-router.post('/advance', (req, res) => {
-  try {
-    const { session_id } = req.body;
-    
-    if (!session_id) {
-      return res.status(400).json({ success: false, error: '缺少 session_id' });
-    }
-    
-    const session = tribulationStorage.getSession(session_id);
-    if (!session) {
-      return res.status(404).json({ success: false, error: '渡劫会话不存在' });
-    }
-    
-    if (session.status === SESSION_STATUS.COMPLETED || session.status === SESSION_STATUS.EXPIRED) {
-      return res.status(400).json({ success: false, error: '渡劫会话已结束', status: session.status });
-    }
-    
-    const prevPhase = session.currentPhase;
-    const advanced = tribulationStorage.advancePhase(session_id);
-    
-    if (!advanced) {
-      return res.status(400).json({ success: false, error: '无法推进阶段' });
-    }
-    
-    const currentPhaseData = advanced.phases[advanced.currentPhase] || null;
-    const isLastPhase = advanced.currentPhase === advanced.totalPhases - 1;
-    
-    res.json({
-      success: true,
-      data: {
-        session_id: advanced.sessionId,
-        previous_phase: prevPhase,
-        current_phase: advanced.currentPhase,
-        total_phases: advanced.totalPhases,
-        current_phase_data: currentPhaseData,
-        is_last_phase: isLastPhase,
-        status: advanced.status
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// POST /api/tribulation/complete - 完成渡劫（结算奖励）
-router.post('/complete', (req, res) => {
-  try {
-    const { session_id, success, use_items } = req.body;
-    
-    if (!session_id) {
-      return res.status(400).json({ success: false, error: '缺少 session_id' });
-    }
-    
-    const session = tribulationStorage.getSession(session_id);
-    if (!session) {
-      return res.status(404).json({ success: false, error: '渡劫会话不存在' });
-    }
-    
-    if (session.status === SESSION_STATUS.COMPLETED) {
-      return res.json({
-        success: true,
-        data: {
-          session_id: session.sessionId,
-          result: session.result,
-          rewards: session.rewards,
-          message: session.result === 'success' ? '渡劫已成功完成' : '渡劫已失败'
-        }
-      });
-    }
-    
-    // 获取玩家数据（同步读取 Users.lingshi 作为权威数据源）
-    let player = null;
-    let userLingshi = 0;
-    if (dbRef) {
-      player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(session.playerId);
-      try {
-        const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(session.playerId);
-        if (userRow) userLingshi = userRow.lingshi || 0;
-      } catch (e) { userLingshi = player?.spirit_stones || 0; }
-    }
-    
-    const currentRealm = REALMS[player?.realm_level || 0] || REALMS[0];
-    const targetRealmName = currentRealm.next;
-    const diffConfig = DIFFICULTY_CONFIG[session.difficulty] || DIFFICULTY_CONFIG.normal;
-    
-    // 如果没有传入 success，自行判定
-    let finalSuccess = success;
-    if (finalSuccess === undefined) {
-      // 使用存储的成功率进行判定
-      const roll = Math.random();
-      const rateInfo = tribulationStorage.calculateSuccessRateDetailed(
-        player?.realm_level || 0,
-        session.tribulationType,
-        session.difficulty
-      );
-      finalSuccess = roll < (rateInfo.finalRate / 100);
-    }
-    
-    let rewards = null;
-    let penalty = null;
-    
-    if (finalSuccess) {
-      // 计算奖励
-      rewards = tribulationStorage.calculateAscensionRewards(
-        currentRealm.name,
-        targetRealmName,
-        session.difficulty
-      );
-      
-      // 更新玩家数据
-      if (dbRef && player) {
-        const spiritStonesGain = rewards.spiritStones || 0;
-        const realmLevelUp = player.realm_level + 1;
-        
-        // 境界提升 + 灵石奖励（写入 Users.lingshi，权威数据源）
-        dbRef.prepare('UPDATE Users SET realm = ?, lingshi = lingshi + ?, updatedAt = ? WHERE id = ?')
-          .run(realmLevelUp, spiritStonesGain, new Date().toISOString(), session.playerId);
-        dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
-          .run(realmLevelUp, spiritStonesGain, session.playerId);
-        
-        // 检查飞升成就（渡劫/真仙突破代表飞升成就）
-        const isAscension = targetRealmName === '渡劫' || targetRealmName === '真仙';
-        if (isAscension && rewards.broadcast) {
-          // 全服广播
-          try {
-            const broadcastApi = require('./broadcast');
-            broadcastApi.broadcast({
-              type: 'ascension',
-              player_id: session.playerId,
-              username: player.username,
-              realm: targetRealmName,
-              rewards
-            });
-          } catch (e) {
-            // 广播未挂载
-          }
-        }
-      }
-    } else {
-      // 失败惩罚
-      const penaltyRate = diffConfig.penalty === 'heavy' ? 0.5 : diffConfig.penalty === 'medium' ? 0.3 : 0.15;
-      penalty = {
-        spirit_stones_loss: Math.floor((userLingshi || player?.spirit_stones || 0) * penaltyRate),
-        realm_level_loss: 0,
-        message: diffConfig.penalty === 'heavy' ? '殒落' : diffConfig.penalty === 'medium' ? '重伤' : '轻伤'
-      };
-      
-      if (dbRef && player) {
-        // 扣除灵石（写入 Users.lingshi，权威数据源）
-        dbRef.prepare('UPDATE Users SET lingshi = MAX(0, lingshi - ?) WHERE id = ?')
-          .run(penalty.spirit_stones_loss, session.playerId);
-      }
-    }
-    
-    // 完成会话
-    const completed = tribulationStorage.completeSession(session_id, finalSuccess, rewards);
-    
-    // 更新数据库记录
-    if (dbRef) {
-      const record = dbRef.prepare(
-        'SELECT * FROM tribulation_records WHERE player_id = ? ORDER BY created_at DESC LIMIT 1'
-      ).get(session.playerId);
-      
-      if (record) {
-        dbRef.prepare(`
-          UPDATE tribulation_records 
-          SET status = ?, result = ?, rewards = ?, completed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(
-          finalSuccess ? 'success' : 'failed',
-          finalSuccess ? 'success' : 'failed',
-          JSON.stringify(rewards),
-          record.id
-        );
-      }
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        session_id: completed.sessionId,
-        result: finalSuccess ? 'success' : 'failed',
-        current_realm: currentRealm.name,
-        target_realm: targetRealmName,
-        tribulation_type: session.tribulationType,
-        difficulty: session.difficulty,
-        rewards: finalSuccess ? {
-          spirit: rewards.spirit,
-          spirit_stones: rewards.spiritStones,
-          items: rewards.items || [],
-          title: rewards.title_reward,
-          aura: rewards.aura,
-          is_ascension: rewards.broadcast || false
-        } : null,
-        penalty: penalty,
-        message: finalSuccess 
-          ? `🎊 渡劫成功！恭喜突破至${targetRealmName}！` 
-          : `💀 渡劫失败！${penalty?.message || '损失部分灵气'}`
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/tribulation/anim-config/:type - 获取动画配置
-router.get('/anim-config/:type', (req, res) => {
-  try {
-    const { type } = req.params;
-    const config = tribulationStorage.getAnimConfig(type);
-    
-    if (!config) {
-      return res.status(404).json({ success: false, error: '未找到该天劫类型的动画配置' });
-    }
-    
-    res.json({
-      success: true,
-      data: config
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/tribulation/anim-configs - 获取所有动画配置
-router.get('/anim-configs', (req, res) => {
-  res.json({
-    success: true,
-    data: tribulationStorage.getAllAnimConfigs()
-  });
-});
-
-// GET /api/tribulation/rewards/:fromTo - 获取境界突破奖励预览
-router.get('/rewards/:fromTo', (req, res) => {
-  try {
-    const { fromTo } = req.params;
-    const rewards = tribulationStorage.calculateAscensionRewards(
-      fromTo.split('→')[0],
-      fromTo.split('→')[1],
-      'normal'
-    );
-    
-    res.json({
-      success: true,
-      data: {
-        from_to: fromTo,
-        rewards
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/tribulation/status - 获取渡劫状态（兼容旧接口）
+// GET /api/tribulation/status - 获取渡劫状态
 router.get('/status', (req, res) => {
+  const userId = extractUserId(req);
+  const database = getDb();
   try {
-    const { player_id, session_id } = req.query;
-    
-    if (!player_id) {
-      return res.status(400).json({ success: false, error: '缺少 player_id' });
-    }
-    
-    let player = null;
-    let actualPlayerId = player_id;
-    
-    if (dbRef) {
-      player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-      if (!player) {
-        const result = dbRef.prepare(
-          'INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)'
-        ).run(`player_${player_id}`, 10000, 1, 0);
-        actualPlayerId = result.lastInsertRowid;
-        player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
-      }
-    }
-    
-    const currentRealm = REALMS[player?.realm_level || 0] || REALMS[0];
-    const canAdvance = currentRealm.next !== null;
-    
-    // 获取玩家进行中的会话
-    const activeSession = tribulationStorage.getPlayerActiveSession(actualPlayerId);
-    
-    // 获取最近的渡劫记录
-    let records = [];
-    if (dbRef) {
-      records = dbRef.prepare(
-        'SELECT * FROM tribulation_records WHERE player_id = ? ORDER BY created_at DESC LIMIT 10'
-      ).all(actualPlayerId);
-    }
-    
+    const session = database.prepare('SELECT * FROM tribulation_sessions WHERE player_id = ? AND status = ? ORDER BY id DESC LIMIT 1').get(userId, 'active');
+    const cooldowns = database.prepare('SELECT * FROM tribulation_cooldowns WHERE player_id = ?').get(userId);
+    const recentRecords = database.prepare('SELECT tribulation_type, difficulty, success, reward_spirit, created_at FROM tribulation_records WHERE player_id = ? ORDER BY id DESC LIMIT 5').all(userId);
+    const stats = database.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN success=1 THEN 1 ELSE 0 END) as successes FROM tribulation_records WHERE player_id = ?').get(userId);
     res.json({
       success: true,
-      data: {
-        player: {
-          id: player?.id || actualPlayerId,
-          realm_level: player?.realm_level || 0,
-          current_realm: currentRealm.name,
-          next_realm: currentRealm.next,
-          can_advance: canAdvance,
-          spirit_stones: player?.spirit_stones || 0
-        },
-        active_session: activeSession ? {
-          session_id: activeSession.sessionId,
-          tribulation_type: activeSession.tribulationType,
-          current_phase: activeSession.currentPhase,
-          total_phases: activeSession.totalPhases,
-          status: activeSession.status
-        } : null,
-        records: records.map(r => ({
-          id: r.id,
-          current_realm: r.current_realm,
-          target_realm: r.target_realm,
-          tribulation_type: TRIBULATION_TYPES[r.tribulation_type]?.name || r.tribulation_type,
-          difficulty: r.difficulty,
-          status: r.status,
-          result: r.result,
-          final_success_rate: r.final_success_rate ? Math.round(r.final_success_rate * 100) : 0,
-          rewards: r.rewards ? JSON.parse(r.rewards) : null,
-          created_at: r.created_at,
-          completed_at: r.completed_at
-        }))
-      }
+      activeSession: session || null,
+      cooldowns: cooldowns || { daily_attempts: 0, weekly_successes: 0 },
+      recentRecords,
+      stats: { total: stats.total || 0, successes: stats.successes || 0, rate: stats.total ? Math.round((stats.successes / stats.total) * 100) : 0 }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (e) {
+    console.error('[tribulation] GET /status error:', e.message);
+    res.json({ success: false, message: e.message });
   }
 });
 
-// POST /api/tribulation/attempt - 兼容旧接口（直接判定+奖励）
-router.post('/attempt', (req, res) => {
-  try {
-    const { player_id, tribulation_type, difficulty, use_items } = req.body;
-    
-    if (!player_id) {
-      return res.status(400).json({ success: false, error: '缺少 player_id' });
-    }
-    
-    let player = null;
-    let actualPlayerId = player_id;
-    
-    if (dbRef) {
-      player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-      if (!player) {
-        const result = dbRef.prepare(
-          'INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)'
-        ).run(`player_${player_id}`, 10000, 1, 0);
-        actualPlayerId = result.lastInsertRowid;
-        player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
-      }
-    }
-    
-    const currentRealm = REALMS[player?.realm_level || 0] || REALMS[0];
-    if (!currentRealm.next) {
-      return res.status(400).json({ success: false, error: '已达到最高境界' });
-    }
-    
-    // 验证天劫类型
-    const tribType = TRIBULATION_TYPES[tribulation_type];
-    if (!tribType) {
-      return res.status(400).json({ success: false, error: '无效的天劫类型' });
-    }
-    
-    // 计算成功率
-    const rateInfo = tribulationStorage.calculateSuccessRateDetailed(
-      player?.realm_level || 0,
-      tribulation_type,
-      difficulty || 'normal'
-    );
-    
-    // 判定结果
-    const roll = Math.random();
-    const success = roll < (rateInfo.finalRate / 100);
-    const diffConfig = DIFFICULTY_CONFIG[difficulty || 'normal'] || DIFFICULTY_CONFIG.normal;
-    
-    // 计算奖励
-    let rewards = null;
-    let penalty = null;
-    
-    if (success) {
-      rewards = tribulationStorage.calculateAscensionRewards(
-        currentRealm.name,
-        currentRealm.next,
-        difficulty || 'normal'
-      );
-      
-      if (dbRef && player) {
-        const spiritStonesGain = rewards.spiritStones || 0;
-        const realmLevelUp = player.realm_level + 1;
-        
-        // 境界提升 + 灵石奖励（写入 Users.lingshi，权威数据源）
-        dbRef.prepare('UPDATE Users SET realm = ?, lingshi = lingshi + ?, updatedAt = ? WHERE id = ?')
-          .run(realmLevelUp, spiritStonesGain, new Date().toISOString(), actualPlayerId);
-        dbRef.prepare('UPDATE player SET realm_level = ?, spirit_stones = spirit_stones + ? WHERE id = ?')
-          .run(realmLevelUp, spiritStonesGain, actualPlayerId);
-        
-        // 渡劫/真仙突破时全服广播（代表真正的飞升成就）
-        const isAscension = currentRealm.next === '渡劫' || currentRealm.next === '真仙';
-        if (isAscension && rewards.broadcast) {
-          try {
-            const broadcastApi = require('./broadcast');
-            broadcastApi.broadcast({
-              type: 'ascension',
-              player_id: actualPlayerId,
-              username: player.username,
-              realm: currentRealm.next,
-              rewards
-            });
-          } catch (e) {}
-        }
-      }
-    } else {
-      const penaltyRate = diffConfig.penalty === 'heavy' ? 0.5 : diffConfig.penalty === 'medium' ? 0.3 : 0.15;
-      // 读取 Users.lingshi 计算惩罚（权威数据源）
-      let penaltyLingshi = player?.spirit_stones || 0;
-      try {
-        const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(actualPlayerId);
-        if (userRow) penaltyLingshi = userRow.lingshi || 0;
-      } catch (e) {}
-      penalty = {
-        spirit_stones_loss: Math.floor(penaltyLingshi * penaltyRate)
-      };
-      
-      if (dbRef && player) {
-        // 扣除灵石（写入 Users.lingshi，权威数据源）
-        dbRef.prepare('UPDATE Users SET lingshi = MAX(0, lingshi - ?) WHERE id = ?')
-          .run(penalty.spirit_stones_loss, actualPlayerId);
-      }
-    }
-    
-    // 记录
-    if (dbRef) {
-      dbRef.prepare(`
-        INSERT INTO tribulation_records 
-        (player_id, current_realm, target_realm, tribulation_type, difficulty, status, base_success_rate, bonus_success_rate, final_success_rate, result, rewards)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        actualPlayerId,
-        currentRealm.name,
-        currentRealm.next,
-        tribulation_type,
-        difficulty || 'normal',
-        success ? 'success' : 'failed',
-        rateInfo.baseRate / 100,
-        rateInfo.bonusRate / 100,
-        rateInfo.finalRate / 100,
-        success ? 'success' : 'failed',
-        JSON.stringify(rewards)
-      );
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        success,
-        current_realm: currentRealm.name,
-        target_realm: currentRealm.next,
-        tribulation_type: tribType.name,
-        difficulty: diffConfig.name,
-        success_rate: rateInfo,
-        roll: Math.round(roll * 10000) / 100,
-        rewards: success ? {
-          spirit: rewards.spirit,
-          spirit_stones: rewards.spiritStones,
-          items: rewards.items || [],
-          title: rewards.title_reward,
-          aura: rewards.aura,
-          is_ascension: rewards.broadcast || false
-        } : null,
-        penalty: success ? null : penalty,
-        message: success 
-          ? `🎊 渡劫成功！恭喜突破至${currentRealm.next}！` 
-          : `💀 渡劫失败！${penalty ? `损失${penalty.spirit_stones_loss}灵石` : '未知的惩罚'}`
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// POST /api/tribulation/begin - 开始渡劫
+router.post('/begin', (req, res) => {
+  const userId = extractUserId(req);
+  const { tribulationType, difficulty = 'normal' } = req.body || {};
+  const database = getDb();
 
-// GET /api/tribulation/realms - 获取境界数据
-router.get('/realms', (req, res) => {
+  if (!tribulationType || !TRIBULATION_TYPES[tribulationType]) {
+    return res.json({ success: false, message: '无效的渡劫类型' });
+  }
+
+  const tribConfig = TRIBULATION_TYPES[tribulationType];
+  const diffConfig = DIFFICULTY_MODIFIERS[difficulty] || DIFFICULTY_MODIFIERS.normal;
+
+  // 检查是否有进行中的渡劫
+  const active = database.prepare('SELECT * FROM tribulation_sessions WHERE player_id = ? AND status = ?').get(userId, 'active');
+  if (active) {
+    return res.json({ success: false, message: '已有进行中的渡劫，请先完成或放弃' });
+  }
+
+  // 检查玩家境界是否满足
+  const player = database.prepare('SELECT realm, level, hp, attack, defense FROM player WHERE id = ?').get(userId);
+  if (!player) return res.json({ success: false, message: '玩家不存在' });
+  if (player.realm < tribConfig.realm - 1) {
+    return res.json({ success: false, message: `境界不足，需要达到境界${tribConfig.realm - 1}才能渡此天劫` });
+  }
+
+  // 检查每日次数限制
+  let cooldowns = database.prepare('SELECT * FROM tribulation_cooldowns WHERE player_id = ?').get(userId);
+  if (!cooldowns) {
+    database.prepare('INSERT INTO tribulation_cooldowns (player_id) VALUES (?)').run(userId);
+    cooldowns = { daily_attempts: 0, weekly_successes: 0 };
+  }
+
+  // 开始渡劫
+  const sessionId = database.prepare(
+    'INSERT INTO tribulation_sessions (player_id, tribulation_type, difficulty, status, current_stage, total_stages) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(userId, tribulationType, difficulty, 'active', 1, tribConfig.stages);
+
+  // 更新每日次数
+  database.prepare("UPDATE tribulation_cooldowns SET daily_attempts = daily_attempts + 1, last_tribulation = datetime('now', '+8 hours') WHERE player_id = ?").run(userId);
+
+  // 初始天劫信息
+  const successRate = Math.max(0.05, Math.min(0.95, tribConfig.baseSuccessRate + diffConfig.successBonus));
+  const estimatedDamage = Math.floor(tribConfig.baseDamage * diffConfig.damageMult);
+
   res.json({
     success: true,
-    data: REALMS
+    sessionId: sessionId.lastInsertRowid,
+    message: `${tribConfig.icon} ${tribConfig.name}开始！`,
+    stage: 1,
+    totalStages: tribConfig.stages,
+    difficulty,
+    successRate: Math.round(successRate * 100) + '%',
+    estimatedDamage,
+    tip: `渡过${tribConfig.stages}道雷劫即可成功，使用护身符可免疫一次失败惩罚`
   });
 });
 
-// POST /api/tribulation/protect - 购买/使用保护道具
-router.post('/protect', (req, res) => {
-  try {
-    const { player_id, item_id, action } = req.body;
-    
-    if (!player_id || !item_id) {
-      return res.status(400).json({ success: false, error: '缺少必要参数' });
-    }
-    
-    if (!action || !['buy', 'use'].includes(action)) {
-      return res.status(400).json({ success: false, error: '无效的操作类型 (buy/use)' });
-    }
-    
-    const item = PROTECTION_ITEMS[item_id];
-    if (!item) {
-      return res.status(400).json({ success: false, error: '无效的道具' });
-    }
-    
-    let player = null;
-    let actualPlayerId = player_id;
-    
-    if (dbRef) {
-      player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(player_id);
-      if (!player) {
-        const result = dbRef.prepare(
-          'INSERT INTO player (username, spirit_stones, level, realm_level) VALUES (?, ?, ?, ?)'
-        ).run(`player_${player_id}`, 10000, 1, 0);
-        actualPlayerId = result.lastInsertRowid;
-        player = dbRef.prepare('SELECT * FROM player WHERE id = ?').get(actualPlayerId);
-      }
-    }
-    
-    if (action === 'buy') {
-      // 读取 Users.lingshi（权威数据源）进行余额检查
-      let userLingshi = player?.spirit_stones || 0;
-      if (dbRef) {
-        try {
-          const userRow = dbRef.prepare('SELECT lingshi FROM Users WHERE id = ?').get(actualPlayerId);
-          if (userRow) userLingshi = userRow.lingshi || 0;
-        } catch (e) {}
-      }
-      if (userLingshi < item.price) {
-        return res.status(400).json({ success: false, error: '灵石不足' });
-      }
-      
-      if (dbRef) {
-        // 扣除灵石（写入 Users.lingshi，权威数据源）
-        dbRef.prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?')
-          .run(item.price, actualPlayerId);
-        
-        const existing = dbRef.prepare(
-          'SELECT * FROM player_protection_items WHERE player_id = ? AND item_id = ?'
-        ).get(actualPlayerId, item_id);
-        
-        if (existing) {
-          dbRef.prepare(
-            'UPDATE player_protection_items SET quantity = quantity + 1, updated_at = CURRENT_TIMESTAMP WHERE player_id = ? AND item_id = ?'
-          ).run(actualPlayerId, item_id);
-        } else {
-          dbRef.prepare(
-            'INSERT INTO player_protection_items (player_id, item_id, item_name, quantity) VALUES (?, ?, ?, ?)'
-          ).run(actualPlayerId, item_id, item.name, 1);
-        }
-      }
-      
-      res.json({
-        success: true,
-        message: `成功购买 ${item.name}`,
-        data: {
-          item_id,
-          item_name: item.name,
-          price: item.price,
-          remaining_spirit_stones: userLingshi - item.price
-        }
-      });
-    } else if (action === 'use') {
-      if (dbRef) {
-        const playerItem = dbRef.prepare(
-          'SELECT * FROM player_protection_items WHERE player_id = ? AND item_id = ?'
-        ).get(actualPlayerId, item_id);
-        
-        if (!playerItem || playerItem.quantity <= 0) {
-          return res.status(400).json({ success: false, error: '没有此道具' });
-        }
-      }
-      
-      const effects = {};
-      if (item.success_bonus) effects.success_bonus = item.success_bonus;
-      if (item.dodge_one_hit) effects.dodge_one_hit = true;
-      if (item.revive_once) effects.revive_once = true;
-      if (item.restore_spirit) effects.restore_spirit = item.restore_spirit;
-      if (item.invincibility) effects.invincibility = item.invincibility;
-      
-      res.json({
-        success: true,
-        message: `使用 ${item.name} 成功`,
-        data: {
-          item_id,
-          item_name: item.name,
-          effects
-        }
-      });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+// POST /api/tribulation/lightning - 迎接天雷（核心渡劫操作）
+router.post('/lightning', (req, res) => {
+  const userId = extractUserId(req);
+  const { sessionId, use_protection = false, use_tribulation_pill = false } = req.body || {};
+  const database = getDb();
+
+  if (!sessionId) return res.json({ success: false, message: '缺少渡劫会话ID' });
+
+  const session = database.prepare('SELECT * FROM tribulation_sessions WHERE id = ? AND player_id = ? AND status = ?').get(sessionId, userId, 'active');
+  if (!session) return res.json({ success: false, message: '渡劫会话不存在' });
+
+  const tribConfig = TRIBULATION_TYPES[session.tribulation_type];
+  const diffConfig = DIFFICULTY_MODIFIERS[session.difficulty] || DIFFICULTY_MODIFIERS.normal;
+  const player = database.prepare('SELECT * FROM player WHERE id = ?').get(userId);
+  if (!player) return res.json({ success: false, message: '玩家不存在' });
+
+  // 计算成功率
+  let successRate = tribConfig.baseSuccessRate + diffConfig.successBonus;
+  if (use_tribulation_pill) {
+    const pillBonus = tribConfig.requiredItems[0]?.bonus || 0.15;
+    successRate = Math.min(0.99, successRate + pillBonus);
   }
+
+  // 消耗物品
+  if (use_tribulation_pill) {
+    database.prepare('UPDATE player_items SET count = count - 1 WHERE user_id = ? AND item_name LIKE ? AND count > 0').run(userId, '%渡劫丹%');
+  }
+
+  const isLastStage = session.current_stage >= session.total_stages;
+  const roll = Math.random();
+  const success = roll < successRate;
+
+  // 更新会话
+  const newLightningCount = session.lightning_count + 1;
+  const newStage = success ? session.current_stage + 1 : session.current_stage;
+  const status = (!success && !use_protection) ? 'failed' : (newStage > session.total_stages ? 'completed' : 'active');
+  const completedAt = status !== 'active' ? new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ') : null;
+
+  database.prepare('UPDATE tribulation_sessions SET current_stage = ?, lightning_count = ?, status = ?, completed_at = ? WHERE id = ?').run(
+    newStage, newLightningCount, status, completedAt, sessionId
+  );
+
+  if (status === 'failed') {
+    // 渡劫失败处理
+    const damage = Math.floor(tribConfig.baseDamage * diffConfig.damageMult * 0.5);
+    database.prepare('UPDATE player SET hp = MAX(1, hp - ?) WHERE id = ?').run(damage, userId);
+    database.prepare('INSERT INTO tribulation_records (player_id, tribulation_type, difficulty, success, damage_taken) VALUES (?, ?, ?, ?, ?)')
+      .run(userId, session.tribulation_type, session.difficulty, 0, damage);
+
+    const failureReward = weightedRandom(TRIBULATION_REWARDS.failure);
+    let rewardText = '';
+    if (failureReward.type === 'spirit_stones') {
+      const amount = failureReward.min + Math.floor(Math.random() * (failureReward.max - failureReward.min));
+      database.prepare('UPDATE player SET spirit_stones = spirit_stones + ? WHERE id = ?').run(amount, userId);
+      rewardText = `获得${amount}灵石慰藉`;
+    }
+
+    return res.json({
+      success: false,
+      stage: session.current_stage,
+      totalStages: session.total_stages,
+      lightning: newLightningCount,
+      message: `⚡ 第${session.current_stage}道天雷未能渡过！${damage > 0 ? `受到${damage}伤害` : ''}`,
+      reward: rewardText,
+      hint: '可使用护身符免疫一次失败，渡劫丹可提升成功率'
+    });
+  }
+
+  if (status === 'completed') {
+    // 渡劫成功
+    const rewardSpirit = Math.floor((tribConfig.baseDamage * 2 + (player.realm * 100)) * diffConfig.rewardMult);
+    database.prepare('UPDATE player SET spirit_stones = spirit_stones + ?, realm = realm + 1 WHERE id = ?').run(rewardSpirit, userId);
+    database.prepare('INSERT INTO tribulation_records (player_id, tribulation_type, difficulty, success, damage_taken, reward_spirit) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(userId, session.tribulation_type, session.difficulty, 1, 0, rewardSpirit);
+    database.prepare('UPDATE tribulation_cooldowns SET weekly_successes = weekly_successes + 1 WHERE player_id = ?').run(userId);
+
+    // 发放额外奖励
+    const extraReward = weightedRandom(TRIBULATION_REWARDS.success);
+    let extraText = '';
+    if (extraReward.type === 'equipment' && extraReward.quality) {
+      extraText = `获得${extraReward.quality}品质装备宝箱`;
+    } else if (extraReward.type === 'tribulation_pill') {
+      database.prepare('INSERT INTO player_items (user_id, item_id, item_name, item_type, count, icon, source, quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(userId, 9991, '渡劫丹', 'consumable', 1, '💊', 'tribulation', 'rare');
+      extraText = '获得1个渡劫丹';
+    }
+
+    return res.json({
+      success: true,
+      stage: session.total_stages,
+      totalStages: session.total_stages,
+      lightning: newLightningCount,
+      message: `🎉 ${tribConfig.icon} 渡劫成功！突破至境界${player.realm + 1}！`,
+      rewards: { spiritStones: rewardSpirit },
+      extraReward: extraText,
+      newRealm: player.realm + 1
+    });
+  }
+
+  // 进行中
+  const remainingStages = session.total_stages - newStage + 1;
+  return res.json({
+    success: true,
+    stage: newStage,
+    totalStages: session.total_stages,
+    lightning: newLightningCount,
+    message: `⚡ 第${session.current_stage}道天雷渡过！继续坚持！`,
+    remainingStages,
+    nextSuccessRate: Math.round(Math.max(0.1, successRate - 0.05) * 100) + '%'
+  });
+});
+
+// POST /api/tribulation/give-up - 放弃渡劫
+router.post('/give-up', (req, res) => {
+  const userId = extractUserId(req);
+  const { sessionId } = req.body || {};
+  const database = getDb();
+  if (!sessionId) return res.json({ success: false, message: '缺少会话ID' });
+
+  const session = database.prepare('SELECT * FROM tribulation_sessions WHERE id = ? AND player_id = ? AND status = ?').get(sessionId, userId, 'active');
+  if (!session) return res.json({ success: false, message: '会话不存在' });
+
+  database.prepare('UPDATE tribulation_sessions SET status = ? WHERE id = ?').run('abandoned', sessionId);
+  res.json({ success: true, message: '已放弃本次渡劫' });
+});
+
+// GET /api/tribulation/rewards - 渡劫奖励预览
+router.get('/rewards', (req, res) => {
+  const userId = extractUserId(req);
+  const { tribulationType, difficulty } = req.query;
+  const database = getDb();
+
+  if (!tribulationType || !TRIBULATION_TYPES[tribulationType]) {
+    return res.json({ success: false, message: '无效的渡劫类型' });
+  }
+  const tribConfig = TRIBULATION_TYPES[tribulationType];
+  const diffConfig = DIFFICULTY_MODIFIERS[difficulty] || DIFFICULTY_MODIFIERS.normal;
+  const player = database.prepare('SELECT realm FROM player WHERE id = ?').get(userId);
+
+  const baseReward = Math.floor((tribConfig.baseDamage * 2 + ((player?.realm || 1) * 100)) * diffConfig.rewardMult);
+
+  res.json({
+    success: true,
+    type: tribulationType,
+    difficulty: difficulty || 'normal',
+    rewards: {
+      spiritStones: baseReward,
+      bonus: diffConfig.rewardMult > 1.5 ? '稀有装备/高级材料' : '灵石/经验',
+      failureConsolation: Math.floor(baseReward * 0.1)
+    }
+  });
 });
 
 module.exports = router;
-module.exports.configure = configure;
+module.exports.TRIBULATION_TYPES = TRIBULATION_TYPES;

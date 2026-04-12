@@ -20,7 +20,7 @@ try {
   // 回退到直接创建 SQLite 连接
   const Database = require('better-sqlite3');
   const path = require('path');
-  const dbPath = path.join(__dirname, '..', '..', 'data', 'game.db');
+  const dbPath = path.join(__dirname, '..', 'data', 'game.db');
   db = new Database(dbPath);
 }
 
