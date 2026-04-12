@@ -567,6 +567,94 @@ router.get('/energy-status', (req, res) => {
   }
 });
 
+// ============================================================
+// 切磋武技
+// ============================================================
+const SPAR_CD = 30 * 60 * 1000; // 30分钟CD
+
+router.post('/sparrig', requirePlayerId, (req, res) => {
+  const playerId = getPlayerId(req);
+  const { targetId } = req.body;
+  const targetNum = parseInt(targetId);
+
+  if (!targetNum || targetNum === playerId) {
+    return res.status(400).json({ success: false, error: '目标无效' });
+  }
+
+  // 检查是否好友
+  const isFriend = db.prepare(`
+    SELECT id FROM friendships 
+    WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+  `).get(playerId, targetNum, targetNum, playerId);
+
+  if (!isFriend) {
+    return res.status(403).json({ success: false, error: '仅好友可切磋' });
+  }
+
+  // 检查CD
+  const lastSpar = db.prepare(`
+    SELECT sparring_at FROM friendships 
+    WHERE id = ?
+  `).get(isFriend.id);
+
+  if (lastSpar && (Date.now() - new Date(lastSpar.sparring_at).getTime()) < SPAR_CD) {
+    const remaining = Math.ceil((SPAR_CD - (Date.now() - new Date(lastSpar.sparring_at).getTime())) / 60000);
+    return res.status(429).json({ success: false, error: `切磋CD中，还需${remaining}分钟` });
+  }
+
+  // 获取双方数据
+  const me = db.prepare('SELECT * FROM Users WHERE id = ?').get(playerId);
+  const target = db.prepare('SELECT * FROM Users WHERE id = ?').get(targetNum);
+
+  if (!me || !target) {
+    return res.status(404).json({ success: false, error: '玩家不存在' });
+  }
+
+  // 简单战斗计算
+  const myPower = me.combat_power || (me.attack + me.defense + me.hp * 0.1);
+  const targetPower = target.combat_power || (target.attack + target.defense + target.hp * 0.1);
+
+  // 加入随机性 (±20%)
+  const myFinal = myPower * (0.8 + Math.random() * 0.4);
+  const targetFinal = targetPower * (0.8 + Math.random() * 0.4);
+
+  const won = myFinal > targetFinal;
+  const expGain = Math.floor(50 + Math.abs(myFinal - targetFinal) * 0.05);
+  const friendBonus = won ? 20 : 10;
+
+  // 更新CD时间
+  db.prepare('UPDATE friendships SET sparring_at = ? WHERE id = ?').run(new Date().toISOString(), isFriend.id);
+
+  // 记录切磋历史
+  try {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS friend_spar_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER, target_id INTEGER,
+        won INTEGER, exp_gain INTEGER,
+        my_power REAL, target_power REAL,
+        sparded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO friend_spar_history (player_id, target_id, won, exp_gain, my_power, target_power)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(playerId, targetNum, won ? 1 : 0, expGain, myFinal, targetFinal);
+  } catch (e) { /* 忽略 */ }
+
+  res.json({
+    success: true,
+    data: {
+      won,
+      expGain: expGain + friendBonus,
+      myPower: Math.floor(myFinal),
+      targetPower: Math.floor(targetFinal),
+      friendBonus,
+      message: won ? '切磋获胜！' : '切磋惜败'
+    }
+  });
+});
+
 // ============ 初始化 ============
 initTables();
 

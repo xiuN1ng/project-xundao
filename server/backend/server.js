@@ -101,6 +101,7 @@ app.use('/api/payment', require('./routes/payment'));
 
 // 游戏
 app.use('/api/player', require('./routes/player'));
+app.use('/api/rankings', require('./routes/rankings_api'));
 app.use('/api/cultivation', require('./routes/cultivation'));
 app.use('/api/tribulation', require('./routes/tribulation'));
 app.use('/api/breakthrough', require('./routes/breakthrough'));
@@ -170,6 +171,7 @@ app.use('/api/hotupdate', require('./routes/hotupdate'));
 // 新功能
 app.use('/api/dailyQuest', require('./routes/dailyQuest'));
 app.use('/api/daily-quest', require('./routes/dailyQuest'));
+app.use('/api/daily-goals', require('./routes/daily_goals_api'));
 app.use('/api/daily-mission', require('./routes/dailyMission'));
 app.use('/api/achievement', require('./routes/achievement'));
 app.use('/api/achievements', require('./routes/achievements'));
