@@ -122,6 +122,17 @@ try {
   const dbPath = path.join(dataDir, 'game.db');
   db = new Database(dbPath);
   Logger.info('✓ 数据库连接成功');
+
+  // 初始化后端数据库连接（用于跨表查询如cultivation→player）
+  try {
+    const backendDataDir = path.join(__dirname, 'backend', 'data');
+    const backendDbPath = path.join(backendDataDir, 'game.db');
+    global.backendDb = new Database(backendDbPath);
+    global.backendDb.pragma('journal_mode = WAL');
+    Logger.info('✓ 后端数据库连接成功');
+  } catch (e) {
+    Logger.warn('⚠ 后端数据库连接失败:', e.message);
+  }
 } catch (err) {
   Logger.info('⚠ 数据库不可用，将使用内存存储:', err.message);
   useMemoryStorage = true;
@@ -7254,8 +7265,28 @@ app.get('/api/player/status', (req, res) => {
         level: player.level,
         experience: gameData.experience || 0,
         requiredExp: gameData.required_exp || 100,
-        realmLevel: player.realm_level,
-        realmName: ['凡人', '练气期', '筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '合体期', '大乘期', '渡劫期'][player.realm_level] || '凡人',
+        // Cultivations.realm = cultivation config realm_level (1-9), server array (0-9)需要+1偏移
+        // cultivation.realm 1(练气)→server index 1(练气期), 8(渡劫)→server index 9(渡劫期)
+        realmLevel: (() => {
+          try {
+            if (global.backendDb) {
+              const cult = global.backendDb.prepare('SELECT realm FROM Cultivations WHERE userId = ?').get(parseInt(playerId));
+              if (cult && cult.realm !== undefined) return cult.realm + 1;
+            }
+          } catch (e) { /* cultivation表可能不存在 */ }
+          return player.realm_level;
+        })(),
+        realmName: ['凡人', '练气期', '筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '合体期', '大乘期', '渡劫期'][
+          (() => {
+            try {
+              if (global.backendDb) {
+                const cult = global.backendDb.prepare('SELECT realm FROM Cultivations WHERE userId = ?').get(parseInt(playerId));
+                if (cult && cult.realm !== undefined) return cult.realm + 1;
+              }
+            } catch (e) {}
+            return player.realm_level;
+          })()
+        ] || '凡人',
         hp: (gameData.hp || player.hp || 100) + (rankBonus.hp || 0) + (meridianBonus.totalHpBonus || 0),
         maxHp: (gameData.max_hp || 200) + (rankBonus.hp || 0) + (meridianBonus.totalHpBonus || 0),
         atk: (gameData.atk || 10) + (rankBonus.atk || 0) + durabilityBonus.atk + (meridianBonus.totalAtkBonus || 0),
