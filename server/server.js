@@ -1966,6 +1966,65 @@ seedShopData();
 seedSkillsData();
 createIndexes();
 
+// ============ P85-4: 成就系统增强数据库表初始化 ============
+try {
+  const achievementTablesInit = [
+    `CREATE TABLE IF NOT EXISTS achievement_milestones (
+      id INTEGER PRIMARY KEY,
+      threshold INTEGER NOT NULL UNIQUE,
+      reward_type TEXT NOT NULL,
+      reward_amount INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      title_reward TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS achievement_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      achievement_id TEXT NOT NULL,
+      progress INTEGER DEFAULT 0,
+      completed INTEGER DEFAULT 0,
+      completed_at DATETIME,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, achievement_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS achievement_leaderboard_cache (
+      player_id INTEGER PRIMARY KEY,
+      username TEXT,
+      achievement_points INTEGER DEFAULT 0,
+      completed_count INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS achievement_player_milestone (
+      player_id INTEGER NOT NULL,
+      milestone_id INTEGER NOT NULL,
+      claimed INTEGER DEFAULT 0,
+      claimed_at DATETIME,
+      PRIMARY KEY(player_id, milestone_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS achievement_player_stats (
+      player_id INTEGER PRIMARY KEY,
+      total_points INTEGER DEFAULT 0,
+      completed_count INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ];
+
+  const achievementIndexes = [
+    `CREATE INDEX IF NOT EXISTS idx_ach_progress_player ON achievement_progress(player_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ach_progress_completed ON achievement_progress(player_id, completed)`,
+    `CREATE INDEX IF NOT EXISTS idx_ach_leaderboard_points ON achievement_leaderboard_cache(achievement_points DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_ach_milestone_player ON achievement_player_milestone(player_id)`,
+  ];
+
+  achievementTablesInit.forEach(sql => { db.exec(sql); });
+  achievementIndexes.forEach(sql => { db.exec(sql); });
+  Logger.info('✓ P85-4 成就系统数据库表初始化完成');
+} catch (e) {
+  Logger.warn('成就系统数据库表初始化失败:', e.message);
+}
+
 // ============ 世界BOSS系统配置 ============
 
 // BOSS刷新时间配置（每天）
@@ -3606,17 +3665,15 @@ try {
   console.log('封神榜API不可用:', e.message);
 }
 
-// ============ 宝石系统 API ============
+// ============ 宝石系统 API (P83-2) ============
+// 旧版 game/gem_api.js 因依赖问题已禁用，改用 backend/routes/gem_api.js
 try {
   const gemStorage = require('./game/gem_storage');
   gemStorage.initGemTables().catch(err => Logger.info('宝石表初始化:', err.message));
   gemStorage.seedInitialGems().catch(err => Logger.info('宝石种子数据:', err.message));
-  
-  const gemApi = require('./game/gem_api');
-  app.use('/api/gem', gemApi);
-  Logger.info('✅ 宝石系统 API 已加载');
+  Logger.info('✅ 宝石存储层已加载');
 } catch (e) {
-  Logger.info('宝石API不可用:', e.message);
+  Logger.info('宝石存储层不可用:', e.message);
 }
 
 // ============ 经脉系统 API ============
@@ -7218,12 +7275,13 @@ app.get('/api/player/status', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(playerId);
+    // 主玩家数据优先从 backendDb (生产数据), 回退到旧 db
+    const player = (global.backendDb || db).prepare('SELECT * FROM player WHERE id = ?').get(playerId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
     
-    // 获取玩家的游戏数据
+    // 玩家游戏数据/经脉表使用旧 db (backendDb 中不存在这些表)
     const gameDataRow = db.prepare('SELECT player_data FROM player_game_data WHERE player_id = ?').get(playerId);
     const gameData = gameDataRow && gameDataRow.player_data ? JSON.parse(gameDataRow.player_data) : {};
     
@@ -7336,7 +7394,7 @@ app.get('/api/player/combat-power', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(playerId);
+    const player = (global.backendDb || db).prepare('SELECT * FROM player WHERE id = ?').get(playerId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
@@ -7427,7 +7485,7 @@ app.get('/api/player/combat-power/detail', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(playerId);
+    const player = (global.backendDb || db).prepare('SELECT * FROM player WHERE id = ?').get(playerId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
@@ -7564,7 +7622,7 @@ app.get('/api/player/data', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const player = db.prepare('SELECT * FROM player WHERE id = ?').get(playerId);
+    const player = (global.backendDb || db).prepare('SELECT * FROM player WHERE id = ?').get(playerId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
@@ -7597,7 +7655,7 @@ app.get('/api/player/qianghua-stone', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少玩家ID' });
     }
     
-    const player = db.prepare('SELECT qianghua_stones FROM player WHERE id = ?').get(playerId);
+    const player = (global.backendDb || db).prepare('SELECT qianghua_stones FROM player WHERE id = ?').get(playerId);
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
     }
@@ -8057,9 +8115,13 @@ app.get('/api/artifacts/list', (req, res) => {
 });
 
 // 师尊: /api/master/*
-app.get('/api/master/info', (req, res) => {
-  res.json({ success: true, data: { level: 1, name: '新手师尊', blessing: { attack: 0, defense: 0, hp: 0 } }, message: '师尊系统开发中' });
-});
+try {
+  const masterRoute = require('./backend/routes/master');
+  app.use('/api/master', masterRoute);
+  Logger.info('✓ 师徒系统路由已加载 (/api/master)');
+} catch (e) {
+  Logger.warn('⚠ 师徒路由加载失败:', e.message);
+}
 
 // ==================== 玩家挑战 API (境界压制) ====================
 
@@ -8283,7 +8345,7 @@ app.get('/api/player/realm-info', (req, res) => {
       return res.status(400).json({ success: false, error: '缺少 player_id' });
     }
     
-    const player = db.prepare('SELECT id, username, realm, realm_level, level FROM player WHERE id = ?').get(player_id);
+    const player = (global.backendDb || db).prepare('SELECT id, username, realm, realm_level, level FROM player WHERE id = ?').get(player_id);
     
     if (!player) {
       return res.status(404).json({ success: false, error: '玩家不存在' });
@@ -9457,6 +9519,15 @@ try {
   Logger.warn('⚠ 好友路由加载失败:', e.message);
 }
 
+// P85-3: 好友/师徒增强系统
+try {
+  const friendApiRoute = require('./backend/routes/friend_api');
+  app.use('/api/friend-api', friendApiRoute);
+  Logger.info('✓ P85-3 好友/师徒增强 API 已加载 (/api/friend-api)');
+} catch (e) {
+  Logger.warn('⚠ P85-3 好友增强路由加载失败:', e.message);
+}
+
 try {
   const questRoute = require('./backend/routes/quest');
   app.use('/api/quest', questRoute.router);
@@ -9589,6 +9660,15 @@ try {
     Logger.warn('⚠ 渡劫系统路由加载失败:', e.message);
   }
 
+  // 境界突破战斗系统
+  try {
+    const breakthroughRoute = require('./backend/routes/breakthrough');
+    app.use('/api/breakthrough', breakthroughRoute);
+    Logger.info('✅ 境界突破战斗系统路由已加载 (backend/routes/breakthrough.js)');
+  } catch (e) {
+    Logger.warn('⚠ 境界突破战斗系统路由加载失败:', e.message);
+  }
+
   // 启动 NPC 入侵调度器 (每30秒检查一次)
   setInterval(() => {
     try {
@@ -9643,6 +9723,15 @@ try {
   Logger.warn('⚠ 引导路由加载失败:', e.message);
 }
 
+// ==================== 7天新手引导系统路由 ====================
+try {
+  const guideApiNew = require('./backend/routes/guide_api');
+  app.use('/api/guide-api', guideApiNew);
+  Logger.info('✓ 7天新手引导系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 7天新手引导路由加载失败:', e.message);
+}
+
 // ==================== 修炼属性路由 (P0-1) ====================
 try {
   const attributesRoute = require('./backend/routes/attributes');
@@ -9666,6 +9755,11 @@ try {
   const achievementRoute = require('./backend/routes/achievement');
   app.use('/api/ach2', achievementRoute);
 
+  // P85-4: 成就系统增强 API
+  const achievementApiRoute = require('./backend/routes/achievement_api');
+  app.use('/api/achievement', achievementApiRoute);
+  Logger.info('✓ P85-4 成就系统增强 API 已加载 (/api/achievement)');
+
   // 背包系统
   const bagRoute = require('./backend/routes/bag');
   app.use('/api/bag', bagRoute);
@@ -9675,6 +9769,11 @@ try {
   const gemRoute = require('./backend/routes/gem_api');
   app.use('/api/gem', gemRoute);
   Logger.info('✓ 宝石镶嵌系统路由已加载');
+
+  // 阵法系统
+  const formationApiRouter = require('./backend/routes/formation_api');
+  app.use('/api/formation', formationApiRouter);
+  Logger.info('✓ 阵法系统路由已加载 (P86-5)');
 
   Logger.info('✓ 成就系统增强路由已加载');
 } catch (e) {

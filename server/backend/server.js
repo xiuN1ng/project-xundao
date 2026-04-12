@@ -103,6 +103,7 @@ app.use('/api/payment', require('./routes/payment'));
 app.use('/api/player', require('./routes/player'));
 app.use('/api/cultivation', require('./routes/cultivation'));
 app.use('/api/tribulation', require('./routes/tribulation'));
+app.use('/api/breakthrough', require('./routes/breakthrough'));
 
 // 玩家模块（必须在 chapter/tribulation/achievement setPlayerRef 之前加载）
 const playerModule = require('./routes/player');
@@ -122,6 +123,7 @@ app.use('/api/adventure', require('./routes/adventure'));
 app.use('/api/battle', require('./routes/battle'));
 app.use('/api/attributes', require('./routes/attributes'));
 app.use('/api/shop', require('./routes/shop'));
+app.use('/api/dye', require('./routes/dye_api'));
 app.use('/api/market', require('./routes/market'));
 app.use('/api/material-exchange', require('./routes/material_exchange'));
 app.use('/api/beast', require('../game/beast_api'));
@@ -188,11 +190,24 @@ app.use('/api/realm-dungeon', require('./routes/realm_dungeon'));
 app.use('/api/bag', require('./routes/bag'));
 app.use('/api/mount', require('./routes/mount'));
 app.use('/api/wing', require('./routes/wing'));
+
+// 飞剑/法宝系统
+try {
+  const swordApi = require('./routes/sword_api');
+  swordApi.initSwordTables();
+  if (swordApi.setDb) swordApi.setDb(db);
+  app.use('/api/sword', swordApi);
+  console.log('✅ 飞剑/法宝系统路由已加载');
+} catch(e) {
+  console.log('[sword] 飞剑路由加载失败:', e.message);
+}
 app.use('/api/gem', require('./routes/gem'));
 app.use('/api/fashion', require('./routes/fashion'));
 app.use('/api/vip', require('./routes/vip'));
 app.use('/api/friend', require('./routes/friend'));
 app.use('/api/friends', require('./routes/friend')); // 前端 /api/friends 路径兼容
+// 好友/师徒增强系统 P85-3: 体力赠送、协助副本、师徒任务
+app.use('/api/friend-api', require('./routes/friend_api'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/auction', require('./routes/auction'));
 app.use('/api/season-pass', require('./routes/season_pass'));

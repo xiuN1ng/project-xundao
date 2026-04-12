@@ -76,7 +76,7 @@ const CONTRIBUTION_SHOP = [
 
 // ============ 辅助函数 ============
 function getPlayerId(req) {
-  return parseInt(req.body.player_id || req.query.player_id || 1);
+  return parseInt((req.body && req.body.player_id) || req.query.player_id || 1);
 }
 
 function getPlayerData(playerId) {
@@ -522,6 +522,64 @@ router.post('/complete-task', (req, res) => {
       message: `任务完成！获得 ${task.reward_contribution} 贡献点和 ${task.reward_exp} 经验`,
       contribution: myRel.contribution,
       expGain: task.reward_exp,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ============ 师徒任务奖励领取 P85-3 ============
+
+// 领取师徒任务奖励
+router.post('/claim-reward', (req, res) => {
+  try {
+    const playerId = getPlayerId(req);
+    const taskId = req.body.task_id || req.body.taskId;
+
+    if (!taskId) return res.json({ success: false, message: '缺少 task_id' });
+
+    const myRel = getRelation(playerId);
+    const task = DAILY_TASKS.find(t => t.id === taskId);
+
+    if (!task) return res.json({ success: false, message: '任务不存在' });
+
+    // 检查任务是否完成
+    resetDailyTasks(playerId);
+    if (!myRel.completedTasks.tasks.includes(taskId)) {
+      return res.json({ success: false, message: '任务未完成，无法领取奖励' });
+    }
+
+    // 检查是否已领取（用奖励key标记）
+    const claimedKey = `claimed_${taskId}`;
+    if (myRel.completedTasks[claimedKey]) {
+      return res.json({ success: false, message: '奖励已领取' });
+    }
+
+    // 标记已领取
+    myRel.completedTasks[claimedKey] = true;
+
+    // 发放奖励（灵石+贡献点）
+    const player = getPlayerData(playerId);
+    if (player) {
+      player.spiritStones = (player.spiritStones || 1000) + task.reward_contribution;
+    }
+
+    // 师徒积分累加
+    myRel.contribution = (myRel.contribution || 0) + task.reward_contribution;
+
+    res.json({
+      success: true,
+      message: `领取成功！获得 ${task.reward_contribution} 贡献点和 ${task.reward_exp} 经验`,
+      data: {
+        taskId,
+        taskName: task.name,
+        rewards: {
+          contribution: task.reward_contribution,
+          lingshi: task.reward_contribution,
+          exp: task.reward_exp,
+        },
+        totalContribution: myRel.contribution,
+      },
     });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });

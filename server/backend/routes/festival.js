@@ -542,7 +542,7 @@ router.post('/sign', (req, res) => {
     if (startTime > now) return json(res, null, '活动尚未开始');
     if (endTime < now) return json(res, null, '活动已结束');
 
-    const today = now.toISOString().split('T)[0];
+    const today = now.toISOString().split('T')[0];
 
     // 检查今日是否已签到
     const todayRecord = db.prepare(`
