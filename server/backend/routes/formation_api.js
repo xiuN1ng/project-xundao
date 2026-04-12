@@ -13,8 +13,7 @@ const Logger = {
   error: (...args) => console.error('[formation:error]', new Date().toISOString(), ...args)
 };
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'game.db');
+const DB_PATH = path.join(__dirname, '..', '..', 'data', 'game.db');
 
 let db = null;
 function getDb() {

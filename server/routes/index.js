@@ -40,6 +40,8 @@ function loadRoutes(app, db, authenticateToken, logger, options = {}) {
     const explicitPaths = {
       'sect-war': '/api/sect-war',
       'sect_war': '/api/sect-war',
+      'sect-war-api': '/api/sect-war-api',
+      'sect_war_api': '/api/sect-war-api',
       'sect-missions': '/api/sect-missions',
       'sect_missions': '/api/sect-missions',
       'sect-activity': '/api/sect-activity',
@@ -68,6 +70,10 @@ function loadRoutes(app, db, authenticateToken, logger, options = {}) {
       'ladder_season_v2_api': '/api/ladder-season-v2',
       'economy_api': '/api/economy',
       'random_events_api': '/api/events',
+      // P88-2 限时商店
+      'limited_shop': '/api/shop',
+      // P88-6 灵兽进化
+      'spirit_beast_api': '/api/spirit-beast',
     };
     if (explicitPaths[base]) return explicitPaths[base];
 
@@ -85,6 +91,9 @@ function loadRoutes(app, db, authenticateToken, logger, options = {}) {
   const skipFiles = new Set([
     'index.js',           // 本文件
     'auth.js',            // 认证中间件，非路由
+    'formation_api.js',   // 已在 server.js 手动注册到 /api/formation
+    'trade_api.js',       // 已在 server.js 手动注册到 /api/trade（增强版）
+    'gem.js',             // 已由 gem_api.js 替代，手动注册到 /api/gem
   ]);
 
   // 需要特殊处理的文件（使用 .router 属性）

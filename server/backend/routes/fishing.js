@@ -47,9 +47,21 @@ function initTables() {
       total_catches INTEGER DEFAULT 0,
       total_points INTEGER DEFAULT 0,
       rod_level INTEGER DEFAULT 1,
+      rod_exp INTEGER DEFAULT 0,
+      rod_durability INTEGER DEFAULT 100,
+      rod_max_durability INTEGER DEFAULT 100,
       biggest_catch TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS fishing_fish_collection (
+      player_id INTEGER,
+      fish_id INTEGER,
+      total_count INTEGER DEFAULT 0,
+      best_weight REAL DEFAULT 0,
+      first_caught_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY(player_id, fish_id)
     );
 
     CREATE TABLE IF NOT EXISTS fishing_records (
@@ -487,6 +499,177 @@ router.get('/history', (req, res) => {
       'SELECT id, fish_name, rarity, sell_price, caught_at FROM fishing_records WHERE player_id = ? ORDER BY id DESC LIMIT ?'
     ).all(userId, limit);
     res.json({ success: true, records });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/fishing/rod - 鱼竿信息/耐久
+router.get('/rod', (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    const stats = getPlayerStats(userId);
+    const rodLevel = stats.rod_level || 1;
+    const rodExp = stats.rod_exp || 0;
+    const durability = stats.rod_durability ?? 100;
+    const maxDurability = stats.rod_max_durability ?? 100;
+
+    // 计算下一级所需经验
+    const nextLevel = rodLevel + 1;
+    const rodConfig = [
+      { level: 1, name: '木制鱼竿', exp: 0 },
+      { level: 2, name: '竹制鱼竿', exp: 100 },
+      { level: 3, name: '铁制鱼竿', exp: 300 },
+      { level: 4, name: '精钢鱼竿', exp: 600 },
+      { level: 5, name: '白银鱼竿', exp: 1000 },
+      { level: 6, name: '黄金鱼竿', exp: 1500 },
+      { level: 7, name: '灵玉鱼竿', exp: 2200 },
+      { level: 8, name: '龙魂鱼竿', exp: 3000 },
+      { level: 9, name: '天蚕鱼竿', exp: 4000 },
+      { level: 10, name: '仙灵鱼竿', exp: 5200 },
+    ];
+    const currentRod = rodConfig.find(r => r.level === rodLevel) || rodConfig[0];
+    const nextRod = rodConfig.find(r => r.level === nextLevel);
+    const expForNext = nextRod ? nextRod.exp : null;
+    const expProgress = expForNext ? Math.floor((rodExp / expForNext) * 100) : 100;
+
+    res.json({
+      success: true,
+      rod: {
+        level: rodLevel,
+        name: currentRod.name,
+        exp: rodExp,
+        expForNext,
+        expProgress,
+        durability,
+        maxDurability,
+        catchRateBonus: ((rodLevel - 1) * 8).toFixed(0) + '%',
+        waitReduction: ((rodLevel - 1) * 5).toFixed(0) + '%',
+      },
+      upgrades: nextRod ? {
+        level: nextLevel,
+        name: nextRod.name,
+        cost: rodLevel * 100,
+      } : null,
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/fishing/upgrade-rod - 升级鱼竿
+router.post('/upgrade-rod', (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    const stats = getPlayerStats(userId);
+    const currentLevel = stats.rod_level || 1;
+
+    if (currentLevel >= 10) {
+      return res.json({ success: false, message: '鱼竿已达到最高等级' });
+    }
+
+    const upgradeCost = currentLevel * 100;
+    const player = getDb().prepare('SELECT lingshi FROM Users WHERE id = ?').get(userId);
+    if (!player || player.lingshi < upgradeCost) {
+      return res.json({ success: false, message: `升级需要 ${upgradeCost} 灵石，当前余额不足` });
+    }
+
+    const newLevel = currentLevel + 1;
+    const rodNames = ['', '木制鱼竿', '竹制鱼竿', '铁制鱼竿', '精钢鱼竿', '白银鱼竿', '黄金鱼竿', '灵玉鱼竿', '龙魂鱼竿', '天蚕鱼竿', '仙灵鱼竿'];
+    const newMaxDurability = 100 + (newLevel - 1) * 20;
+
+    getDb().prepare('UPDATE Users SET lingshi = lingshi - ? WHERE id = ?').run(upgradeCost, userId);
+    getDb().prepare(
+      'UPDATE fishing_player_stats SET rod_level = ?, rod_exp = 0, rod_max_durability = ?, rod_durability = ? WHERE player_id = ?'
+    ).run(newLevel, newMaxDurability, newMaxDurability, userId);
+
+    res.json({
+      success: true,
+      newLevel,
+      name: rodNames[newLevel],
+      cost: upgradeCost,
+      maxDurability: newMaxDurability,
+      catchRateBonus: ((newLevel - 1) * 8) + '%',
+      waitReduction: ((newLevel - 1) * 5) + '%',
+      message: `鱼竿升级为【${rodNames[newLevel]}】！消耗 ${upgradeCost} 灵石`,
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/fishing/collection - 鱼类图鉴
+router.get('/collection', (req, res) => {
+  try {
+    const userId = extractUserId(req);
+
+    // 获取所有鱼种
+    const allFish = getDb().prepare(
+      'SELECT id, name, icon, rarity, min_level, sell_price, description FROM fishing_fish_types ORDER BY min_level, id'
+    ).all();
+
+    // 获取玩家已收集的
+    const collected = getDb().prepare(
+      'SELECT fish_id, total_count, best_weight, first_caught_at FROM fishing_fish_collection WHERE player_id = ?'
+    ).all(userId);
+    const collectedMap = {};
+    for (const c of collected) collectedMap[c.fish_id] = c;
+
+    // 统计
+    const totalTypes = allFish.length;
+    const caughtTypes = collected.length;
+    const totalFish = getDb().prepare('SELECT SUM(total_count) as total FROM fishing_fish_collection WHERE player_id = ?').get(userId);
+
+    const collection = allFish.map(fish => ({
+      id: fish.id,
+      name: fish.name,
+      icon: fish.icon,
+      rarity: fish.rarity,
+      minLevel: fish.min_level,
+      sellPrice: fish.sell_price,
+      description: fish.description,
+      collected: !!collectedMap[fish.id],
+      count: collectedMap[fish.id]?.total_count || 0,
+      bestWeight: collectedMap[fish.id]?.best_weight || null,
+      firstCaughtAt: collectedMap[fish.id]?.first_caught_at || null,
+    }));
+
+    res.json({
+      success: true,
+      summary: {
+        totalTypes,
+        caughtTypes,
+        completionRate: totalTypes > 0 ? ((caughtTypes / totalTypes) * 100).toFixed(1) + '%' : '0%',
+        totalFishCaught: totalFish.total || 0,
+      },
+      collection,
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/fishing/locations - 钓鱼地点列表
+router.get('/locations', (req, res) => {
+  try {
+    const userId = extractUserId(req);
+    const stats = getPlayerStats(userId);
+    const playerLevel = stats.rod_level || 1;
+    const ponds = getDb().prepare('SELECT * FROM fishing_ponds ORDER BY min_level').all();
+
+    const locations = ponds.map(p => ({
+      id: p.id,
+      name: p.name,
+      icon: p.icon,
+      minLevel: p.min_level,
+      cost: p.cost,
+      biteRate: p.bite_rate,
+      rareChance: p.rare_chance,
+      description: p.description,
+      accessible: playerLevel >= p.min_level,
+    }));
+
+    res.json({ success: true, locations });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }

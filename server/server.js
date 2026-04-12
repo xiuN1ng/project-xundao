@@ -481,6 +481,67 @@ function initDatabase() {
     )
   `);
 
+  // 神器表 (P87-5 - 炼制神器)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_artifacts_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      artifact_type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      quality TEXT NOT NULL,
+      level INT DEFAULT 1,
+      exp INT DEFAULT 0,
+      is_equipped INTEGER DEFAULT 0,
+      skill_active TEXT,
+      skill_passive TEXT,
+      resonance_level INT DEFAULT 0,
+      obtained_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 神器碎片表 (P87-5)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_artifact_fragments (
+      player_id INTEGER NOT NULL,
+      artifact_type TEXT NOT NULL,
+      count INTEGER DEFAULT 0,
+      PRIMARY KEY(player_id, artifact_type)
+    )
+  `);
+
+  // 套装进度表 (P87-5)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_set_progress_new (
+      player_id INTEGER NOT NULL,
+      set_type TEXT NOT NULL,
+      pieces_owned TEXT DEFAULT '{}',
+      quality TEXT DEFAULT 'mortal',
+      quality_upgrade_count INTEGER DEFAULT 0,
+      awaken_level INTEGER DEFAULT 0,
+      enhance_level INTEGER DEFAULT 0,
+      refine_level INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(player_id, set_type)
+    )
+  `);
+
+  // 套装部件表 (P87-5)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_set_pieces (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      set_type TEXT NOT NULL,
+      piece_id TEXT NOT NULL,
+      quality TEXT DEFAULT 'mortal',
+      enhance_level INTEGER DEFAULT 0,
+      refine_level INTEGER DEFAULT 0,
+      equipped INTEGER DEFAULT 0,
+      obtained_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, set_type, piece_id)
+    )
+  `);
+
   // 商城商品表
   db.exec(`
     CREATE TABLE IF NOT EXISTS shop_items (
@@ -3426,6 +3487,14 @@ try {
   const arenaApi = require('./backend/routes/arena');
   app.use('/api/arena', arenaApi);
   Logger.info('✅ 竞技场系统 API 已加载 (routes/arena.js)');
+  // PVP房间系统 API
+  try {
+    const pvpRoomApi = require('./backend/routes/pvp_room_api');
+    app.use('/api/pvp-room', pvpRoomApi);
+    Logger.info('✅ PVP房间系统 API 已加载 (routes/pvp_room_api.js)');
+  } catch (e) {
+    Logger.info('PVP房间API不可用:', e.message);
+  }
   // 新战斗系统 API (基于战斗引擎)
   try {
     const battleApi = require('./game/battle_api');
@@ -3525,6 +3594,33 @@ try {
   Logger.info('宗门战API不可用:', e.message);
 }
 
+// 宗门战争/领地战系统 API (P87-1)
+try {
+  const sectWarApiV2 = require('./backend/routes/sect_war_api');
+  app.use('/api/sect-war-api', sectWarApiV2);
+  Logger.info('✅ 宗门战争/领地战系统 API 已加载 (/api/sect-war-api)');
+} catch (e) {
+  Logger.info('宗门战争API不可用:', e.message);
+}
+
+// ============ 宗门大厅/驻地建设 API (P88-3) ============
+try {
+  const sectHallApi = require('./backend/routes/sect_hall_api');
+  app.use('/api/sect-hall', sectHallApi);
+  Logger.info('✅ P88-3 宗门大厅/驻地建设 API 已加载');
+} catch (e) {
+  Logger.info('宗门大厅API不可用:', e.message);
+}
+
+// ============ 成就展柜/荣誉殿堂 API (P88-5) ============
+try {
+  const showcaseApi = require('./backend/routes/showcase_api');
+  app.use('/api/showcase', showcaseApi);
+  Logger.info('✅ P88-5 成就展柜/荣誉殿堂 API 已加载');
+} catch (e) {
+  Logger.info('成就展柜API不可用:', e.message);
+}
+
 // 灵石消耗系统 API
 try {
   const expenseApi = require('./game/expense_api');
@@ -3620,6 +3716,24 @@ try {
   console.log('器灵API不可用:', e.message);
 }
 
+// ============ 神器炼制系统 API (P87-5) ============
+try {
+  const artifactApi = require('./backend/routes/artifact_api');
+  app.use('/api/artifact', artifactApi);
+  console.log('✅ 神器系统 API 已加载 (backend/routes/artifact_api.js)');
+} catch (e) {
+  console.log('神器API不可用:', e.message);
+}
+
+// ============ 套装进阶系统 API (P87-5) ============
+try {
+  const setApi = require('./backend/routes/set_api');
+  app.use('/api/set', setApi);
+  console.log('✅ 套装进阶系统 API 已加载 (backend/routes/set_api.js)');
+} catch (e) {
+  console.log('套装API不可用:', e.message);
+}
+
 // ============ 器灵数据 API (spirit_system) ============
 try {
   const spiritRoute = require('./backend/routes/spirit');
@@ -3627,6 +3741,15 @@ try {
   console.log('✅ 器灵数据 API 已加载 (backend/routes/spirit.js)');
 } catch (e) {
   console.log('器灵数据API不可用:', e.message);
+}
+
+// ============ 灵兽培养系统 API (spirit_pet) ============
+try {
+  const spiritPetRouter = require('./backend/routes/spirit_pet_api');
+  app.use('/api/spirit-pet', spiritPetRouter);
+  console.log('✅ 灵兽培养系统 API 已加载 (backend/routes/spirit_pet_api.js)');
+} catch (e) {
+  console.log('灵兽培养API不可用:', e.message);
 }
 
 // ============ 天梯系统 API ============
@@ -3645,6 +3768,15 @@ try {
   console.log('✅ 天梯赛季系统 API 已加载');
 } catch (e) {
   console.log('天梯赛季API不可用:', e.message);
+}
+
+// ============ 跨服战/王者挑战系统 API (P88-4) ============
+try {
+  const crossServerApi = require('./backend/routes/cross_server_api');
+  app.use('/api/cross-server', crossServerApi);
+  console.log('✅ 跨服战/王者挑战系统 API 已加载 (/api/cross-server)');
+} catch (e) {
+  console.log('跨服战API不可用:', e.message);
 }
 
 // ============ 灵石兑换系统 API ============
@@ -3779,6 +3911,15 @@ try {
   Logger.info('✅ 成就殿/名人堂 API 已加载');
 } catch (e) {
   Logger.info('成就殿API不可用:', e.message);
+}
+
+// ============ 天赋系统 API ============
+try {
+  const talentRoute = require('./backend/routes/talent');
+  app.use('/api/talent', talentRoute);
+  Logger.info('✅ 天赋系统 API 已加载');
+} catch (e) {
+  Logger.info('天赋API不可用:', e.message);
 }
 
 // ============ 灵石引导系统 API ============
@@ -4197,7 +4338,7 @@ try {
 
 // ============ 交易市场系统 API ============
 try {
-  const tradeApi = require('./backend/routes/trade');
+  const tradeApi = require('./backend/routes/trade_api');
   app.use('/api/trade', tradeApi);
   Logger.info('✅ 交易市场系统 API 已加载');
 } catch (e) {
@@ -9577,6 +9718,14 @@ try {
 }
 
 try {
+  const lifeSkillRoute = require('./backend/routes/life_skill_api');
+  app.use('/api/life-skill', lifeSkillRoute);
+  Logger.info('✓ 生活技能系统路由已加载');
+} catch (e) {
+  Logger.warn('⚠ 生活技能路由加载失败:', e.message);
+}
+
+try {
   const sectMissionsRoute = require('./backend/routes/sect-missions');
   app.use('/api/sect-missions', sectMissionsRoute);
   Logger.info('✓ 宗门任务路由已加载');
@@ -9598,6 +9747,15 @@ try {
   Logger.info('✓ 福地路由已加载');
 } catch (e) {
   Logger.warn('⚠ 福地路由加载失败:', e.message);
+}
+
+// ============ 洞天福地探索系统 API (P88-7) ============
+try {
+  const paradiseExploreApi = require('./backend/routes/paradise_explore');
+  app.use('/api/paradise-explore', paradiseExploreApi);
+  Logger.info('✓ 洞天福地探索路由已加载 (/api/paradise-explore)');
+} catch (e) {
+  Logger.warn('⚠ 洞天福地探索路由加载失败:', e.message);
 }
 
 try {
@@ -9694,6 +9852,15 @@ try {
   Logger.warn('⚠ 奇遇事件路由加载失败:', e.message);
 }
 
+// ==================== 仙府洞天/家园路由 ============
+try {
+  const homeRouter = require('./backend/routes/home_api');
+  app.use('/api/home', homeRouter);
+  Logger.info('✅ 仙府洞天/家园路由已加载 (backend/routes/home_api.js)');
+} catch (e) {
+  Logger.warn('⚠️ 仙府洞天路由加载失败:', e.message);
+}
+
 // ==================== 模块化路由加载 ====================
 // 尝试加载模块化路由（可选）
 try {
@@ -9774,6 +9941,30 @@ try {
   const formationApiRouter = require('./backend/routes/formation_api');
   app.use('/api/formation', formationApiRouter);
   Logger.info('✓ 阵法系统路由已加载 (P86-5)');
+
+  // 装备染色/幻彩系统 (P86-4)
+  const dyeApiRouter = require('./backend/routes/dye_api');
+  app.use('/api/dye', dyeApiRouter);
+  Logger.info('✓ 装备染色系统路由已加载 (P86-4)');
+
+  // 奇遇/机缘/悬赏系统 (P86-1/P86-3)
+  const randomEventsRouter = require('./backend/routes/random_events_api');
+  app.use('/api/events', randomEventsRouter);
+  Logger.info('✓ 奇遇机缘系统路由已加载 (P86-1/P86-3)');
+
+  // ============ 天气/世界状态系统 API (P88-1) ============
+  const weatherRoute = require('./backend/routes/weather_api');
+  app.use('/api/world', weatherRoute);
+  Logger.info('✓ 天气/世界状态系统路由已加载 (P88-1)');
+
+  // ============ 星图/星魂系统 API (P87-4) ============
+  const starmapRouter = require('./backend/routes/starmap_api');
+  app.use('/api/starmap', starmapRouter);
+  Logger.info('✓ 星图系统路由已加载 (P87-4)');
+
+  const soulRouter = require('./backend/routes/soul_api');
+  app.use('/api/soul', soulRouter);
+  Logger.info('✓ 星魂系统路由已加载 (P87-4)');
 
   Logger.info('✓ 成就系统增强路由已加载');
 } catch (e) {

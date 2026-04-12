@@ -112,6 +112,8 @@ app.use('/api/clan', require('./routes/clan'));
 app.use('/api/sect-missions', require('./routes/sect-missions'));
 app.use('/api/sect-activity', require('./routes/sect-activity'));
 app.use('/api/sect-war', require('./routes/sect-war'));
+app.use('/api/sect-hall', require('./routes/sect_hall_api'));
+app.use('/api/showcase', require('./routes/showcase_api'));
 app.use('/api/seven-day', require('./routes/seven_day'));
 app.use('/api/festival', require('./routes/festival'));
 app.use('/api/commission', require('./routes/commission'));
@@ -173,6 +175,7 @@ app.use('/api/achievement', require('./routes/achievement'));
 app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/guild', require('./routes/guild'));
 app.use('/api/arena', require('./routes/arena'));
+app.use('/api/pvp-room', require('./routes/pvp_room_api'));
 app.use('/api/worldBoss', require('./routes/worldBoss'));
 app.use('/api/worldboss', require('./routes/worldBoss'));
 app.use('/api/rank', require('./routes/rank'));
@@ -215,6 +218,20 @@ app.use('/api/first-recharge', require('./routes/first_recharge'));
 app.use('/api/month-card', require('./routes/month_card'));
 app.use('/api/cave', require('./routes/cave'));
 app.use('/api/fishing', require('./routes/fishing'));
+// 限时商店/神秘商人系统 (P88-2)
+try {
+  app.use('/api/shop', require('./routes/limited_shop'));
+  console.log('✓ 限时商店/神秘商人路由已加载');
+} catch(e) {
+  console.log('[limited_shop] 路由加载失败:', e.message);
+}
+// 灵兽野生捕获/进化树系统 (P88-6)
+try {
+  app.use('/api/spirit-beast', require('./routes/spirit_beast_api'));
+  console.log('✓ 灵兽野生捕获/进化树路由已加载');
+} catch(e) {
+  console.log('[spirit_beast_api] 路由加载失败:', e.message);
+}
 app.use('/api/secret', require('./routes/secret'));
 app.use('/api/title', require('./routes/title'));
 app.use('/api/abyssDungeon', require('./routes/abyss'));

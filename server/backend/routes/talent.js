@@ -97,7 +97,9 @@ function initTalentTables() {
 }
 
 function getUserId(req) {
-  return req.userId || req.body.player_id || req.body.userId || req.query.player_id || req.query.userId || 1;
+  const body = req.body || {};
+  const query = req.query || {};
+  return req.userId || body.player_id || body.userId || query.player_id || query.userId || 1;
 }
 
 function getPlayerLevel(userId) {
